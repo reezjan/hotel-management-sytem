@@ -25,6 +25,7 @@ import {
   pools,
   services,
   leaveRequests,
+  wastages,
   type User,
   type UserWithRole,
   type InsertUser,
@@ -63,7 +64,9 @@ import {
   type Service,
   type InsertService,
   type LeaveRequest,
-  type InsertLeaveRequest
+  type InsertLeaveRequest,
+  type Wastage,
+  type InsertWastage
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, desc, asc, sql } from "drizzle-orm";
@@ -164,6 +167,11 @@ export interface IStorage {
   getKotItems(kotId: string): Promise<KotItem[]>;
   createKotOrder(kot: any): Promise<KotOrder>;
   updateKotOrder(id: string, kot: any): Promise<KotOrder>;
+  updateKotItem(id: string, item: Partial<KotItem>): Promise<KotItem>;
+  
+  // Wastage operations
+  createWastage(wastageData: any): Promise<any>;
+  getWastagesByHotel(hotelId: string): Promise<any[]>;
   
   // Inventory operations
   getInventoryItemsByHotel(hotelId: string): Promise<InventoryItem[]>;
@@ -655,12 +663,57 @@ export class DatabaseStorage implements IStorage {
   }
 
   // KOT operations
-  async getKotOrdersByHotel(hotelId: string): Promise<KotOrder[]> {
-    return await db
+  async getKotOrdersByHotel(hotelId: string): Promise<any[]> {
+    const orders = await db
       .select()
       .from(kotOrders)
       .where(eq(kotOrders.hotelId, hotelId))
       .orderBy(desc(kotOrders.createdAt));
+    
+    const ordersWithItems = await Promise.all(
+      orders.map(async (order) => {
+        const itemResults = await db
+          .select({
+            itemId: kotItems.id,
+            itemKotId: kotItems.kotId,
+            itemMenuItemId: kotItems.menuItemId,
+            itemQty: kotItems.qty,
+            itemNotes: kotItems.notes,
+            itemStatus: kotItems.status,
+            itemDeclineReason: kotItems.declineReason,
+            menuItemId: menuItems.id,
+            menuItemName: menuItems.name,
+            menuItemPrice: menuItems.price,
+            menuItemCategory: menuItems.category
+          })
+          .from(kotItems)
+          .leftJoin(menuItems, eq(kotItems.menuItemId, menuItems.id))
+          .where(eq(kotItems.kotId, order.id));
+        
+        const items = itemResults.map(row => ({
+          id: row.itemId,
+          kotId: row.itemKotId,
+          menuItemId: row.itemMenuItemId,
+          qty: row.itemQty,
+          notes: row.itemNotes,
+          status: row.itemStatus,
+          declineReason: row.itemDeclineReason,
+          menuItem: row.menuItemId ? {
+            id: row.menuItemId,
+            name: row.menuItemName,
+            price: row.menuItemPrice,
+            category: row.menuItemCategory
+          } : null
+        }));
+        
+        return {
+          ...order,
+          items
+        };
+      })
+    );
+    
+    return ordersWithItems;
   }
 
   async getKotItems(kotId: string): Promise<KotItem[]> {
@@ -686,6 +739,32 @@ export class DatabaseStorage implements IStorage {
       .where(eq(kotOrders.id, id))
       .returning();
     return kot;
+  }
+
+  async updateKotItem(id: string, itemData: Partial<KotItem>): Promise<KotItem> {
+    const [item] = await db
+      .update(kotItems)
+      .set(itemData)
+      .where(eq(kotItems.id, id))
+      .returning();
+    return item;
+  }
+
+  // Wastage operations
+  async createWastage(wastageData: any): Promise<any> {
+    const [wastage] = await db
+      .insert(wastages)
+      .values(wastageData)
+      .returning();
+    return wastage;
+  }
+
+  async getWastagesByHotel(hotelId: string): Promise<any[]> {
+    return db
+      .select()
+      .from(wastages)
+      .where(eq(wastages.hotelId, hotelId))
+      .orderBy(desc(wastages.createdAt));
   }
 
   // Inventory operations

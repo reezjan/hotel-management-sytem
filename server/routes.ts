@@ -19,6 +19,8 @@ import {
   insertPoolSchema,
   insertServiceSchema,
   insertLeaveRequestSchema,
+  insertWastageSchema,
+  updateKotItemSchema,
   vouchers
 } from "@shared/schema";
 
@@ -1713,10 +1715,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/kot-orders", async (req, res) => {
     try {
-      const kotData = req.body;
-      const kot = await storage.createKotOrder(kotData);
-      res.status(201).json(kot);
+      const { items, ...kotData } = req.body;
+      
+      if (items && items.length > 0) {
+        const kot = await storage.createKotOrderWithItems(kotData, items);
+        res.status(201).json(kot);
+      } else {
+        const kot = await storage.createKotOrder(kotData);
+        res.status(201).json(kot);
+      }
     } catch (error) {
+      console.error("KOT order creation error:", error);
       res.status(400).json({ message: "Invalid KOT data" });
     }
   });
@@ -1729,6 +1738,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(kot);
     } catch (error) {
       res.status(400).json({ message: "Failed to update KOT order" });
+    }
+  });
+
+  app.put("/api/kot-items/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      // Validate the request body
+      const validatedData = updateKotItemSchema.parse(req.body);
+      const { id } = req.params;
+
+      // Get the KOT item with its order to verify hotel ownership
+      const kotItem = await storage.getKotItems(id);
+      if (!kotItem || kotItem.length === 0) {
+        return res.status(404).json({ message: "KOT item not found" });
+      }
+
+      // Verify the KOT item belongs to the user's hotel
+      const kotOrder = await db.query.kotOrders.findFirst({
+        where: (orders, { eq }) => eq(orders.id, kotItem[0].kotId!)
+      });
+
+      if (!kotOrder || kotOrder.hotelId !== user.hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Update the KOT item
+      const updatedItem = await storage.updateKotItem(id, validatedData);
+      res.json(updatedItem);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid data" });
+      }
+      res.status(400).json({ message: "Failed to update KOT item" });
+    }
+  });
+
+  // Wastage routes
+  app.post("/api/hotels/current/wastages", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      // Validate and create wastage with server-side fields
+      const wastageData = insertWastageSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId,
+        recordedBy: user.id
+      });
+
+      // Verify the inventory item exists and belongs to the user's hotel
+      const inventoryItem = await storage.getInventoryItem(wastageData.itemId);
+      if (!inventoryItem || inventoryItem.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Inventory item not found" });
+      }
+
+      const wastage = await storage.createWastage(wastageData);
+      res.status(201).json(wastage);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: error.errors[0]?.message || "Invalid wastage data" });
+      }
+      res.status(400).json({ message: "Failed to record wastage" });
+    }
+  });
+
+  app.get("/api/hotels/current/wastages", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const wastages = await storage.getWastagesByHotel(user.hotelId);
+      res.json(wastages);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch wastages" });
     }
   });
 
