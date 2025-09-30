@@ -5,103 +5,309 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { Wine, Clock, CheckCircle, Wrench } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Wine, Clock, CheckCircle, XCircle, Wrench, Package, AlertTriangle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { getStatusColor } from "@/lib/utils";
+import { useState } from "react";
+
+interface KotItem {
+  id: string;
+  menuItemId: string;
+  qty: number;
+  notes: string | null;
+  status: string;
+  declineReason: string | null;
+  menuItem?: { name: string };
+}
+
+interface KotOrder {
+  id: string;
+  tableId: string;
+  status: string;
+  createdAt: string;
+  items?: KotItem[];
+}
+
+interface RestaurantTable {
+  id: string;
+  tableNumber: string;
+}
+
+interface InventoryItem {
+  id: string;
+  name: string;
+  unit: string;
+}
+
+interface MaintenanceRequest {
+  id: string;
+  title: string;
+  location: string;
+  description: string;
+  priority: string;
+  status: string;
+  photo: string | null;
+}
 
 export default function BartenderDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
+  const [wastageDialogOpen, setWastageDialogOpen] = useState(false);
+  const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<KotItem | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [wastageData, setWastageData] = useState({
+    itemId: "",
+    qty: "",
+    reason: ""
+  });
+  const [maintenanceData, setMaintenanceData] = useState({
+    title: "",
+    location: "",
+    description: "",
+    priority: "medium",
+    photo: ""
+  });
 
   const { data: kotOrders = [] } = useQuery({
-    queryKey: ["/api/hotels/hotel-id/kot-orders"]
+    queryKey: ["/api/hotels/current/kot-orders"]
   });
 
   const { data: tables = [] } = useQuery({
-    queryKey: ["/api/hotels/hotel-id/restaurant-tables"]
+    queryKey: ["/api/hotels/current/restaurant-tables"]
   });
 
-  const { data: menuItems = [] } = useQuery({
-    queryKey: ["/api/hotels/hotel-id/menu-items"]
+  const { data: inventoryItems = [] } = useQuery({
+    queryKey: ["/api/hotels/current/inventory"]
   });
 
-  const form = useForm({
-    defaultValues: {
-      description: ""
-    }
+  const { data: maintenanceRequests = [] } = useQuery({
+    queryKey: ["/api/hotels/current/maintenance-requests"]
   });
 
-  const updateOrderMutation = useMutation({
-    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
-      await apiRequest("PUT", `/api/kot-orders/${orderId}`, { status });
+  const updateKotItemMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      return await apiRequest("PUT", `/api/kot-items/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/hotel-id/kot-orders"] });
-      toast({ title: "Order status updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
+      toast({ title: "KOT item updated successfully" });
+      setDeclineDialogOpen(false);
+      setDeclineReason("");
+      setSelectedItem(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   });
 
-  const createMaintenanceRequestMutation = useMutation({
+  const createWastageMutation = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("POST", "/api/maintenance-requests", {
-        hotelId: user?.hotelId,
-        raisedBy: user?.id,
-        department: "bar",
-        description: data.description,
-        status: "open"
+      return await apiRequest("POST", "/api/hotels/current/wastages", data);
+    },
+    onSuccess: () => {
+      toast({ title: "Wastage recorded successfully" });
+      setWastageDialogOpen(false);
+      setWastageData({ itemId: "", qty: "", reason: "" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const createMaintenanceMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("POST", "/api/hotels/current/maintenance-requests", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/maintenance-requests"] });
+      toast({ title: "Maintenance request created successfully" });
+      setMaintenanceDialogOpen(false);
+      setMaintenanceData({
+        title: "",
+        location: "",
+        description: "",
+        priority: "medium",
+        photo: ""
       });
     },
-    onSuccess: () => {
-      toast({ title: "Maintenance request submitted successfully" });
-      form.reset();
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   });
 
-  // Filter for bar/beverage related orders (this would be based on menu categories in a real implementation)
-  const beverageItems = menuItems.filter(item => 
-    item.name.toLowerCase().includes('drink') || 
-    item.name.toLowerCase().includes('cocktail') || 
-    item.name.toLowerCase().includes('beer') ||
-    item.name.toLowerCase().includes('wine') ||
-    item.description?.toLowerCase().includes('alcohol')
+  const handleApprove = (item: KotItem) => {
+    updateKotItemMutation.mutate({
+      id: item.id,
+      data: { status: "approved" }
+    });
+  };
+
+  const handleDecline = (item: KotItem) => {
+    setSelectedItem(item);
+    setDeclineDialogOpen(true);
+  };
+
+  const handleSetReady = (item: KotItem) => {
+    updateKotItemMutation.mutate({
+      id: item.id,
+      data: { status: "ready" }
+    });
+  };
+
+  const submitDecline = () => {
+    if (!selectedItem || !declineReason.trim()) {
+      toast({ title: "Please provide a reason for declining", variant: "destructive" });
+      return;
+    }
+    updateKotItemMutation.mutate({
+      id: selectedItem.id,
+      data: { status: "declined", declineReason: declineReason.trim() }
+    });
+  };
+
+  const submitWastage = () => {
+    if (!wastageData.itemId || !wastageData.qty || !wastageData.reason.trim()) {
+      toast({ title: "Please fill all wastage fields", variant: "destructive" });
+      return;
+    }
+    const qty = parseFloat(wastageData.qty);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: "Please enter a valid quantity", variant: "destructive" });
+      return;
+    }
+    createWastageMutation.mutate({
+      itemId: wastageData.itemId,
+      qty: qty.toString(),
+      reason: wastageData.reason.trim()
+    });
+  };
+
+  const submitMaintenance = () => {
+    if (!maintenanceData.title.trim() || !maintenanceData.location.trim() || !maintenanceData.description.trim()) {
+      toast({ title: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+    createMaintenanceMutation.mutate(maintenanceData);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMaintenanceData({ ...maintenanceData, photo: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const pendingOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
+    order.items?.some((item: KotItem) => item.status === 'pending')
+  ) : [];
+  
+  const approvedOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
+    order.items?.some((item: KotItem) => item.status === 'approved')
+  ) : [];
+  
+  const readyOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
+    order.items?.every((item: KotItem) => item.status === 'ready')
+  ) : [];
+  
+  const declinedOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
+    order.items?.some((item: KotItem) => item.status === 'declined')
+  ) : [];
+
+  const getTableNumber = (tableId: string) => {
+    if (!Array.isArray(tables)) return tableId;
+    const table = (tables as RestaurantTable[]).find((t: RestaurantTable) => t.id === tableId);
+    return table ? `Table ${table.tableNumber}` : tableId;
+  };
+
+  const renderKotCard = (order: KotOrder) => (
+    <Card key={order.id}>
+      <CardHeader>
+        <CardTitle className="flex justify-between items-center">
+          <span>{getTableNumber(order.tableId)}</span>
+          <span className="text-sm text-gray-500">
+            {new Date(order.createdAt).toLocaleTimeString()}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {order.items?.map((item: KotItem) => (
+          <div key={item.id} className="mb-4 p-3 border rounded">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <p className="font-semibold">{item.menuItem?.name}</p>
+                <p className="text-sm text-gray-600">Quantity: {item.qty}</p>
+                {item.notes && <p className="text-sm text-gray-500">Notes: {item.notes}</p>}
+                {item.declineReason && (
+                  <p className="text-sm text-red-600">Declined: {item.declineReason}</p>
+                )}
+              </div>
+              <Badge variant={
+                item.status === 'approved' ? 'default' :
+                item.status === 'ready' ? 'default' :
+                item.status === 'declined' ? 'destructive' : 'secondary'
+              }>
+                {item.status}
+              </Badge>
+            </div>
+            {item.status === 'pending' && (
+              <div className="flex gap-2 mt-2">
+                <Button
+                  size="sm"
+                  onClick={() => handleApprove(item)}
+                  className="flex-1"
+                >
+                  <CheckCircle className="w-4 h-4 mr-1" /> Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDecline(item)}
+                  className="flex-1"
+                >
+                  <XCircle className="w-4 h-4 mr-1" /> Decline
+                </Button>
+              </div>
+            )}
+            {item.status === 'approved' && (
+              <Button
+                size="sm"
+                onClick={() => handleSetReady(item)}
+                className="w-full mt-2"
+              >
+                <Clock className="w-4 h-4 mr-1" /> Set Ready
+              </Button>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
-
-  const barOrders = kotOrders; // In a real app, this would be filtered for bar-specific orders
-  const pendingOrders = barOrders.filter(order => order.status === 'open');
-  const preparingOrders = barOrders.filter(order => order.status === 'preparing');
-  const readyOrders = barOrders.filter(order => order.status === 'ready');
-  const completedToday = barOrders.filter(order => {
-    const today = new Date().toDateString();
-    return order.status === 'served' && new Date(order.updatedAt || order.createdAt).toDateString() === today;
-  });
-
-  const handleOrderStatusUpdate = (order: any, newStatus: string) => {
-    updateOrderMutation.mutate({ orderId: order.id, status: newStatus });
-  };
-
-  const onSubmitMaintenanceRequest = (data: any) => {
-    createMaintenanceRequestMutation.mutate(data);
-  };
 
   return (
     <DashboardLayout title="Bartender Dashboard">
       <div className="space-y-6">
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
-            title="Pending Drinks"
+            title="Pending Orders"
             value={pendingOrders.length}
             icon={<Clock />}
             iconColor="text-orange-500"
           />
           <StatsCard
             title="In Preparation"
-            value={preparingOrders.length}
+            value={approvedOrders.length}
             icon={<Wine />}
             iconColor="text-purple-500"
           />
@@ -112,239 +318,263 @@ export default function BartenderDashboard() {
             iconColor="text-green-500"
           />
           <StatsCard
-            title="Served Today"
-            value={completedToday.length}
-            icon={<CheckCircle />}
-            iconColor="text-blue-500"
+            title="Declined"
+            value={declinedOrders.length}
+            icon={<XCircle />}
+            iconColor="text-red-500"
           />
         </div>
 
-        {/* Drink Orders */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Pending Orders */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Clock className="h-5 w-5 text-orange-500" />
-                <span>Pending Drink Orders</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {pendingOrders.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-4" data-testid="no-pending-orders">
-                    No pending drink orders
-                  </p>
-                ) : (
-                  pendingOrders.slice(0, 10).map((order, index) => (
-                    <div key={order.id} className="p-4 border rounded-lg" data-testid={`pending-order-${index}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-foreground">
-                          {tables.find(t => t.id === order.tableId)?.name || `Table ${index + 1}`}
-                        </h4>
-                        <Badge className={getStatusColor(order.status)} variant="secondary">
-                          New Order
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        Order #{order.id.slice(0, 8)} • {new Date(order.createdAt).toLocaleTimeString()}
-                      </p>
-                      <Button
-                        size="sm"
-                        onClick={() => handleOrderStatusUpdate(order, 'preparing')}
-                        disabled={updateOrderMutation.isPending}
-                        className="w-full"
-                        data-testid={`button-start-preparing-${index}`}
-                      >
-                        Start Preparing
-                      </Button>
-                    </div>
-                  ))
-                )}
+        <div className="flex gap-2 justify-end">
+          <Dialog open={wastageDialogOpen} onOpenChange={setWastageDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Package className="w-4 h-4 mr-2" /> Record Wastage
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Record Wastage</DialogTitle>
+                <DialogDescription>Record inventory wastage with reason</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Inventory Item</Label>
+                  <Select
+                    value={wastageData.itemId}
+                    onValueChange={(value) => setWastageData({ ...wastageData, itemId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select item" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.isArray(inventoryItems) && (inventoryItems as InventoryItem[]).map((item: InventoryItem) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name} ({item.unit})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Quantity</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={wastageData.qty}
+                    onChange={(e) => setWastageData({ ...wastageData, qty: e.target.value })}
+                    placeholder="Enter quantity"
+                  />
+                </div>
+                <div>
+                  <Label>Reason</Label>
+                  <Textarea
+                    value={wastageData.reason}
+                    onChange={(e) => setWastageData({ ...wastageData, reason: e.target.value })}
+                    placeholder="Explain reason for wastage"
+                  />
+                </div>
+                <Button onClick={submitWastage} className="w-full" disabled={createWastageMutation.isPending}>
+                  Record Wastage
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            </DialogContent>
+          </Dialog>
 
-          {/* Orders in Preparation */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Wine className="h-5 w-5 text-purple-500" />
-                <span>In Preparation</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {preparingOrders.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-4" data-testid="no-preparing-orders">
-                    No drinks in preparation
-                  </p>
-                ) : (
-                  preparingOrders.slice(0, 10).map((order, index) => (
-                    <div key={order.id} className="p-4 border rounded-lg bg-purple-50" data-testid={`preparing-order-${index}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-foreground">
-                          {tables.find(t => t.id === order.tableId)?.name || `Table ${index + 1}`}
-                        </h4>
-                        <Badge className={getStatusColor(order.status)} variant="secondary">
-                          In Progress
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        Order #{order.id.slice(0, 8)} • Started {new Date(order.updatedAt || order.createdAt).toLocaleTimeString()}
-                      </p>
-                      <Button
-                        size="sm"
-                        onClick={() => handleOrderStatusUpdate(order, 'ready')}
-                        disabled={updateOrderMutation.isPending}
-                        className="w-full"
-                        data-testid={`button-mark-ready-${index}`}
-                      >
-                        Mark as Ready
-                      </Button>
-                    </div>
-                  ))
-                )}
+          <Dialog open={maintenanceDialogOpen} onOpenChange={setMaintenanceDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Wrench className="w-4 h-4 mr-2" /> Maintenance Request
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Maintenance Request</DialogTitle>
+                <DialogDescription>Report a maintenance issue</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Title</Label>
+                  <Input
+                    value={maintenanceData.title}
+                    onChange={(e) => setMaintenanceData({ ...maintenanceData, title: e.target.value })}
+                    placeholder="Brief title"
+                  />
+                </div>
+                <div>
+                  <Label>Location</Label>
+                  <Input
+                    value={maintenanceData.location}
+                    onChange={(e) => setMaintenanceData({ ...maintenanceData, location: e.target.value })}
+                    placeholder="e.g., Bar Counter"
+                  />
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={maintenanceData.description}
+                    onChange={(e) => setMaintenanceData({ ...maintenanceData, description: e.target.value })}
+                    placeholder="Describe the issue"
+                  />
+                </div>
+                <div>
+                  <Label>Priority</Label>
+                  <Select
+                    value={maintenanceData.priority}
+                    onValueChange={(value) => setMaintenanceData({ ...maintenanceData, priority: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Photo (Optional)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                  />
+                  {maintenanceData.photo && (
+                    <img src={maintenanceData.photo} alt="Preview" className="mt-2 max-w-full h-32 object-cover rounded" />
+                  )}
+                </div>
+                <Button onClick={submitMaintenance} className="w-full" disabled={createMaintenanceMutation.isPending}>
+                  Submit Request
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        {/* Ready Orders */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
-              <span>Ready for Service</span>
+              <Wine className="h-5 w-5 text-purple-500" />
+              <span>Bar Orders</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold mb-2">Pending Orders ({pendingOrders.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {pendingOrders.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4">No pending orders</p>
+                  ) : (
+                    pendingOrders.map(renderKotCard)
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-2">In Preparation ({approvedOrders.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {approvedOrders.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4">No orders in preparation</p>
+                  ) : (
+                    approvedOrders.map(renderKotCard)
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-2">Ready ({readyOrders.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {readyOrders.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4">No ready orders</p>
+                  ) : (
+                    readyOrders.map(renderKotCard)
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-2">Declined ({declinedOrders.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {declinedOrders.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4">No declined orders</p>
+                  ) : (
+                    declinedOrders.map(renderKotCard)
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <span>Maintenance Requests</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {readyOrders.length === 0 ? (
-                <p className="col-span-full text-center text-muted-foreground py-4" data-testid="no-ready-orders">
-                  No drinks ready for service
-                </p>
+              {!Array.isArray(maintenanceRequests) || maintenanceRequests.length === 0 ? (
+                <p className="text-gray-500 col-span-full text-center py-4">No maintenance requests</p>
               ) : (
-                readyOrders.map((order, index) => (
-                  <div key={order.id} className="p-4 border rounded-lg bg-green-50" data-testid={`ready-order-${index}`}>
-                    <div className="text-center">
-                      <Wine className="h-8 w-8 mx-auto mb-2 text-green-600" />
-                      <h4 className="font-medium text-foreground mb-1">
-                        {tables.find(t => t.id === order.tableId)?.name || `Table ${index + 1}`}
-                      </h4>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Order #{order.id.slice(0, 8)}
-                      </p>
-                      <Badge className={getStatusColor(order.status)} variant="secondary">
-                        Ready for Pickup
-                      </Badge>
-                    </div>
-                  </div>
+                (maintenanceRequests as MaintenanceRequest[]).map((request: MaintenanceRequest) => (
+                  <Card key={request.id}>
+                    <CardHeader>
+                      <CardTitle className="flex justify-between items-center">
+                        <span>{request.title}</span>
+                        <Badge variant={
+                          request.priority === 'high' ? 'destructive' :
+                          request.priority === 'medium' ? 'default' : 'secondary'
+                        }>
+                          {request.priority}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm"><strong>Location:</strong> {request.location}</p>
+                      <p className="text-sm"><strong>Status:</strong> {request.status}</p>
+                      <p className="text-sm mt-2">{request.description}</p>
+                      {request.photo && (
+                        <img src={request.photo} alt="Issue" className="mt-2 max-w-full h-32 object-cover rounded" />
+                      )}
+                    </CardContent>
+                  </Card>
                 ))
               )}
             </div>
           </CardContent>
         </Card>
-
-        {/* Popular Drinks */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Popular Beverages</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 bg-red-50 rounded-lg text-center" data-testid="popular-drink-cocktails">
-                <Wine className="h-8 w-8 mx-auto mb-2 text-red-600" />
-                <h4 className="font-medium text-foreground">Cocktails</h4>
-                <p className="text-sm text-muted-foreground">Classic & Signature</p>
-              </div>
-              <div className="p-4 bg-yellow-50 rounded-lg text-center" data-testid="popular-drink-beer">
-                <Wine className="h-8 w-8 mx-auto mb-2 text-yellow-600" />
-                <h4 className="font-medium text-foreground">Draft Beer</h4>
-                <p className="text-sm text-muted-foreground">Local & Imported</p>
-              </div>
-              <div className="p-4 bg-purple-50 rounded-lg text-center" data-testid="popular-drink-wine">
-                <Wine className="h-8 w-8 mx-auto mb-2 text-purple-600" />
-                <h4 className="font-medium text-foreground">Wine Selection</h4>
-                <p className="text-sm text-muted-foreground">Red, White & Rosé</p>
-              </div>
-              <div className="p-4 bg-blue-50 rounded-lg text-center" data-testid="popular-drink-mocktails">
-                <Wine className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-                <h4 className="font-medium text-foreground">Mocktails</h4>
-                <p className="text-sm text-muted-foreground">Fresh & Fruity</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Maintenance Request */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Wrench className="h-5 w-5 text-red-500" />
-              <span>Report Bar Equipment Issue</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmitMaintenanceRequest)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Issue Description</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          placeholder="Describe the bar equipment issue (coffee machine, blender, refrigeration, etc.)..."
-                          rows={4}
-                          data-testid="textarea-maintenance-description"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <Button
-                  type="submit"
-                  disabled={createMaintenanceRequestMutation.isPending}
-                  data-testid="button-submit-maintenance"
-                >
-                  <Wrench className="h-4 w-4 mr-2" />
-                  {createMaintenanceRequestMutation.isPending ? "Submitting..." : "Submit Request"}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-
-        {/* Bar Performance */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Bar Performance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-green-50 rounded-lg" data-testid="performance-accuracy">
-                <div className="text-2xl font-bold text-green-600">99%</div>
-                <div className="text-sm text-green-700">Order Accuracy</div>
-              </div>
-              <div className="text-center p-4 bg-blue-50 rounded-lg" data-testid="performance-avg-time">
-                <div className="text-2xl font-bold text-blue-600">4m</div>
-                <div className="text-sm text-blue-700">Avg. Prep Time</div>
-              </div>
-              <div className="text-center p-4 bg-purple-50 rounded-lg" data-testid="performance-drinks-today">
-                <div className="text-2xl font-bold text-purple-600">{barOrders.length}</div>
-                <div className="text-sm text-purple-700">Drinks Today</div>
-              </div>
-              <div className="text-center p-4 bg-orange-50 rounded-lg" data-testid="performance-efficiency">
-                <div className="text-2xl font-bold text-orange-600">96%</div>
-                <div className="text-sm text-orange-700">Bar Efficiency</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
+
+      <Dialog open={declineDialogOpen} onOpenChange={setDeclineDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Decline KOT Item</DialogTitle>
+            <DialogDescription>Please provide a reason for declining this item</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Reason for Decline</Label>
+              <Textarea
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+                placeholder="e.g., Out of stock, Equipment issue"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDeclineDialogOpen(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={submitDecline} className="flex-1" variant="destructive" disabled={updateKotItemMutation.isPending}>
+                Decline
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
