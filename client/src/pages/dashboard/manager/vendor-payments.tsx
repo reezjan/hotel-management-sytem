@@ -1,0 +1,387 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Trash2, Plus, DollarSign, Calendar, User, FileText } from "lucide-react";
+import { toast } from "sonner";
+
+interface Vendor {
+  id: string;
+  name: string;
+  contact: any;
+  hotelId: string;
+  createdAt: string;
+}
+
+interface Transaction {
+  id: string;
+  hotelId: string;
+  txnType: string;
+  amount: string;
+  currency: string;
+  paymentMethod: string;
+  vendorId: string | null;
+  purpose: string;
+  reference: string;
+  createdBy: string;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+export default function VendorPayments() {
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [selectedVendor, setSelectedVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [reference, setReference] = useState("");
+
+  const queryClient = useQueryClient();
+
+  // Get current user and hotel info
+  const { data: currentUser, isLoading: userLoading } = useQuery<any>({
+    queryKey: ["/api/user"],
+    queryFn: async () => {
+      const response = await fetch("/api/user", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch user");
+      return response.json();
+    }
+  });
+
+  // Fetch vendors for this hotel
+  const { data: vendors = [], isLoading: vendorsLoading } = useQuery<Vendor[]>({
+    queryKey: ["/api/hotels/current/vendors"],
+    queryFn: async () => {
+      const response = await fetch("/api/hotels/current/vendors", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch vendors");
+      return response.json();
+    }
+  });
+
+  // Fetch vendor payments (transactions with vendorId)
+  const { data: transactions = [], isLoading: transactionsLoading } = useQuery<Transaction[]>({
+    queryKey: ["/api/hotels/current/transactions"],
+    queryFn: async () => {
+      const response = await fetch("/api/hotels/current/transactions", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch transactions");
+      const allTransactions = await response.json();
+      // Filter to only vendor payments
+      return allTransactions.filter((t: Transaction) => t.vendorId && t.txnType === "vendor_payment");
+    }
+  });
+
+  // Create payment mutation
+  const createPayment = useMutation({
+    mutationFn: async (paymentData: any) => {
+      if (!currentUser?.hotelId || !currentUser?.id) {
+        throw new Error("User information not available");
+      }
+      
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          ...paymentData,
+          hotelId: currentUser.hotelId,
+          txnType: "vendor_payment",
+          createdBy: currentUser.id
+        })
+      });
+      if (!response.ok) throw new Error("Failed to create payment");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      toast.success("Payment recorded successfully");
+      resetForm();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to record payment");
+    }
+  });
+
+  // Delete payment mutation
+  const deletePayment = useMutation({
+    mutationFn: async (transactionId: string) => {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+      if (!response.ok) throw new Error("Failed to delete payment");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      toast.success("Payment deleted successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to delete payment");
+    }
+  });
+
+  const resetForm = () => {
+    setSelectedVendor("");
+    setAmount("");
+    setPaymentMethod("");
+    setPurpose("");
+    setReference("");
+    setShowPaymentForm(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!currentUser?.hotelId || !currentUser?.id) {
+      toast.error("Please wait for user information to load");
+      return;
+    }
+    
+    if (!selectedVendor || !amount || !paymentMethod || !purpose) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    if (isNaN(Number(amount)) || Number(amount) <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+
+    createPayment.mutate({
+      vendorName: selectedVendor, // Send vendor name instead of ID
+      amount: Number(amount).toFixed(2),
+      currency: "NPR",
+      paymentMethod,
+      purpose,
+      reference: reference || undefined
+    });
+  };
+
+  const getVendorName = (vendorId: string) => {
+    const vendor = vendors.find(v => v.id === vendorId);
+    return vendor?.name || "Unknown Vendor";
+  };
+
+  const formatCurrency = (amount: string) => {
+    return `NPR ${Number(amount).toLocaleString()}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
+  if (userLoading || vendorsLoading || transactionsLoading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="h-32 bg-gray-200 rounded"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Vendor Payments</h1>
+          <p className="text-gray-600 mt-1">Manage payments to vendors and suppliers</p>
+        </div>
+        <Button 
+          onClick={() => setShowPaymentForm(true)}
+          className="flex items-center gap-2"
+        >
+          <Plus className="h-4 w-4" />
+          Record Payment
+        </Button>
+      </div>
+
+      {/* Payment Stats */}
+      <div className="grid md:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatCurrency(transactions.reduce((sum, t) => sum + Number(t.amount), 0).toFixed(2))}
+            </div>
+            <p className="text-xs text-muted-foreground">This month</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Vendors</CardTitle>
+            <User className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{vendors.length}</div>
+            <p className="text-xs text-muted-foreground">Registered vendors</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Recent Payments</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{transactions.length}</div>
+            <p className="text-xs text-muted-foreground">Total records</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Payment Form */}
+      {showPaymentForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Record New Payment</CardTitle>
+            <CardDescription>Enter payment details for vendor</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="vendor">Vendor Name *</Label>
+                  <Input
+                    id="vendor"
+                    placeholder="Enter vendor name"
+                    value={selectedVendor}
+                    onChange={(e) => setSelectedVendor(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Amount (NPR) *</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="paymentMethod">Payment Method *</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="cheque">Cheque</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="digital_wallet">Digital Wallet</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="reference">Reference Number</Label>
+                  <Input
+                    id="reference"
+                    placeholder="Cheque number, transfer ID, etc."
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="purpose">Purpose *</Label>
+                <Textarea
+                  id="purpose"
+                  placeholder="Description of payment purpose"
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button type="submit" disabled={createPayment.isPending}>
+                  {createPayment.isPending ? "Recording..." : "Record Payment"}
+                </Button>
+                <Button type="button" variant="outline" onClick={resetForm}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Payment History */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment History</CardTitle>
+          <CardDescription>Recent vendor payments</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {transactions.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No vendor payments recorded yet</p>
+              <p className="text-sm">Click "Record Payment" to add your first payment</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {transactions.map((transaction) => (
+                <div 
+                  key={transaction.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="font-medium">{getVendorName(transaction.vendorId!)}</h3>
+                      <Badge variant="outline" className="capitalize">
+                        {transaction.paymentMethod.replace('_', ' ')}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-1">{transaction.purpose}</p>
+                    <p className="text-xs text-gray-500">{formatDate(transaction.createdAt)}</p>
+                    {transaction.reference && (
+                      <p className="text-xs text-gray-500">Ref: {transaction.reference}</p>
+                    )}
+                  </div>
+                  
+                  <div className="text-right">
+                    <p className="font-semibold text-lg">{formatCurrency(transaction.amount)}</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deletePayment.mutate(transaction.id)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      disabled={deletePayment.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
