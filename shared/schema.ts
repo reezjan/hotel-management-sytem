@@ -169,6 +169,17 @@ export const inventoryConsumptions = pgTable("inventory_consumptions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
+// Wastages Table
+export const wastages = pgTable("wastages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  itemId: uuid("item_id").references(() => inventoryItems.id),
+  qty: numeric("qty", { precision: 12, scale: 3 }).notNull(),
+  reason: text("reason").notNull(),
+  recordedBy: uuid("recorded_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
 // Vendors Table
 export const vendors = pgTable("vendors", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -278,6 +289,7 @@ export const kotItems = pgTable("kot_items", {
   unit: text("unit"),
   inventoryUsage: jsonb("inventory_usage"),
   status: text("status").default('pending'),
+  declineReason: text("decline_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
@@ -568,6 +580,21 @@ export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
   endDate: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val))
 });
 
+export const insertWastageSchema = createInsertSchema(wastages).omit({
+  id: true,
+  createdAt: true,
+  hotelId: true,
+  recordedBy: true
+});
+
+export const updateKotItemSchema = z.object({
+  status: z.enum(['pending', 'approved', 'declined', 'ready']),
+  declineReason: z.string().optional()
+}).refine(
+  (data) => data.status !== 'declined' || (data.declineReason && data.declineReason.trim().length > 0),
+  { message: "Decline reason is required when declining a KOT item", path: ['declineReason'] }
+);
+
 // Types
 export type User = typeof users.$inferSelect;
 export type UserWithRole = User & { role?: Role };
@@ -609,3 +636,5 @@ export type Payment = typeof payments.$inferSelect;
 export type Attendance = typeof attendance.$inferSelect;
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+export type Wastage = typeof wastages.$inferSelect;
+export type InsertWastage = z.infer<typeof insertWastageSchema>;
