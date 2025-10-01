@@ -587,6 +587,12 @@ export const insertWastageSchema = createInsertSchema(wastages).omit({
   recordedBy: true
 });
 
+export const insertVehicleLogSchema = createInsertSchema(vehicleLogs).omit({
+  id: true,
+  hotelId: true,
+  recordedBy: true
+});
+
 export const updateKotItemSchema = z.object({
   status: z.enum(['pending', 'approved', 'declined', 'ready']),
   declineReason: z.string().optional()
@@ -622,6 +628,7 @@ export type MenuCategory = typeof menuCategories.$inferSelect;
 export type HotelTax = typeof hotelTaxes.$inferSelect;
 export type Voucher = typeof vouchers.$inferSelect;
 export type VehicleLog = typeof vehicleLogs.$inferSelect;
+export type InsertVehicleLog = z.infer<typeof insertVehicleLogSchema>;
 export type RoomServiceOrder = typeof roomServiceOrders.$inferSelect;
 export type RoomType = typeof roomTypes.$inferSelect;
 export type InsertRoomType = z.infer<typeof insertRoomTypeSchema>;

@@ -9,5 +9,5 @@ if (!process.env.DATABASE_URL) {
 }
 
 // Use postgres-js for better compatibility
-const client = postgres(process.env.DATABASE_URL, { ssl: false });
+const client = postgres(process.env.DATABASE_URL, { ssl: 'require' });
 export const db = drizzle(client, { schema });

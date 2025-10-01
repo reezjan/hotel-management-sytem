@@ -56,6 +56,7 @@ import {
   type Voucher,
   type InsertVoucher,
   type VehicleLog,
+  type InsertVehicleLog,
   type RoomServiceOrder,
   type Hall,
   type InsertHall,
@@ -161,6 +162,7 @@ export interface IStorage {
   getMaintenanceRequestsByHotel(hotelId: string): Promise<MaintenanceRequest[]>;
   createMaintenanceRequest(request: InsertMaintenanceRequest): Promise<MaintenanceRequest>;
   updateMaintenanceRequest(id: string, request: Partial<InsertMaintenanceRequest>): Promise<MaintenanceRequest>;
+  getMaintenanceRequest(id: string): Promise<MaintenanceRequest | undefined>;
   
   // KOT operations
   getKotOrdersByHotel(hotelId: string): Promise<KotOrder[]>;
@@ -204,6 +206,9 @@ export interface IStorage {
   
   // Vehicle operations
   getVehicleLogsByHotel(hotelId: string): Promise<VehicleLog[]>;
+  createVehicleLog(log: any): Promise<VehicleLog>;
+  updateVehicleLog(id: string, log: Partial<VehicleLog>): Promise<VehicleLog>;
+  getVehicleLog(id: string): Promise<VehicleLog | undefined>;
   
   // Room service operations
   getRoomServiceOrdersByHotel(hotelId: string): Promise<RoomServiceOrder[]>;
@@ -663,6 +668,14 @@ export class DatabaseStorage implements IStorage {
     return request;
   }
 
+  async getMaintenanceRequest(id: string): Promise<MaintenanceRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(maintenanceRequests)
+      .where(eq(maintenanceRequests.id, id));
+    return request;
+  }
+
   // KOT operations
   async getKotOrdersByHotel(hotelId: string): Promise<any[]> {
     const orders = await db
@@ -872,6 +885,28 @@ export class DatabaseStorage implements IStorage {
       .from(vehicleLogs)
       .where(eq(vehicleLogs.hotelId, hotelId))
       .orderBy(desc(vehicleLogs.checkIn));
+  }
+
+  async createVehicleLog(log: InsertVehicleLog): Promise<VehicleLog> {
+    const [result] = await db.insert(vehicleLogs).values(log).returning();
+    return result;
+  }
+
+  async updateVehicleLog(id: string, log: Partial<VehicleLog>): Promise<VehicleLog> {
+    const [result] = await db
+      .update(vehicleLogs)
+      .set(log)
+      .where(eq(vehicleLogs.id, id))
+      .returning();
+    return result;
+  }
+
+  async getVehicleLog(id: string): Promise<VehicleLog | undefined> {
+    const [result] = await db
+      .select()
+      .from(vehicleLogs)
+      .where(eq(vehicleLogs.id, id));
+    return result;
   }
 
   // Room service operations

@@ -20,6 +20,7 @@ import {
   insertServiceSchema,
   insertLeaveRequestSchema,
   insertWastageSchema,
+  insertVehicleLogSchema,
   updateKotItemSchema,
   vouchers
 } from "@shared/schema";
@@ -1782,6 +1783,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/kot-orders/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+      
+      // Verify the KOT order belongs to the user's hotel
+      const kotOrder = await db.query.kotOrders.findFirst({
+        where: (orders, { eq }) => eq(orders.id, id)
+      });
+
+      if (!kotOrder) {
+        return res.status(404).json({ message: "KOT order not found" });
+      }
+
+      if (kotOrder.hotelId !== user.hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Delete the KOT order with inventory restoration
+      await storage.deleteKotOrderWithInventoryRestore(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("KOT deletion error:", error);
+      res.status(400).json({ message: "Failed to delete KOT order" });
+    }
+  });
+
   // Wastage routes
   app.post("/api/hotels/current/wastages", async (req, res) => {
     try {
@@ -2267,6 +2301,307 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Leave request update error:", error);
       res.status(400).json({ message: "Failed to update leave request" });
+    }
+  });
+
+  // Vehicle log routes
+  app.get("/api/hotels/current/vehicle-logs", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const logs = await storage.getVehicleLogsByHotel(user.hotelId);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch vehicle logs" });
+    }
+  });
+
+  app.post("/api/hotels/current/vehicle-logs", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const logData = insertVehicleLogSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId,
+        recordedBy: user.id
+      });
+      const log = await storage.createVehicleLog(logData);
+      res.status(201).json(log);
+    } catch (error) {
+      console.error("Vehicle log creation error:", error);
+      res.status(400).json({ message: "Invalid vehicle log data" });
+    }
+  });
+
+  app.patch("/api/vehicle-logs/:id/checkout", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      
+      // Verify the log exists
+      const existingLog = await storage.getVehicleLog(id);
+      if (!existingLog) {
+        return res.status(404).json({ message: "Vehicle log not found" });
+      }
+      
+      // Check authorization (only creator or Security Head can checkout)
+      const userRole = user.role?.name || '';
+      const isAuthorized = existingLog.recordedBy === user.id || userRole === 'security_head';
+      
+      if (!isAuthorized) {
+        return res.status(403).json({ message: "Unauthorized to checkout this vehicle" });
+      }
+      
+      const updatedLog = await storage.updateVehicleLog(id, { checkOut: new Date() });
+      res.json(updatedLog);
+    } catch (error) {
+      console.error("Vehicle checkout error:", error);
+      res.status(400).json({ message: "Failed to checkout vehicle" });
+    }
+  });
+
+  // Security Head routes - Create Surveillance Officer
+  app.post("/api/hotels/current/security/officers", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only Security Head can create Surveillance Officers
+      const userRole = user.role?.name || '';
+      if (userRole !== 'security_head') {
+        return res.status(403).json({ message: "Only Security Head can create Surveillance Officers" });
+      }
+      
+      // Get the Surveillance Officer role
+      const officerRole = await storage.getRoleByName('surveillance_officer');
+      if (!officerRole) {
+        return res.status(400).json({ message: "Surveillance Officer role not found" });
+      }
+      
+      const { username, password, email, phone } = req.body;
+      
+      // Check if username already exists
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(409).json({ message: "Username already exists" });
+      }
+      
+      // Hash password using Node.js crypto
+      const crypto = await import('crypto');
+      const salt = crypto.randomBytes(16).toString('hex');
+      const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+      const passwordHash = `${salt}:${hash}`;
+      
+      const userData = insertUserSchema.parse({
+        username,
+        email,
+        phone,
+        passwordHash,
+        roleId: officerRole.id,
+        hotelId: user.hotelId,
+        createdBy: user.id,
+        isActive: true
+      });
+      
+      const officer = await storage.createUser(userData);
+      res.status(201).json(officer);
+    } catch (error) {
+      console.error("Officer creation error:", error);
+      res.status(400).json({ message: "Failed to create Surveillance Officer" });
+    }
+  });
+
+  // Security Head routes - Get Surveillance Officers
+  app.get("/api/hotels/current/security/officers", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only Security Head can view officers
+      const userRole = user.role?.name || '';
+      if (userRole !== 'security_head') {
+        return res.status(403).json({ message: "Only Security Head can view Surveillance Officers" });
+      }
+      
+      const allUsers = await storage.getUsersByHotel(user.hotelId);
+      const officers = allUsers.filter(u => u.role?.name === 'surveillance_officer');
+      res.json(officers);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch Surveillance Officers" });
+    }
+  });
+
+  // Security Head routes - Create task for officer
+  app.post("/api/hotels/current/security/tasks", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only Security Head can create officer tasks
+      const userRole = user.role?.name || '';
+      if (userRole !== 'security_head') {
+        return res.status(403).json({ message: "Only Security Head can create tasks" });
+      }
+      
+      const taskData = insertTaskSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId,
+        createdBy: user.id
+      });
+      
+      const task = await storage.createTask(taskData);
+      res.status(201).json(task);
+    } catch (error) {
+      console.error("Task creation error:", error);
+      res.status(400).json({ message: "Failed to create task" });
+    }
+  });
+
+  // Security routes - Get tasks (Head sees all officer tasks, Officer sees assigned tasks)
+  app.get("/api/hotels/current/security/tasks", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const userRole = user.role?.name || '';
+      
+      if (userRole === 'security_head') {
+        // Security Head sees all tasks
+        const allTasks = await storage.getTasksByHotel(user.hotelId);
+        res.json(allTasks);
+      } else if (userRole === 'surveillance_officer') {
+        // Surveillance Officer sees only assigned tasks
+        const myTasks = await storage.getTasksByUser(user.id);
+        res.json(myTasks);
+      } else {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch tasks" });
+    }
+  });
+
+  // Update task status (for Surveillance Officer)
+  app.patch("/api/tasks/:id/status", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      const { status } = req.body;
+      
+      // Verify the task exists
+      const task = await storage.getTask(id);
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
+      // Check if user is assigned to this task or is the creator
+      if (task.assignedTo !== user.id && task.createdBy !== user.id) {
+        return res.status(403).json({ message: "Unauthorized to update this task" });
+      }
+      
+      const updatedTask = await storage.updateTask(id, { status });
+      res.json(updatedTask);
+    } catch (error) {
+      console.error("Task update error:", error);
+      res.status(400).json({ message: "Failed to update task" });
+    }
+  });
+
+  // Forward maintenance request to finance (Security Head only)
+  app.post("/api/maintenance-requests/:id/forward", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      const { financeUserId } = req.body;
+      
+      // Only Security Head can forward requests
+      const userRole = user.role?.name || '';
+      if (userRole !== 'security_head') {
+        return res.status(403).json({ message: "Only Security Head can forward maintenance requests" });
+      }
+      
+      // Verify the maintenance request exists and belongs to this hotel
+      const request = await storage.getMaintenanceRequest(id);
+      if (!request || request.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Maintenance request not found" });
+      }
+      
+      // Verify the finance user exists
+      const financeUser = await storage.getUser(financeUserId);
+      if (!financeUser || financeUser.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Finance user not found" });
+      }
+      
+      // Update the maintenance request
+      const updatedRequest = await storage.updateMaintenanceRequest(id, {
+        assignedTo: financeUserId,
+        status: 'forwarded'
+      });
+      
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Maintenance forward error:", error);
+      res.status(400).json({ message: "Failed to forward maintenance request" });
+    }
+  });
+
+  // Duty status toggle (for any user)
+  app.patch("/api/users/me/duty", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { isOnline } = req.body;
+      
+      if (typeof isOnline !== 'boolean') {
+        return res.status(400).json({ message: "Invalid duty status" });
+      }
+      
+      await storage.updateUserOnlineStatus(user.id, isOnline);
+      res.json({ success: true, isOnline });
+    } catch (error) {
+      console.error("Duty status update error:", error);
+      res.status(400).json({ message: "Failed to update duty status" });
     }
   });
 
