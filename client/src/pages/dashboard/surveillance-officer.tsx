@@ -26,9 +26,13 @@ export default function SurveillanceOfficerDashboard() {
   // Vehicle check-in form
   const [vehicleForm, setVehicleForm] = useState({
     vehicleNumber: "",
+    vehicleType: "",
     driverName: "",
     purpose: ""
   });
+  
+  // Vehicle search for checkout
+  const [vehicleSearchQuery, setVehicleSearchQuery] = useState("");
   
   // Maintenance request form
   const [maintenanceForm, setMaintenanceForm] = useState({
@@ -85,7 +89,7 @@ export default function SurveillanceOfficerDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/vehicle-logs"] });
       toast({ title: "Vehicle checked in successfully" });
-      setVehicleForm({ vehicleNumber: "", driverName: "", purpose: "" });
+      setVehicleForm({ vehicleNumber: "", vehicleType: "", driverName: "", purpose: "" });
     },
     onError: (error: any) => {
       toast({ 
@@ -157,8 +161,8 @@ export default function SurveillanceOfficerDashboard() {
 
   const handleVehicleCheckIn = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vehicleForm.vehicleNumber || !vehicleForm.driverName) {
-      toast({ title: "Vehicle number and driver name are required", variant: "destructive" });
+    if (!vehicleForm.vehicleNumber || !vehicleForm.vehicleType || !vehicleForm.driverName) {
+      toast({ title: "Vehicle number, type, and driver name are required", variant: "destructive" });
       return;
     }
     checkInVehicleMutation.mutate(vehicleForm);
@@ -340,6 +344,19 @@ export default function SurveillanceOfficerDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle>My Vehicle Logs</CardTitle>
+                <CardDescription>
+                  <div className="mt-2">
+                    <Label htmlFor="vehicleSearch">Search Vehicle</Label>
+                    <Input
+                      id="vehicleSearch"
+                      data-testid="input-vehicle-search"
+                      placeholder="Search by vehicle number..."
+                      value={vehicleSearchQuery}
+                      onChange={(e) => setVehicleSearchQuery(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 {vehicleLogsLoading ? (
@@ -350,15 +367,25 @@ export default function SurveillanceOfficerDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {myVehicleLogs.map((log) => (
+                    {myVehicleLogs
+                      .filter(log => 
+                        vehicleSearchQuery === "" || 
+                        log.vehicleNumber.toLowerCase().includes(vehicleSearchQuery.toLowerCase())
+                      )
+                      .map((log) => (
                       <div key={log.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`vehicle-${log.id}`}>
                         <div className="flex-1">
                           <div className="flex items-center space-x-2">
                             <Car className="h-4 w-4 text-muted-foreground" />
                             <span className="font-medium" data-testid={`vehicle-number-${log.id}`}>{log.vehicleNumber}</span>
+                            {log.vehicleType && (
+                              <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
+                                {log.vehicleType}
+                              </span>
+                            )}
                           </div>
                           <div className="text-sm text-muted-foreground mt-1">
-                            Driver: {log.driverName} • Purpose: {log.purpose}
+                            Driver: {log.driverName} • Purpose: {log.purpose || 'N/A'}
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">
                             Check-in: {format(new Date(log.checkIn), 'MMM dd, yyyy HH:mm')}
@@ -531,9 +558,30 @@ export default function SurveillanceOfficerDashboard() {
                       data-testid="input-vehicle-number"
                       value={vehicleForm.vehicleNumber}
                       onChange={(e) => setVehicleForm({ ...vehicleForm, vehicleNumber: e.target.value })}
-                      placeholder="e.g., BA-1234"
+                      placeholder="e.g., BA-1-2345"
                       required
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="vehicleType">Vehicle Type *</Label>
+                    <Select 
+                      value={vehicleForm.vehicleType} 
+                      onValueChange={(value) => setVehicleForm({ ...vehicleForm, vehicleType: value })}
+                    >
+                      <SelectTrigger data-testid="select-vehicle-type">
+                        <SelectValue placeholder="Select vehicle type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2 Wheeler">2 Wheeler (Bike/Scooter)</SelectItem>
+                        <SelectItem value="3 Wheeler">3 Wheeler (Auto/Tempo)</SelectItem>
+                        <SelectItem value="4 Wheeler Car">4 Wheeler - Car</SelectItem>
+                        <SelectItem value="4 Wheeler SUV">4 Wheeler - SUV</SelectItem>
+                        <SelectItem value="Truck">Truck</SelectItem>
+                        <SelectItem value="Van">Van</SelectItem>
+                        <SelectItem value="Bus">Bus</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label htmlFor="driverName">Driver Name *</Label>

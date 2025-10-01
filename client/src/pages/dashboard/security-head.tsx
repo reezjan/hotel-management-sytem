@@ -138,8 +138,8 @@ export default function SecurityHeadDashboard() {
 
   const handleCreateOfficer = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newOfficer.username || !newOfficer.password) {
-      toast({ title: "Username and password are required", variant: "destructive" });
+    if (!newOfficer.username || !newOfficer.password || !newOfficer.email || !newOfficer.phone) {
+      toast({ title: "Username, password, email, and phone are required", variant: "destructive" });
       return;
     }
     createOfficerMutation.mutate(newOfficer);
@@ -248,22 +248,24 @@ export default function SecurityHeadDashboard() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="email">Email</Label>
+                      <Label htmlFor="email">Email *</Label>
                       <Input
                         id="email"
                         type="email"
                         data-testid="input-officer-email"
                         value={newOfficer.email}
                         onChange={(e) => setNewOfficer({ ...newOfficer, email: e.target.value })}
+                        required
                       />
                     </div>
                     <div>
-                      <Label htmlFor="phone">Phone</Label>
+                      <Label htmlFor="phone">Phone *</Label>
                       <Input
                         id="phone"
                         data-testid="input-officer-phone"
                         value={newOfficer.phone}
                         onChange={(e) => setNewOfficer({ ...newOfficer, phone: e.target.value })}
+                        required
                       />
                     </div>
                     <DialogFooter>
