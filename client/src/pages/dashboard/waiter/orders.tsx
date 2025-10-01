@@ -1,14 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Clock, CheckCircle2 } from "lucide-react";
+import { ShoppingCart, Clock, CheckCircle2, Trash2, Edit } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getStatusColor } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 export default function WaiterOrders() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const { data: orders = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/kot-orders"],
@@ -19,12 +25,44 @@ export default function WaiterOrders() {
     queryKey: ["/api/hotels/current/restaurant-tables"],
   });
 
+  const deleteOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      await apiRequest("DELETE", `/api/kot-orders/${orderId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
+      toast({ title: "Order deleted successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  });
+
   const activeOrders = orders.filter(order => ['open', 'preparing'].includes(order.status));
   const completedOrders = orders.filter(order => ['served', 'completed'].includes(order.status));
 
   const getTableName = (tableId: string) => {
     const table = tables.find((t: any) => t.id === tableId);
     return table?.name || 'Unknown Table';
+  };
+
+  const handleDeleteOrder = async (orderId: string, orderStatus: string) => {
+    if (orderStatus === 'served' || orderStatus === 'completed') {
+      toast({ 
+        title: "Cannot delete", 
+        description: "Completed orders cannot be deleted", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    if (confirm("Are you sure you want to delete this order?")) {
+      deleteOrderMutation.mutate(orderId);
+    }
+  };
+
+  const handleEditOrder = (orderId: string) => {
+    setLocation(`/dashboard/waiter`);
   };
 
   return (
@@ -98,10 +136,42 @@ export default function WaiterOrders() {
                       <p className="text-sm text-muted-foreground">
                         Order #{order.id.slice(0, 8)} • {new Date(order.createdAt).toLocaleString()}
                       </p>
+                      {order.items && order.items.length > 0 && (
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          {order.items.length} item(s)
+                        </div>
+                      )}
                     </div>
-                    <Button variant="outline" size="sm">
-                      View Details
-                    </Button>
+                    <div className="flex gap-2">
+                      {order.status !== 'served' && order.status !== 'completed' && (
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditOrder(order.id)}
+                            data-testid={`button-edit-order-${order.id}`}
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteOrder(order.id, order.status)}
+                            data-testid={`button-delete-order-${order.id}`}
+                            disabled={deleteOrderMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </>
+                      )}
+                      {(order.status === 'served' || order.status === 'completed') && (
+                        <Badge variant="secondary" className="text-xs">
+                          Completed
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 ))
               )}

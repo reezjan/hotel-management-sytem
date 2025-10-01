@@ -1,154 +1,172 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
-import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Shield, Car, Clock, UserPlus, ClipboardList, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Users, Shield, Car, ClipboardList, UserPlus, AlertTriangle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { format } from "date-fns";
 
 export default function SecurityHeadDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  const { data: staff = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/hotel-id/users"]
+  
+  const [isCreateOfficerOpen, setIsCreateOfficerOpen] = useState(false);
+  const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [selectedRequestForForward, setSelectedRequestForForward] = useState<any>(null);
+  
+  // New officer form
+  const [newOfficer, setNewOfficer] = useState({
+    username: "",
+    password: "",
+    email: "",
+    phone: ""
+  });
+  
+  // New task form
+  const [newTask, setNewTask] = useState({
+    assignedTo: "",
+    title: "",
+    description: "",
+    priority: "medium",
+    dueDate: ""
   });
 
-  const { data: tasks = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/hotel-id/tasks"]
+  // Fetch surveillance officers
+  const { data: officers = [], isLoading: officersLoading } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/security/officers"]
   });
 
-  const { data: maintenanceRequests = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/hotel-id/maintenance-requests"]
+  // Fetch tasks
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/security/tasks"]
   });
 
-  const { data: vehicleLogs = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/hotel-id/vehicle-logs"]
+  // Fetch vehicle logs
+  const { data: vehicleLogs = [], isLoading: vehicleLogsLoading } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/vehicle-logs"]
   });
 
-  const updateTaskMutation = useMutation({
-    mutationFn: async ({ taskId, status }: { taskId: string; status: string }) => {
-      await apiRequest("PUT", `/api/tasks/${taskId}`, { status });
+  // Fetch maintenance requests (filter officer-submitted ones)
+  const { data: allMaintenanceRequests = [], isLoading: maintenanceLoading } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/maintenance-requests"]
+  });
+
+  // Fetch all hotel users for finance forwarding
+  const { data: allUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/users"]
+  });
+
+  // Filter maintenance requests from surveillance officers
+  const maintenanceRequests = allMaintenanceRequests.filter(req => {
+    const reporter = allUsers.find(u => u.id === req.reportedBy);
+    return reporter?.role?.name === 'surveillance_officer';
+  });
+
+  const financeUsers = allUsers.filter(u => 
+    ['finance', 'manager', 'owner'].includes(u.role?.name || '')
+  );
+
+  // Create officer mutation
+  const createOfficerMutation = useMutation({
+    mutationFn: async (data: typeof newOfficer) => {
+      return await apiRequest("POST", "/api/hotels/current/security/officers", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/hotel-id/tasks"] });
-      toast({ title: "Task updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/security/officers"] });
+      toast({ title: "Surveillance Officer created successfully" });
+      setIsCreateOfficerOpen(false);
+      setNewOfficer({ username: "", password: "", email: "", phone: "" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to create officer", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
+      });
     }
   });
 
-  const createMaintenanceRequestMutation = useMutation({
-    mutationFn: async (data: any) => {
-      await apiRequest("POST", "/api/maintenance-requests", {
-        hotelId: user?.hotelId,
-        raisedBy: user?.id,
-        department: "security",
-        description: data.description,
-        status: "open"
-      });
+  // Create task mutation
+  const createTaskMutation = useMutation({
+    mutationFn: async (data: typeof newTask) => {
+      return await apiRequest("POST", "/api/hotels/current/security/tasks", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/hotel-id/maintenance-requests"] });
-      toast({ title: "Maintenance request submitted to finance" });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/security/tasks"] });
+      toast({ title: "Task assigned successfully" });
+      setIsCreateTaskOpen(false);
+      setNewTask({ assignedTo: "", title: "", description: "", priority: "medium", dueDate: "" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to create task", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
+      });
     }
   });
 
-  const securityGuards = staff.filter(s => s.role?.name === 'security_guard');
-  const onlineGuards = securityGuards.filter(s => s.isOnline);
-  const securityTasks = tasks.filter(t => t.department === 'security' || t.context?.department === 'security');
-  const pendingTasks = securityTasks.filter(t => t.status === 'pending');
-  const completedTasks = securityTasks.filter(t => t.status === 'completed');
-
-  const staffColumns = [
-    { key: "username", label: "Name", sortable: true },
-    { 
-      key: "isOnline", 
-      label: "Duty Status", 
-      render: (value: boolean) => (
-        <span className={`px-2 py-1 rounded-full text-xs flex items-center space-x-1 ${value ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-          <div className={`w-2 h-2 rounded-full ${value ? 'bg-green-500' : 'bg-gray-400'}`} />
-          <span>{value ? 'On Duty' : 'Off Duty'}</span>
-        </span>
-      )
+  // Forward maintenance request mutation
+  const forwardMaintenanceMutation = useMutation({
+    mutationFn: async ({ requestId, financeUserId }: { requestId: string; financeUserId: string }) => {
+      return await apiRequest("POST", `/api/maintenance-requests/${requestId}/forward`, { financeUserId });
     },
-    { 
-      key: "lastLogin", 
-      label: "Last Active", 
-      sortable: true,
-      render: (value: string) => value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu' }) : 'Never'
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/maintenance-requests"] });
+      toast({ title: "Maintenance request forwarded to finance successfully" });
+      setSelectedRequestForForward(null);
     },
-    { key: "createdAt", label: "Joined", sortable: true }
-  ];
-
-  const taskColumns = [
-    { key: "title", label: "Task", sortable: true },
-    { 
-      key: "assignedTo", 
-      label: "Assigned To", 
-      render: (value: any, row: any) => {
-        const assignee = staff.find(s => s.id === row.assignedTo);
-        return assignee?.username || "Unassigned";
-      }
-    },
-    { key: "status", label: "Status", sortable: true },
-    { key: "createdAt", label: "Created", sortable: true }
-  ];
-
-  const vehicleColumns = [
-    { key: "vehicleNumber", label: "Vehicle Number", sortable: true },
-    { key: "driverName", label: "Driver", sortable: true },
-    { key: "purpose", label: "Purpose", sortable: true },
-    { key: "checkIn", label: "Check In", sortable: true },
-    { key: "checkOut", label: "Check Out", sortable: true },
-    { 
-      key: "status", 
-      label: "Status", 
-      render: (value: any, row: any) => (
-        <span className={`px-2 py-1 rounded-full text-xs ${
-          row.checkOut ? 'bg-gray-100 text-gray-800' : 'bg-green-100 text-green-800'
-        }`}>
-          {row.checkOut ? 'Checked Out' : 'On Premises'}
-        </span>
-      )
-    }
-  ];
-
-  const maintenanceColumns = [
-    { key: "description", label: "Request", sortable: true },
-    { key: "department", label: "Department", sortable: true },
-    { key: "status", label: "Status", sortable: true },
-    { key: "createdAt", label: "Reported", sortable: true }
-  ];
-
-  const staffActions = [
-    { label: "Assign Task", action: (row: any) => console.log("Assign task to:", row) },
-    { label: "View Schedule", action: (row: any) => console.log("View schedule:", row) },
-    { label: "Remove", action: (row: any) => console.log("Remove guard:", row), variant: "destructive" as const }
-  ];
-
-  const taskActions = [
-    { label: "Edit", action: (row: any) => console.log("Edit task:", row) },
-    { label: "Reassign", action: (row: any) => console.log("Reassign task:", row) },
-    { label: "Complete", action: (row: any) => updateTaskMutation.mutate({ taskId: row.id, status: 'completed' }) }
-  ];
-
-  const vehicleActions = [
-    { label: "Check Out", action: (row: any) => console.log("Check out vehicle:", row) },
-    { label: "View Details", action: (row: any) => console.log("View vehicle details:", row) }
-  ];
-
-  const maintenanceActions = [
-    { label: "Forward to Finance", action: (row: any) => {
-      createMaintenanceRequestMutation.mutate({
-        description: `Security Department: ${row.description}`,
-        department: "finance"
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to forward request", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
       });
-    }},
-    { label: "Assign Guard", action: (row: any) => console.log("Assign to guard:", row) }
-  ];
+    }
+  });
+
+  const handleCreateOfficer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newOfficer.username || !newOfficer.password) {
+      toast({ title: "Username and password are required", variant: "destructive" });
+      return;
+    }
+    createOfficerMutation.mutate(newOfficer);
+  };
+
+  const handleCreateTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTask.assignedTo || !newTask.title) {
+      toast({ title: "Please select an officer and enter task title", variant: "destructive" });
+      return;
+    }
+    createTaskMutation.mutate(newTask);
+  };
+
+  const handleForwardMaintenance = (financeUserId: string) => {
+    if (selectedRequestForForward && financeUserId) {
+      forwardMaintenanceMutation.mutate({ 
+        requestId: selectedRequestForForward.id, 
+        financeUserId 
+      });
+    }
+  };
+
+  const onlineOfficers = officers.filter(o => o.isOnline);
+  const pendingTasks = tasks.filter(t => t.status === 'pending');
+  const activeVehicles = vehicleLogs.filter(v => !v.checkOut);
+  const pendingMaintenance = maintenanceRequests.filter(r => r.status === 'pending');
 
   return (
     <DashboardLayout title="Security Head Dashboard">
@@ -156,25 +174,25 @@ export default function SecurityHeadDashboard() {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
-            title="Security Guards"
-            value={securityGuards.length}
+            title="Surveillance Officers"
+            value={officers.length}
             icon={<Users />}
             iconColor="text-blue-500"
           />
           <StatsCard
             title="On Duty"
-            value={onlineGuards.length}
+            value={onlineOfficers.length}
             icon={<Shield />}
             iconColor="text-green-500"
             trend={{ 
-              value: onlineGuards.length > 0 ? Math.round((onlineGuards.length / securityGuards.length) * 100) : 0, 
+              value: officers.length > 0 ? Math.round((onlineOfficers.length / officers.length) * 100) : 0, 
               label: "coverage", 
               isPositive: true 
             }}
           />
           <StatsCard
             title="Vehicles on Premises"
-            value={vehicleLogs.filter(v => !v.checkOut).length}
+            value={activeVehicles.length}
             icon={<Car />}
             iconColor="text-purple-500"
           />
@@ -189,128 +207,401 @@ export default function SecurityHeadDashboard() {
         {/* Quick Actions */}
         <Card>
           <CardHeader>
-            <CardTitle>Security Operations</CardTitle>
+            <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-add-guard">
-                <UserPlus className="h-6 w-6 mb-2" />
-                <span className="text-sm">Add Guard</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-assign-tasks">
-                <ClipboardList className="h-6 w-6 mb-2" />
-                <span className="text-sm">Assign Tasks</span>
-              </Button>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <Dialog open={isCreateOfficerOpen} onOpenChange={setIsCreateOfficerOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="h-20 flex flex-col" data-testid="button-add-officer">
+                    <UserPlus className="h-6 w-6 mb-2" />
+                    <span className="text-sm">Add Officer</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent data-testid="dialog-create-officer">
+                  <DialogHeader>
+                    <DialogTitle>Create Surveillance Officer</DialogTitle>
+                    <DialogDescription>
+                      Create a new surveillance officer account with username and password
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateOfficer} className="space-y-4">
+                    <div>
+                      <Label htmlFor="username">Username *</Label>
+                      <Input
+                        id="username"
+                        data-testid="input-officer-username"
+                        value={newOfficer.username}
+                        onChange={(e) => setNewOfficer({ ...newOfficer, username: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="password">Password *</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        data-testid="input-officer-password"
+                        value={newOfficer.password}
+                        onChange={(e) => setNewOfficer({ ...newOfficer, password: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        data-testid="input-officer-email"
+                        value={newOfficer.email}
+                        onChange={(e) => setNewOfficer({ ...newOfficer, email: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Phone</Label>
+                      <Input
+                        id="phone"
+                        data-testid="input-officer-phone"
+                        value={newOfficer.phone}
+                        onChange={(e) => setNewOfficer({ ...newOfficer, phone: e.target.value })}
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button 
+                        type="submit" 
+                        disabled={createOfficerMutation.isPending}
+                        data-testid="button-submit-officer"
+                      >
+                        {createOfficerMutation.isPending ? "Creating..." : "Create Officer"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isCreateTaskOpen} onOpenChange={setIsCreateTaskOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="h-20 flex flex-col" data-testid="button-assign-task">
+                    <ClipboardList className="h-6 w-6 mb-2" />
+                    <span className="text-sm">Assign Task</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent data-testid="dialog-create-task">
+                  <DialogHeader>
+                    <DialogTitle>Assign Task to Officer</DialogTitle>
+                    <DialogDescription>
+                      Create a new task and assign it to a surveillance officer
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateTask} className="space-y-4">
+                    <div>
+                      <Label htmlFor="officer">Assign To *</Label>
+                      <Select value={newTask.assignedTo} onValueChange={(value) => setNewTask({ ...newTask, assignedTo: value })}>
+                        <SelectTrigger data-testid="select-task-officer">
+                          <SelectValue placeholder="Select an officer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {officers.map((officer) => (
+                            <SelectItem key={officer.id} value={officer.id}>
+                              {officer.username} {officer.isOnline ? '(Online)' : '(Offline)'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="title">Task Title *</Label>
+                      <Input
+                        id="title"
+                        data-testid="input-task-title"
+                        value={newTask.title}
+                        onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        data-testid="textarea-task-description"
+                        value={newTask.description}
+                        onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="priority">Priority</Label>
+                      <Select value={newTask.priority} onValueChange={(value) => setNewTask({ ...newTask, priority: value })}>
+                        <SelectTrigger data-testid="select-task-priority">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="dueDate">Due Date</Label>
+                      <Input
+                        id="dueDate"
+                        type="datetime-local"
+                        data-testid="input-task-duedate"
+                        value={newTask.dueDate}
+                        onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button 
+                        type="submit" 
+                        disabled={createTaskMutation.isPending}
+                        data-testid="button-submit-task"
+                      >
+                        {createTaskMutation.isPending ? "Assigning..." : "Assign Task"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
               <Button variant="outline" className="h-20 flex flex-col" data-testid="button-vehicle-logs">
                 <Car className="h-6 w-6 mb-2" />
-                <span className="text-sm">Vehicle Logs</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-duty-roster">
-                <Clock className="h-6 w-6 mb-2" />
-                <span className="text-sm">Duty Roster</span>
+                <span className="text-sm">View Vehicles</span>
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Security Guards Management */}
-        <DataTable
-          title="Security Guards"
-          data={securityGuards}
-          columns={staffColumns}
-          actions={staffActions}
-          onAdd={() => console.log("Add security guard")}
-          addButtonLabel="Add Security Guard"
-          searchPlaceholder="Search guards..."
-        />
+        {/* Main Tabs */}
+        <Tabs defaultValue="officers" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="officers" data-testid="tab-officers">Officers</TabsTrigger>
+            <TabsTrigger value="tasks" data-testid="tab-tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="vehicles" data-testid="tab-vehicles">Vehicles</TabsTrigger>
+            <TabsTrigger value="maintenance" data-testid="tab-maintenance">Maintenance</TabsTrigger>
+          </TabsList>
 
-        {/* Task Management */}
-        <DataTable
-          title="Security Tasks"
-          data={securityTasks}
-          columns={taskColumns}
-          actions={taskActions}
-          onAdd={() => console.log("Create security task")}
-          addButtonLabel="Create Task"
-          searchPlaceholder="Search tasks..."
-        />
+          {/* Officers Tab */}
+          <TabsContent value="officers">
+            <Card>
+              <CardHeader>
+                <CardTitle>Surveillance Officers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {officersLoading ? (
+                  <div className="text-center py-8" data-testid="loading-officers">Loading officers...</div>
+                ) : officers.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground" data-testid="no-officers">
+                    No surveillance officers yet. Create one to get started.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {officers.map((officer) => (
+                      <div key={officer.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`officer-${officer.id}`}>
+                        <div className="flex items-center space-x-4">
+                          <div className={`w-3 h-3 rounded-full ${officer.isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                          <div>
+                            <div className="font-medium" data-testid={`officer-name-${officer.id}`}>{officer.username}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {officer.email || 'No email'} • {officer.phone || 'No phone'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-3 py-1 rounded-full text-xs ${officer.isOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`} data-testid={`officer-status-${officer.id}`}>
+                            {officer.isOnline ? 'On Duty' : 'Off Duty'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Vehicle Logs */}
-        <DataTable
-          title="Vehicle Check-in/Check-out Records"
-          data={vehicleLogs}
-          columns={vehicleColumns}
-          actions={vehicleActions}
-          searchPlaceholder="Search vehicles..."
-        />
+          {/* Tasks Tab */}
+          <TabsContent value="tasks">
+            <Card>
+              <CardHeader>
+                <CardTitle>Assigned Tasks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {tasksLoading ? (
+                  <div className="text-center py-8" data-testid="loading-tasks">Loading tasks...</div>
+                ) : tasks.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground" data-testid="no-tasks">
+                    No tasks assigned yet.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {tasks.map((task) => {
+                      const assignee = officers.find(o => o.id === task.assignedTo);
+                      return (
+                        <div key={task.id} className="p-4 border rounded-lg" data-testid={`task-${task.id}`}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <h4 className="font-medium" data-testid={`task-title-${task.id}`}>{task.title}</h4>
+                                <span className={`px-2 py-0.5 rounded text-xs ${
+                                  task.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                  task.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {task.priority}
+                                </span>
+                              </div>
+                              {task.description && (
+                                <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
+                              )}
+                              <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
+                                <span data-testid={`task-assignee-${task.id}`}>Assigned to: {assignee?.username || 'Unknown'}</span>
+                                <span data-testid={`task-status-${task.id}`}>Status: {task.status}</span>
+                                {task.dueDate && (
+                                  <span>Due: {format(new Date(task.dueDate), 'MMM dd, yyyy')}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Maintenance Requests */}
-        <DataTable
-          title="Maintenance Requests"
-          data={maintenanceRequests.filter(r => r.department === 'security')}
-          columns={maintenanceColumns}
-          actions={maintenanceActions}
-          searchPlaceholder="Search maintenance requests..."
-        />
+          {/* Vehicles Tab */}
+          <TabsContent value="vehicles">
+            <Card>
+              <CardHeader>
+                <CardTitle>Vehicle Check-in/Check-out Logs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {vehicleLogsLoading ? (
+                  <div className="text-center py-8" data-testid="loading-vehicles">Loading vehicle logs...</div>
+                ) : vehicleLogs.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground" data-testid="no-vehicles">
+                    No vehicle logs yet.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {vehicleLogs.map((log) => (
+                      <div key={log.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`vehicle-${log.id}`}>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <Car className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium" data-testid={`vehicle-number-${log.id}`}>{log.vehicleNumber}</span>
+                          </div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Driver: {log.driverName} • Purpose: {log.purpose}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Check-in: {format(new Date(log.checkIn), 'MMM dd, yyyy HH:mm')}
+                            {log.checkOut && ` • Check-out: ${format(new Date(log.checkOut), 'MMM dd, yyyy HH:mm')}`}
+                          </div>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs ${
+                          log.checkOut ? 'bg-gray-100 text-gray-800' : 'bg-green-100 text-green-800'
+                        }`} data-testid={`vehicle-status-${log.id}`}>
+                          {log.checkOut ? 'Checked Out' : 'On Premises'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Security Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Today's Security Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-blue-50 rounded-lg" data-testid="summary-patrols">
-                <div className="text-2xl font-bold text-blue-600">24</div>
-                <div className="text-sm text-blue-700">Patrols Completed</div>
-              </div>
-              <div className="text-center p-4 bg-green-50 rounded-lg" data-testid="summary-incidents">
-                <div className="text-2xl font-bold text-green-600">0</div>
-                <div className="text-sm text-green-700">Security Incidents</div>
-              </div>
-              <div className="text-center p-4 bg-purple-50 rounded-lg" data-testid="summary-vehicles">
-                <div className="text-2xl font-bold text-purple-600">{vehicleLogs.length}</div>
-                <div className="text-sm text-purple-700">Vehicle Entries</div>
-              </div>
-              <div className="text-center p-4 bg-orange-50 rounded-lg" data-testid="summary-alerts">
-                <div className="text-2xl font-bold text-orange-600">2</div>
-                <div className="text-sm text-orange-700">System Alerts</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recent Activities */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Security Activities</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-secondary rounded" data-testid="activity-patrol">
-                <div className="flex items-center">
-                  <Shield className="text-blue-500 mr-3 h-5 w-5" />
-                  <span className="text-foreground">Night patrol completed - All clear</span>
-                </div>
-                <span className="text-xs text-muted-foreground">2 hours ago</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-secondary rounded" data-testid="activity-vehicle">
-                <div className="flex items-center">
-                  <Car className="text-green-500 mr-3 h-5 w-5" />
-                  <span className="text-foreground">Vehicle BA-1234 checked in - Delivery truck</span>
-                </div>
-                <span className="text-xs text-muted-foreground">4 hours ago</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-secondary rounded" data-testid="activity-alert">
-                <div className="flex items-center">
-                  <AlertTriangle className="text-orange-500 mr-3 h-5 w-5" />
-                  <span className="text-foreground">CCTV camera #3 maintenance scheduled</span>
-                </div>
-                <span className="text-xs text-muted-foreground">6 hours ago</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Maintenance Tab */}
+          <TabsContent value="maintenance">
+            <Card>
+              <CardHeader>
+                <CardTitle>Maintenance Requests from Officers</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {maintenanceLoading ? (
+                  <div className="text-center py-8" data-testid="loading-maintenance">Loading maintenance requests...</div>
+                ) : maintenanceRequests.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground" data-testid="no-maintenance">
+                    No maintenance requests from officers yet.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {maintenanceRequests.map((request) => {
+                      const reporter = allUsers.find(u => u.id === request.reportedBy);
+                      return (
+                        <div key={request.id} className="p-4 border rounded-lg" data-testid={`maintenance-${request.id}`}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <AlertTriangle className="h-4 w-4 text-orange-500" />
+                                <h4 className="font-medium" data-testid={`maintenance-title-${request.id}`}>{request.title}</h4>
+                                <span className={`px-2 py-0.5 rounded text-xs ${
+                                  request.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                  request.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {request.priority}
+                                </span>
+                              </div>
+                              <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
+                              <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
+                                <span>Reported by: {reporter?.username || 'Unknown'}</span>
+                                <span>Location: {request.location}</span>
+                                <span data-testid={`maintenance-status-${request.id}`}>Status: {request.status}</span>
+                              </div>
+                            </div>
+                            {request.status !== 'forwarded' && (
+                              <Dialog open={selectedRequestForForward?.id === request.id} onOpenChange={(open) => setSelectedRequestForForward(open ? request : null)}>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline" data-testid={`button-forward-${request.id}`}>
+                                    Forward to Finance
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent data-testid="dialog-forward-maintenance">
+                                  <DialogHeader>
+                                    <DialogTitle>Forward Maintenance Request</DialogTitle>
+                                    <DialogDescription>
+                                      Select a finance department user to forward this maintenance request to
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <Label>Select Finance User</Label>
+                                    {financeUsers.length === 0 ? (
+                                      <p className="text-sm text-muted-foreground">No finance users available</p>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {financeUsers.map((financeUser) => (
+                                          <Button
+                                            key={financeUser.id}
+                                            variant="outline"
+                                            className="w-full justify-start"
+                                            onClick={() => handleForwardMaintenance(financeUser.id)}
+                                            disabled={forwardMaintenanceMutation.isPending}
+                                            data-testid={`button-forward-to-${financeUser.id}`}
+                                          >
+                                            {financeUser.username} ({financeUser.role?.name})
+                                          </Button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

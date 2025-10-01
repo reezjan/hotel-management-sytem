@@ -1,123 +1,226 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { Shield, Car, Clock, Wrench, AlertTriangle, Plus, CheckSquare } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Shield, Car, Clock, CheckSquare, AlertTriangle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { getStatusColor } from "@/lib/utils";
+import { format } from "date-fns";
 
-export default function SecurityGuardDashboard() {
+export default function SurveillanceOfficerDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
-
-  const { data: tasks = [] } = useQuery<any[]>({
-    queryKey: ["/api/users", user?.id, "tasks"]
+  
+  const [isDutyOn, setIsDutyOn] = useState(user?.isOnline || false);
+  
+  // Vehicle check-in form
+  const [vehicleForm, setVehicleForm] = useState({
+    vehicleNumber: "",
+    driverName: "",
+    purpose: ""
+  });
+  
+  // Maintenance request form
+  const [maintenanceForm, setMaintenanceForm] = useState({
+    title: "",
+    location: "",
+    description: "",
+    priority: "medium",
+    photo: ""
   });
 
-  const { data: vehicleLogs = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/hotel-id/vehicle-logs"]
+  // Fetch my tasks
+  const { data: tasks = [], isLoading: tasksLoading } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/security/tasks"]
   });
 
-  const vehicleForm = useForm({
-    defaultValues: {
-      vehicleNumber: "",
-      driverName: "",
-      purpose: ""
+  // Fetch vehicle logs
+  const { data: vehicleLogs = [], isLoading: vehicleLogsLoading } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/vehicle-logs"]
+  });
+
+  // Fetch my maintenance requests
+  const { data: maintenanceRequests = [], isLoading: maintenanceLoading } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/maintenance-requests"]
+  });
+
+  // Duty status toggle mutation
+  const toggleDutyMutation = useMutation({
+    mutationFn: async (isOnline: boolean) => {
+      return await apiRequest("PATCH", "/api/users/me/duty", { isOnline });
+    },
+    onSuccess: (data) => {
+      setIsDutyOn(data.isOnline);
+      toast({ 
+        title: data.isOnline ? "Duty started" : "Duty ended",
+        description: data.isOnline ? "You are now on duty" : "You are now off duty"
+      });
+      // Refresh user data
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to update duty status", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
+      });
     }
   });
 
-  const maintenanceForm = useForm({
-    defaultValues: {
-      description: ""
+  // Vehicle check-in mutation
+  const checkInVehicleMutation = useMutation({
+    mutationFn: async (data: typeof vehicleForm) => {
+      return await apiRequest("POST", "/api/hotels/current/vehicle-logs", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/vehicle-logs"] });
+      toast({ title: "Vehicle checked in successfully" });
+      setVehicleForm({ vehicleNumber: "", driverName: "", purpose: "" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to check in vehicle", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
+      });
     }
   });
 
+  // Vehicle check-out mutation
+  const checkOutVehicleMutation = useMutation({
+    mutationFn: async (vehicleId: string) => {
+      return await apiRequest("PATCH", `/api/vehicle-logs/${vehicleId}/checkout`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/vehicle-logs"] });
+      toast({ title: "Vehicle checked out successfully" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to check out vehicle", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
+      });
+    }
+  });
+
+  // Update task status mutation
   const updateTaskMutation = useMutation({
     mutationFn: async ({ taskId, status }: { taskId: string; status: string }) => {
-      await apiRequest("PUT", `/api/tasks/${taskId}`, { status });
+      return await apiRequest("PATCH", `/api/tasks/${taskId}/status`, { status });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users", user?.id, "tasks"] });
-      toast({ title: "Task updated successfully" });
-    }
-  });
-
-  const createVehicleLogMutation = useMutation({
-    mutationFn: async (data: any) => {
-      await apiRequest("POST", "/api/vehicle-logs", {
-        hotelId: user?.hotelId,
-        vehicleNumber: data.vehicleNumber,
-        driverName: data.driverName,
-        purpose: data.purpose,
-        recordedBy: user?.id
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/security/tasks"] });
+      toast({ title: "Task status updated successfully" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to update task", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
       });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/hotel-id/vehicle-logs"] });
-      toast({ title: "Vehicle logged successfully" });
-      vehicleForm.reset();
-      setIsVehicleModalOpen(false);
     }
   });
 
-  const createMaintenanceRequestMutation = useMutation({
-    mutationFn: async (data: any) => {
-      await apiRequest("POST", "/api/maintenance-requests", {
-        hotelId: user?.hotelId,
-        raisedBy: user?.id,
-        department: "security",
-        description: data.description,
-        status: "open"
+  // Create maintenance request mutation (using waiter pattern)
+  const createMaintenanceMutation = useMutation({
+    mutationFn: async (data: typeof maintenanceForm) => {
+      return await apiRequest("POST", "/api/hotels/current/maintenance-requests", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/maintenance-requests"] });
+      toast({ title: "Maintenance request sent to Security Head successfully" });
+      setMaintenanceForm({ title: "", location: "", description: "", priority: "medium", photo: "" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to send maintenance request", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
       });
-    },
-    onSuccess: () => {
-      toast({ title: "Maintenance request submitted to security head" });
-      maintenanceForm.reset();
     }
   });
 
-  const pendingTasks = tasks.filter(t => t.status === 'pending');
-  const performingTasks = tasks.filter(t => t.status === 'performing');
-  const completedTasks = tasks.filter(t => t.status === 'completed');
-  const todayCompleted = completedTasks.filter(t => {
-    const today = new Date().toDateString();
-    return new Date(t.updatedAt || t.createdAt).toDateString() === today;
-  });
-
-  const todayVehicles = vehicleLogs.filter(v => {
-    const today = new Date().toDateString();
-    return new Date(v.checkIn).toDateString() === today;
-  });
-
-  const vehiclesOnPremises = vehicleLogs.filter(v => !v.checkOut);
-
-  const handleTaskStatusUpdate = (task: any, newStatus: string) => {
-    updateTaskMutation.mutate({ taskId: task.id, status: newStatus });
+  const handleDutyToggle = (checked: boolean) => {
+    toggleDutyMutation.mutate(checked);
   };
 
-  const onSubmitVehicleLog = (data: any) => {
-    createVehicleLogMutation.mutate(data);
+  const handleVehicleCheckIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vehicleForm.vehicleNumber || !vehicleForm.driverName) {
+      toast({ title: "Vehicle number and driver name are required", variant: "destructive" });
+      return;
+    }
+    checkInVehicleMutation.mutate(vehicleForm);
   };
 
-  const onSubmitMaintenanceRequest = (data: any) => {
-    createMaintenanceRequestMutation.mutate(data);
+  const handleMaintenanceSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!maintenanceForm.title || !maintenanceForm.location) {
+      toast({ title: "Title and location are required", variant: "destructive" });
+      return;
+    }
+    createMaintenanceMutation.mutate(maintenanceForm);
   };
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMaintenanceForm({ ...maintenanceForm, photo: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const myTasks = tasks.filter(t => t.assignedTo === user?.id);
+  const pendingTasks = myTasks.filter(t => t.status === 'pending');
+  const inProgressTasks = myTasks.filter(t => t.status === 'in_progress');
+  const completedTasks = myTasks.filter(t => t.status === 'completed');
+  
+  const myVehicleLogs = vehicleLogs.filter(v => v.recordedBy === user?.id);
+  const activeVehicles = myVehicleLogs.filter(v => !v.checkOut);
+  
+  const myMaintenanceRequests = maintenanceRequests.filter(r => r.reportedBy === user?.id);
 
   return (
-    <DashboardLayout title="Security Guard Dashboard">
+    <DashboardLayout title="Surveillance Officer Dashboard">
       <div className="space-y-6">
+        {/* Duty Status Toggle */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Duty Status</CardTitle>
+            <CardDescription>Toggle your duty status on or off</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className={`w-4 h-4 rounded-full ${isDutyOn ? 'bg-green-500' : 'bg-gray-400'}`} />
+                <span className="text-lg font-medium">
+                  {isDutyOn ? 'On Duty' : 'Off Duty'}
+                </span>
+              </div>
+              <Switch
+                checked={isDutyOn}
+                onCheckedChange={handleDutyToggle}
+                disabled={toggleDutyMutation.isPending}
+                data-testid="switch-duty-status"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
@@ -128,344 +231,343 @@ export default function SecurityGuardDashboard() {
           />
           <StatsCard
             title="In Progress"
-            value={performingTasks.length}
+            value={inProgressTasks.length}
             icon={<Shield />}
             iconColor="text-blue-500"
           />
           <StatsCard
-            title="Completed Today"
-            value={todayCompleted.length}
+            title="Completed"
+            value={completedTasks.length}
             icon={<CheckSquare />}
             iconColor="text-green-500"
           />
           <StatsCard
-            title="Vehicles Today"
-            value={todayVehicles.length}
+            title="Active Vehicles"
+            value={activeVehicles.length}
             icon={<Car />}
             iconColor="text-purple-500"
           />
         </div>
 
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Security Operations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button 
-                variant="outline" 
-                className="h-20 flex flex-col"
-                onClick={() => setIsVehicleModalOpen(true)}
-                data-testid="button-log-vehicle"
-              >
-                <Car className="h-6 w-6 mb-2" />
-                <span className="text-sm">Log Vehicle</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-patrol-report">
-                <Shield className="h-6 w-6 mb-2" />
-                <span className="text-sm">Patrol Report</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-incident-report">
-                <AlertTriangle className="h-6 w-6 mb-2" />
-                <span className="text-sm">Incident Report</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-emergency">
-                <AlertTriangle className="h-6 w-6 mb-2 text-red-500" />
-                <span className="text-sm">Emergency</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Main Tabs */}
+        <Tabs defaultValue="tasks" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="tasks" data-testid="tab-tasks">My Tasks</TabsTrigger>
+            <TabsTrigger value="vehicles" data-testid="tab-vehicles">Vehicle Logs</TabsTrigger>
+            <TabsTrigger value="maintenance" data-testid="tab-maintenance">Maintenance</TabsTrigger>
+            <TabsTrigger value="checkin" data-testid="tab-checkin">Check-in Vehicle</TabsTrigger>
+          </TabsList>
 
-        {/* Security Tasks */}
-        <Card>
-          <CardHeader>
-            <CardTitle>My Security Tasks</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {tasks.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4" data-testid="no-tasks-message">
-                  No tasks assigned
-                </p>
-              ) : (
-                tasks.slice(0, 10).map((task, index) => (
-                  <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`task-item-${index}`}>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-foreground">{task.title}</h4>
-                      <p className="text-sm text-muted-foreground">{task.description}</p>
-                      <div className="flex items-center space-x-2 mt-2">
-                        <Badge className={getStatusColor(task.status)} variant="secondary">
-                          {task.status}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(task.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col space-y-1">
-                      {task.status === 'pending' && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleTaskStatusUpdate(task, 'performing')}
-                          disabled={updateTaskMutation.isPending}
-                          data-testid={`button-start-task-${index}`}
-                        >
-                          Start
-                        </Button>
-                      )}
-                      {task.status === 'performing' && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleTaskStatusUpdate(task, 'completed')}
-                          disabled={updateTaskMutation.isPending}
-                          data-testid={`button-complete-task-${index}`}
-                        >
-                          Complete
-                        </Button>
-                      )}
-                    </div>
+          {/* Tasks Tab */}
+          <TabsContent value="tasks">
+            <Card>
+              <CardHeader>
+                <CardTitle>My Assigned Tasks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {tasksLoading ? (
+                  <div className="text-center py-8" data-testid="loading-tasks">Loading tasks...</div>
+                ) : myTasks.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground" data-testid="no-tasks">
+                    No tasks assigned yet.
                   </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Vehicle Logs */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Vehicle Activity Log</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {vehicleLogs.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4" data-testid="no-vehicles-message">
-                  No vehicle activity today
-                </p>
-              ) : (
-                vehicleLogs.slice(0, 10).map((log, index) => (
-                  <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`vehicle-log-${index}`}>
-                    <div className="flex items-center space-x-3">
-                      <Car className="h-5 w-5 text-purple-500" />
-                      <div>
-                        <h4 className="font-medium text-foreground">{log.vehicleNumber}</h4>
-                        <p className="text-sm text-muted-foreground">Driver: {log.driverName}</p>
-                        <p className="text-xs text-muted-foreground">{log.purpose}</p>
+                ) : (
+                  <div className="space-y-4">
+                    {myTasks.map((task) => (
+                      <div key={task.id} className="p-4 border rounded-lg" data-testid={`task-${task.id}`}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <h4 className="font-medium" data-testid={`task-title-${task.id}`}>{task.title}</h4>
+                              <span className={`px-2 py-0.5 rounded text-xs ${
+                                task.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                task.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-blue-100 text-blue-800'
+                              }`}>
+                                {task.priority}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded text-xs ${
+                                task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`} data-testid={`task-status-${task.id}`}>
+                                {task.status}
+                              </span>
+                            </div>
+                            {task.description && (
+                              <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
+                            )}
+                            {task.dueDate && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Due: {format(new Date(task.dueDate), 'MMM dd, yyyy HH:mm')}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex space-x-2 ml-4">
+                            {task.status === 'pending' && (
+                              <Button 
+                                size="sm" 
+                                onClick={() => updateTaskMutation.mutate({ taskId: task.id, status: 'in_progress' })}
+                                disabled={updateTaskMutation.isPending}
+                                data-testid={`button-start-${task.id}`}
+                              >
+                                Start
+                              </Button>
+                            )}
+                            {task.status === 'in_progress' && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => updateTaskMutation.mutate({ taskId: task.id, status: 'completed' })}
+                                disabled={updateTaskMutation.isPending}
+                                data-testid={`button-complete-${task.id}`}
+                              >
+                                Complete
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <Badge 
-                        className={log.checkOut ? "bg-gray-100 text-gray-800" : "bg-green-100 text-green-800"} 
-                        variant="secondary"
-                      >
-                        {log.checkOut ? 'Checked Out' : 'On Premises'}
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        In: {new Date(log.checkIn).toLocaleTimeString()}
-                      </p>
-                      {log.checkOut && (
-                        <p className="text-xs text-muted-foreground">
-                          Out: {new Date(log.checkOut).toLocaleTimeString()}
-                        </p>
-                      )}
-                    </div>
+                    ))}
                   </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Duty Schedule */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Today's Duty Schedule</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg" data-testid="schedule-morning">
-                  <h4 className="font-medium text-blue-900 mb-2">Morning Shift (6 AM - 2 PM)</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Main entrance monitoring</li>
-                    <li>• Perimeter patrol</li>
-                    <li>• Vehicle logging</li>
-                  </ul>
-                </div>
-                <div className="p-4 bg-green-50 rounded-lg" data-testid="schedule-afternoon">
-                  <h4 className="font-medium text-green-900 mb-2">Afternoon Tasks</h4>
-                  <ul className="text-sm text-green-700 space-y-1">
-                    <li>• Lobby surveillance</li>
-                    <li>• Guest assistance</li>
-                    <li>• Equipment check</li>
-                  </ul>
-                </div>
-                <div className="p-4 bg-orange-50 rounded-lg" data-testid="schedule-evening">
-                  <h4 className="font-medium text-orange-900 mb-2">Evening Priority</h4>
-                  <ul className="text-sm text-orange-700 space-y-1">
-                    <li>• Parking area patrol</li>
-                    <li>• Emergency response</li>
-                    <li>• Incident reporting</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Vehicles Tab */}
+          <TabsContent value="vehicles">
+            <Card>
+              <CardHeader>
+                <CardTitle>My Vehicle Logs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {vehicleLogsLoading ? (
+                  <div className="text-center py-8" data-testid="loading-vehicles">Loading vehicle logs...</div>
+                ) : myVehicleLogs.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground" data-testid="no-vehicles">
+                    No vehicle logs yet.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {myVehicleLogs.map((log) => (
+                      <div key={log.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`vehicle-${log.id}`}>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <Car className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium" data-testid={`vehicle-number-${log.id}`}>{log.vehicleNumber}</span>
+                          </div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Driver: {log.driverName} • Purpose: {log.purpose}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Check-in: {format(new Date(log.checkIn), 'MMM dd, yyyy HH:mm')}
+                            {log.checkOut && ` • Check-out: ${format(new Date(log.checkOut), 'MMM dd, yyyy HH:mm')}`}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-3 py-1 rounded-full text-xs ${
+                            log.checkOut ? 'bg-gray-100 text-gray-800' : 'bg-green-100 text-green-800'
+                          }`} data-testid={`vehicle-status-${log.id}`}>
+                            {log.checkOut ? 'Checked Out' : 'On Premises'}
+                          </span>
+                          {!log.checkOut && (
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => checkOutVehicleMutation.mutate(log.id)}
+                              disabled={checkOutVehicleMutation.isPending}
+                              data-testid={`button-checkout-${log.id}`}
+                            >
+                              Check Out
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Maintenance Request */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Wrench className="h-5 w-5 text-red-500" />
-              <span>Report Issue to Security Head</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...maintenanceForm}>
-              <form onSubmit={maintenanceForm.handleSubmit(onSubmitMaintenanceRequest)} className="space-y-4">
-                <FormField
-                  control={maintenanceForm.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Issue Description</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          placeholder="Describe the security equipment issue (CCTV, access control, radios, etc.)..."
-                          rows={4}
-                          data-testid="textarea-maintenance-description"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <Button
-                  type="submit"
-                  disabled={createMaintenanceRequestMutation.isPending}
-                  data-testid="button-submit-maintenance"
-                >
-                  <Wrench className="h-4 w-4 mr-2" />
-                  {createMaintenanceRequestMutation.isPending ? "Submitting..." : "Submit Request"}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+          {/* Maintenance Tab */}
+          <TabsContent value="maintenance">
+            <Card>
+              <CardHeader>
+                <CardTitle>My Maintenance Requests</CardTitle>
+                <CardDescription>Requests sent to Security Head</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {maintenanceLoading ? (
+                  <div className="text-center py-8" data-testid="loading-maintenance">Loading maintenance requests...</div>
+                ) : myMaintenanceRequests.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground" data-testid="no-maintenance">
+                    No maintenance requests yet.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {myMaintenanceRequests.map((request) => (
+                      <div key={request.id} className="p-4 border rounded-lg" data-testid={`maintenance-${request.id}`}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <AlertTriangle className="h-4 w-4 text-orange-500" />
+                              <h4 className="font-medium" data-testid={`maintenance-title-${request.id}`}>{request.title}</h4>
+                              <span className={`px-2 py-0.5 rounded text-xs ${
+                                request.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                request.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-blue-100 text-blue-800'
+                              }`}>
+                                {request.priority}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
+                            <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
+                              <span>Location: {request.location}</span>
+                              <span data-testid={`maintenance-status-${request.id}`}>Status: {request.status}</span>
+                              <span>{format(new Date(request.createdAt), 'MMM dd, yyyy')}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-        {/* Vehicle Logging Modal */}
-        <Dialog open={isVehicleModalOpen} onOpenChange={setIsVehicleModalOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Log Vehicle Entry</DialogTitle>
-            </DialogHeader>
-            
-            <Form {...vehicleForm}>
-              <form onSubmit={vehicleForm.handleSubmit(onSubmitVehicleLog)} className="space-y-4">
-                <FormField
-                  control={vehicleForm.control}
-                  name="vehicleNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Vehicle Number</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="e.g., BA-1234"
-                          data-testid="input-vehicle-number"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={vehicleForm.control}
-                  name="driverName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Driver Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="Driver's full name"
-                          data-testid="input-driver-name"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={vehicleForm.control}
-                  name="purpose"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Purpose of Visit</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="e.g., Delivery, Guest visit, Service"
-                          data-testid="input-purpose"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="flex space-x-3">
-                  <Button
-                    type="submit"
-                    className="flex-1"
-                    disabled={createVehicleLogMutation.isPending}
-                    data-testid="button-log-entry"
+            {/* Maintenance Request Form */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Submit New Maintenance Request</CardTitle>
+                <CardDescription>Report maintenance issues to Security Head</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleMaintenanceSubmit} className="space-y-4">
+                  <div>
+                    <Label htmlFor="title">Issue Title *</Label>
+                    <Input
+                      id="title"
+                      data-testid="input-maintenance-title"
+                      value={maintenanceForm.title}
+                      onChange={(e) => setMaintenanceForm({ ...maintenanceForm, title: e.target.value })}
+                      placeholder="e.g., CCTV Camera Malfunction"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="location">Location *</Label>
+                    <Input
+                      id="location"
+                      data-testid="input-maintenance-location"
+                      value={maintenanceForm.location}
+                      onChange={(e) => setMaintenanceForm({ ...maintenanceForm, location: e.target.value })}
+                      placeholder="e.g., Main Entrance"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="priority">Priority</Label>
+                    <Select value={maintenanceForm.priority} onValueChange={(value) => setMaintenanceForm({ ...maintenanceForm, priority: value })}>
+                      <SelectTrigger data-testid="select-maintenance-priority">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      data-testid="textarea-maintenance-description"
+                      value={maintenanceForm.description}
+                      onChange={(e) => setMaintenanceForm({ ...maintenanceForm, description: e.target.value })}
+                      placeholder="Detailed description of the issue"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="photo">Photo (optional)</Label>
+                    <Input
+                      id="photo"
+                      type="file"
+                      accept="image/*"
+                      data-testid="input-maintenance-photo"
+                      onChange={handlePhotoChange}
+                    />
+                    {maintenanceForm.photo && (
+                      <img src={maintenanceForm.photo} alt="Preview" className="mt-2 h-32 rounded" />
+                    )}
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={createMaintenanceMutation.isPending}
+                    data-testid="button-submit-maintenance"
                   >
-                    {createVehicleLogMutation.isPending ? "Logging..." : "Log Entry"}
+                    {createMaintenanceMutation.isPending ? "Submitting..." : "Submit Request"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="flex-1"
-                    onClick={() => setIsVehicleModalOpen(false)}
-                    data-testid="button-cancel-log"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Performance Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Security Performance</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-green-50 rounded-lg" data-testid="performance-attendance">
-                <div className="text-2xl font-bold text-green-600">100%</div>
-                <div className="text-sm text-green-700">Attendance Rate</div>
-              </div>
-              <div className="text-center p-4 bg-blue-50 rounded-lg" data-testid="performance-patrols">
-                <div className="text-2xl font-bold text-blue-600">12</div>
-                <div className="text-sm text-blue-700">Patrols Today</div>
-              </div>
-              <div className="text-center p-4 bg-purple-50 rounded-lg" data-testid="performance-vehicles">
-                <div className="text-2xl font-bold text-purple-600">{todayVehicles.length}</div>
-                <div className="text-sm text-purple-700">Vehicles Logged</div>
-              </div>
-              <div className="text-center p-4 bg-orange-50 rounded-lg" data-testid="performance-incidents">
-                <div className="text-2xl font-bold text-orange-600">0</div>
-                <div className="text-sm text-orange-700">Incidents Reported</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Check-in Vehicle Tab */}
+          <TabsContent value="checkin">
+            <Card>
+              <CardHeader>
+                <CardTitle>Vehicle Check-in</CardTitle>
+                <CardDescription>Register a vehicle entering the premises</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleVehicleCheckIn} className="space-y-4">
+                  <div>
+                    <Label htmlFor="vehicleNumber">Vehicle Number *</Label>
+                    <Input
+                      id="vehicleNumber"
+                      data-testid="input-vehicle-number"
+                      value={vehicleForm.vehicleNumber}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, vehicleNumber: e.target.value })}
+                      placeholder="e.g., BA-1234"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="driverName">Driver Name *</Label>
+                    <Input
+                      id="driverName"
+                      data-testid="input-driver-name"
+                      value={vehicleForm.driverName}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, driverName: e.target.value })}
+                      placeholder="e.g., John Doe"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="purpose">Purpose</Label>
+                    <Input
+                      id="purpose"
+                      data-testid="input-vehicle-purpose"
+                      value={vehicleForm.purpose}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, purpose: e.target.value })}
+                      placeholder="e.g., Delivery"
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={checkInVehicleMutation.isPending}
+                    data-testid="button-checkin-vehicle"
+                  >
+                    {checkInVehicleMutation.isPending ? "Checking in..." : "Check In Vehicle"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );
