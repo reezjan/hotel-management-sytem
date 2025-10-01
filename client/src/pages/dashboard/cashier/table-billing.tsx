@@ -3,19 +3,22 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Receipt, Printer, CreditCard, Banknote, Smartphone } from "lucide-react";
+import { Receipt, Printer, CreditCard, Banknote, Smartphone, Plus, Minus, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 
-export default function WaiterBilling() {
+export default function CashierTableBilling() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedTable, setSelectedTable] = useState<string>("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("");
+  const [voucherCode, setVoucherCode] = useState("");
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"]
@@ -56,6 +59,57 @@ export default function WaiterBilling() {
     }
   });
 
+  const updateKotItemMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      return await apiRequest("PUT", `/api/kot-items/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
+      toast({ title: "Order updated successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const validateVoucherMutation = useMutation({
+    mutationFn: async (code: string) => {
+      if (!code || code.trim().length === 0) {
+        throw new Error("Please enter a voucher code");
+      }
+      const response = await apiRequest("POST", "/api/vouchers/validate", { code: code.trim() });
+      return response;
+    },
+    onSuccess: (data: any) => {
+      if (data.valid && data.voucher) {
+        setAppliedVoucher(data.voucher);
+        const discountText = data.voucher.discountType === 'percentage' 
+          ? `${data.voucher.discountAmount}% off`
+          : `${formatCurrency(data.voucher.discountAmount)} off`;
+        toast({ 
+          title: "✓ Voucher Applied!", 
+          description: `Code: ${data.voucher.code} - ${discountText}`,
+          variant: "default"
+        });
+      } else {
+        setAppliedVoucher(null);
+        toast({ 
+          title: "Invalid Voucher", 
+          description: "Voucher code not found or expired", 
+          variant: "destructive" 
+        });
+      }
+    },
+    onError: (error: any) => {
+      setAppliedVoucher(null);
+      toast({ 
+        title: "Validation Error", 
+        description: error?.message || "Unable to validate voucher", 
+        variant: "destructive" 
+      });
+    }
+  });
+
   // Filter orders that have approved or ready items
   const selectedTableOrders = kotOrders.filter(
     (order: any) => {
@@ -66,7 +120,7 @@ export default function WaiterBilling() {
     }
   );
 
-  // Calculate bill with cascading taxes
+  // Calculate bill with cascading taxes and discount
   const calculateBill = () => {
     let subtotal = 0;
     
@@ -82,6 +136,19 @@ export default function WaiterBilling() {
       });
     });
 
+    // Calculate discount
+    let discount = 0;
+    if (appliedVoucher) {
+      const discountAmount = parseFloat(appliedVoucher.discountAmount);
+      if (appliedVoucher.discountType === 'percentage') {
+        discount = Math.round((subtotal * discountAmount / 100) * 100) / 100;
+      } else {
+        discount = Math.round(discountAmount * 100) / 100;
+      }
+    }
+
+    const discountedSubtotal = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
+
     // Get active taxes
     const activeTaxes = hotelTaxes.filter((tax: any) => tax.isActive);
     
@@ -95,8 +162,8 @@ export default function WaiterBilling() {
       return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
     });
 
-    // Apply cascading taxes
-    let runningTotal = subtotal;
+    // Apply cascading taxes on discounted subtotal
+    let runningTotal = discountedSubtotal;
     const taxBreakdown: any = {};
     
     sortedTaxes.forEach((tax: any) => {
@@ -114,10 +181,12 @@ export default function WaiterBilling() {
     });
 
     const totalTax = Object.values(taxBreakdown).reduce((sum: number, t: any) => sum + t.amount, 0);
-    const grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
+    const grandTotal = Math.round((discountedSubtotal + totalTax) * 100) / 100;
 
     return {
       subtotal,
+      discount,
+      discountedSubtotal,
       taxBreakdown,
       totalTax,
       grandTotal
@@ -125,6 +194,29 @@ export default function WaiterBilling() {
   };
 
   const billCalc = calculateBill();
+
+  const handleUpdateQuantity = (item: any, newQty: number) => {
+    if (newQty <= 0) {
+      if (window.confirm('Remove this item from the order?')) {
+        // Set qty to 0 or use a delete endpoint if available
+        updateKotItemMutation.mutate({
+          id: item.id,
+          data: { qty: 0 }
+        });
+      }
+    } else {
+      updateKotItemMutation.mutate({
+        id: item.id,
+        data: { qty: newQty }
+      });
+    }
+  };
+
+  const handleApplyVoucher = () => {
+    if (voucherCode.trim()) {
+      validateVoucherMutation.mutate(voucherCode.trim());
+    }
+  };
 
   const handleProcessPayment = async () => {
     if (!selectedPaymentMethod) {
@@ -144,8 +236,19 @@ export default function WaiterBilling() {
         amount: billCalc.grandTotal.toFixed(2),
         paymentMethod: selectedPaymentMethod,
         purpose: 'restaurant_sale',
-        reference: `Table: ${tables.find((t: any) => t.id === selectedTable)?.name || selectedTable}`
+        reference: appliedVoucher ? `Voucher: ${appliedVoucher.code}, Table: ${tables.find((t: any) => t.id === selectedTable)?.name}` : `Table: ${tables.find((t: any) => t.id === selectedTable)?.name}`
       });
+
+      // Redeem voucher if applied
+      if (appliedVoucher) {
+        try {
+          await apiRequest("POST", "/api/vouchers/redeem", {
+            voucherId: appliedVoucher.id
+          });
+        } catch (error) {
+          toast({ title: "Warning", description: "Transaction successful but voucher redemption failed", variant: "destructive" });
+        }
+      }
 
       // Mark all orders as served
       for (const order of selectedTableOrders) {
@@ -160,6 +263,8 @@ export default function WaiterBilling() {
       // Reset selection
       setSelectedTable("");
       setSelectedPaymentMethod("");
+      setVoucherCode("");
+      setAppliedVoucher(null);
     } catch (error) {
       toast({ title: "Error", description: "Failed to process payment", variant: "destructive" });
     }
@@ -192,7 +297,7 @@ export default function WaiterBilling() {
     <div>Date: ${now.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' })}</div>
     <div>Time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
     <div>Bill No: ${now.getTime().toString().slice(-8)}</div>
-    <div>Waiter: ${user?.username}</div>
+    <div>Cashier: ${user?.username}</div>
   </div>
   
   <div style="border-top: 2px dashed #000; border-bottom: 2px dashed #000; padding: 10px 0; margin: 10px 0;">
@@ -234,6 +339,14 @@ export default function WaiterBilling() {
       <span>${formatCurrency(billCalc.subtotal)}</span>
     </div>
 `;
+
+    if (billCalc.discount > 0) {
+      billContent += `
+    <div style="display: flex; justify-content: space-between; padding: 3px 0; color: green;">
+      <span>Discount (${appliedVoucher?.code}):</span>
+      <span>- ${formatCurrency(billCalc.discount)}</span>
+    </div>`;
+    }
 
     Object.entries(billCalc.taxBreakdown).forEach(([taxType, details]: [string, any]) => {
       billContent += `
@@ -291,13 +404,13 @@ export default function WaiterBilling() {
   };
 
   return (
-    <DashboardLayout title="Billing">
+    <DashboardLayout title="Table Billing">
       <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
               <Receipt className="h-5 w-5 mr-2" />
-              Generate Bill
+              Table-Based Billing
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -326,17 +439,41 @@ export default function WaiterBilling() {
                   {selectedTableOrders.length === 0 ? (
                     <p className="text-muted-foreground text-sm">No approved orders for this table</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {selectedTableOrders.map((order: any) => (
-                        <div key={order.id} className="text-sm">
+                        <div key={order.id}>
                           {order.items?.map((item: any, idx: number) => {
                             if (item.status === 'approved' || item.status === 'ready') {
                               const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
                               if (!menuItem) return null;
                               return (
-                                <div key={idx} className="flex justify-between py-1">
-                                  <span>{menuItem.name} x {item.qty}</span>
-                                  <span>{formatCurrency(menuItem.price * item.qty)}</span>
+                                <div key={idx} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
+                                  <div className="flex-1">
+                                    <p className="font-medium">{menuItem.name}</p>
+                                    <p className="text-sm text-muted-foreground">{formatCurrency(menuItem.price)} each</p>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      className="h-8 w-8"
+                                      onClick={() => handleUpdateQuantity(item, item.qty - 1)}
+                                      disabled={updateKotItemMutation.isPending}
+                                    >
+                                      <Minus className="h-4 w-4" />
+                                    </Button>
+                                    <span className="w-10 text-center font-medium">{item.qty}</span>
+                                    <Button
+                                      size="icon"
+                                      variant="outline"
+                                      className="h-8 w-8"
+                                      onClick={() => handleUpdateQuantity(item, item.qty + 1)}
+                                      disabled={updateKotItemMutation.isPending}
+                                    >
+                                      <Plus className="h-4 w-4" />
+                                    </Button>
+                                    <span className="text-right w-24">{formatCurrency(menuItem.price * item.qty)}</span>
+                                  </div>
                                 </div>
                               );
                             }
@@ -350,11 +487,48 @@ export default function WaiterBilling() {
 
                 {selectedTableOrders.length > 0 && (
                   <>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">
+                        Voucher Code (Optional)
+                      </label>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Enter voucher code"
+                          value={voucherCode}
+                          onChange={(e) => setVoucherCode(e.target.value)}
+                          disabled={!!appliedVoucher}
+                        />
+                        <Button 
+                          onClick={handleApplyVoucher}
+                          disabled={validateVoucherMutation.isPending || !!appliedVoucher}
+                        >
+                          Apply
+                        </Button>
+                        {appliedVoucher && (
+                          <Button 
+                            variant="outline"
+                            onClick={() => {
+                              setAppliedVoucher(null);
+                              setVoucherCode("");
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="border rounded-lg p-4 space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>Subtotal:</span>
                         <span>{formatCurrency(billCalc.subtotal)}</span>
                       </div>
+                      {billCalc.discount > 0 && (
+                        <div className="flex justify-between text-sm text-green-600">
+                          <span>Discount ({appliedVoucher?.code}):</span>
+                          <span>- {formatCurrency(billCalc.discount)}</span>
+                        </div>
+                      )}
                       {Object.entries(billCalc.taxBreakdown).map(([taxType, details]: [string, any]) => (
                         <div key={taxType} className="flex justify-between text-sm">
                           <span>{taxType} ({details.rate}%):</span>

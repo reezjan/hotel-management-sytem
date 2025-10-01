@@ -547,46 +547,6 @@ export default function BaristaDashboard() {
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertTriangle className="h-5 w-5 text-orange-500" />
-              <span>Maintenance Requests</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {!Array.isArray(maintenanceRequests) || maintenanceRequests.length === 0 ? (
-                <p className="text-gray-500 col-span-full text-center py-4">No maintenance requests</p>
-              ) : (
-                (maintenanceRequests as MaintenanceRequest[]).map((request: MaintenanceRequest) => (
-                  <Card key={request.id}>
-                    <CardHeader>
-                      <CardTitle className="flex justify-between items-center">
-                        <span>{request.title}</span>
-                        <Badge variant={
-                          request.priority === 'high' ? 'destructive' :
-                          request.priority === 'medium' ? 'default' : 'secondary'
-                        }>
-                          {request.priority}
-                        </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm"><strong>Location:</strong> {request.location}</p>
-                      <p className="text-sm"><strong>Status:</strong> {request.status}</p>
-                      <p className="text-sm mt-2">{request.description}</p>
-                      {request.photo && (
-                        <img src={request.photo} alt="Issue" className="mt-2 max-w-full h-32 object-cover rounded" />
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <Dialog open={declineDialogOpen} onOpenChange={setDeclineDialogOpen}>
