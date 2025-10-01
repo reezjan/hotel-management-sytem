@@ -2398,17 +2398,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { username, password, email, phone } = req.body;
       
+      // Validate required fields
+      if (!username || !password || !email || !phone) {
+        return res.status(400).json({ message: "Username, password, email, and phone are required" });
+      }
+      
       // Check if username already exists
       const existingUser = await storage.getUserByUsername(username);
       if (existingUser) {
         return res.status(409).json({ message: "Username already exists" });
       }
       
-      // Hash password using Node.js crypto
-      const crypto = await import('crypto');
-      const salt = crypto.randomBytes(16).toString('hex');
-      const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-      const passwordHash = `${salt}:${hash}`;
+      // Hash password using standard hashPassword function
+      const { hashPassword } = await import("./auth.js");
+      const passwordHash = await hashPassword(password);
       
       const userData = insertUserSchema.parse({
         username,
@@ -2422,7 +2425,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const officer = await storage.createUser(userData);
-      res.status(201).json(officer);
+      
+      // Sanitize response
+      const { passwordHash: _, ...sanitizedOfficer } = officer;
+      res.status(201).json(sanitizedOfficer);
     } catch (error) {
       console.error("Officer creation error:", error);
       res.status(400).json({ message: "Failed to create Surveillance Officer" });

@@ -372,6 +372,7 @@ export const vehicleLogs = pgTable("vehicle_logs", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   hotelId: uuid("hotel_id").references(() => hotels.id),
   vehicleNumber: text("vehicle_number"),
+  vehicleType: text("vehicle_type"),
   driverName: text("driver_name"),
   purpose: text("purpose"),
   checkIn: timestamp("check_in", { withTimezone: true }).defaultNow(),
