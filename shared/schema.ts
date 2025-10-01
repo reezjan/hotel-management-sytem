@@ -230,7 +230,6 @@ export const tasks = pgTable("tasks", {
   assignedTo: uuid("assigned_to").references(() => users.id),
   title: text("title").notNull(),
   description: text("description"),
-  taskType: text("task_type"),
   status: text("status").default('pending'),
   priority: text("priority").default('medium'),
   dueDate: timestamp("due_date", { withTimezone: true }),
@@ -238,55 +237,6 @@ export const tasks = pgTable("tasks", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
-
-// Housekeeping Task Requirements Table
-export const housekeepingTaskRequirements = pgTable("housekeeping_task_requirements", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  hotelId: uuid("hotel_id").references(() => hotels.id).notNull(),
-  taskType: text("task_type").notNull(),
-  inventoryItemId: uuid("inventory_item_id").references(() => inventoryItems.id).notNull(),
-  qtyRequired: numeric("qty_required", { precision: 12, scale: 3 }).notNull(),
-  maxAllowed: numeric("max_allowed", { precision: 12, scale: 3 }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
-}, (table) => ({
-  uniqueTaskTypeItem: index("htreq_hotel_tasktype_item_idx").on(table.hotelId, table.taskType, table.inventoryItemId)
-}));
-
-// Inventory Usage Log Table
-export const inventoryUsageLogs = pgTable("inventory_usage_logs", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  hotelId: uuid("hotel_id").references(() => hotels.id).notNull(),
-  taskId: uuid("task_id").references(() => tasks.id).notNull(),
-  staffId: uuid("staff_id").references(() => users.id).notNull(),
-  inventoryItemId: uuid("inventory_item_id").references(() => inventoryItems.id).notNull(),
-  qtyDeducted: numeric("qty_deducted", { precision: 12, scale: 3 }).notNull(),
-  beforeQty: numeric("before_qty", { precision: 12, scale: 3 }).notNull(),
-  afterQty: numeric("after_qty", { precision: 12, scale: 3 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
-}, (table) => ({
-  taskIdx: index("iusagelog_task_idx").on(table.taskId),
-  staffIdx: index("iusagelog_staff_idx").on(table.staffId),
-  itemIdx: index("iusagelog_item_idx").on(table.inventoryItemId)
-}));
-
-// Staff Discipline Table
-export const staffDiscipline = pgTable("staff_discipline", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  hotelId: uuid("hotel_id").references(() => hotels.id).notNull(),
-  staffId: uuid("staff_id").references(() => users.id).notNull(),
-  taskId: uuid("task_id").references(() => tasks.id).notNull(),
-  inventoryItemId: uuid("inventory_item_id").references(() => inventoryItems.id),
-  ruleViolated: text("rule_violated").notNull(),
-  qtyUsed: numeric("qty_used", { precision: 12, scale: 3 }),
-  qtyAllowed: numeric("qty_allowed", { precision: 12, scale: 3 }),
-  severity: text("severity").default('low'),
-  notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
-}, (table) => ({
-  taskIdx: index("staffdisc_task_idx").on(table.taskId),
-  staffIdx: index("staffdisc_staff_idx").on(table.staffId)
-}));
 
 // Restaurant Tables Table
 export const restaurantTables = pgTable("restaurant_tables", {
@@ -653,22 +603,6 @@ export const updateKotItemSchema = z.object({
   { message: "Decline reason is required when declining a KOT item", path: ['declineReason'] }
 );
 
-export const insertHousekeepingTaskRequirementSchema = createInsertSchema(housekeepingTaskRequirements).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true
-});
-
-export const insertInventoryUsageLogSchema = createInsertSchema(inventoryUsageLogs).omit({
-  id: true,
-  createdAt: true
-});
-
-export const insertStaffDisciplineSchema = createInsertSchema(staffDiscipline).omit({
-  id: true,
-  createdAt: true
-});
-
 // Types
 export type User = typeof users.$inferSelect;
 export type UserWithRole = User & { role?: Role };
@@ -713,9 +647,3 @@ export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
 export type Wastage = typeof wastages.$inferSelect;
 export type InsertWastage = z.infer<typeof insertWastageSchema>;
-export type HousekeepingTaskRequirement = typeof housekeepingTaskRequirements.$inferSelect;
-export type InsertHousekeepingTaskRequirement = z.infer<typeof insertHousekeepingTaskRequirementSchema>;
-export type InventoryUsageLog = typeof inventoryUsageLogs.$inferSelect;
-export type InsertInventoryUsageLog = z.infer<typeof insertInventoryUsageLogSchema>;
-export type StaffDiscipline = typeof staffDiscipline.$inferSelect;
-export type InsertStaffDiscipline = z.infer<typeof insertStaffDisciplineSchema>;

@@ -26,9 +26,6 @@ import {
   services,
   leaveRequests,
   wastages,
-  housekeepingTaskRequirements,
-  inventoryUsageLogs,
-  staffDiscipline,
   type User,
   type UserWithRole,
   type InsertUser,
@@ -70,13 +67,7 @@ import {
   type LeaveRequest,
   type InsertLeaveRequest,
   type Wastage,
-  type InsertWastage,
-  type HousekeepingTaskRequirement,
-  type InsertHousekeepingTaskRequirement,
-  type InventoryUsageLog,
-  type InsertInventoryUsageLog,
-  type StaffDiscipline,
-  type InsertStaffDiscipline
+  type InsertWastage
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, desc, asc, sql } from "drizzle-orm";
@@ -230,23 +221,6 @@ export interface IStorage {
   createLeaveRequest(request: InsertLeaveRequest): Promise<LeaveRequest>;
   updateLeaveRequest(id: string, request: Partial<InsertLeaveRequest>): Promise<LeaveRequest>;
   getLeaveRequest(id: string): Promise<LeaveRequest | undefined>;
-  
-  // Housekeeping task requirements operations
-  getHousekeepingTaskRequirements(hotelId: string, taskType?: string): Promise<HousekeepingTaskRequirement[]>;
-  createHousekeepingTaskRequirement(requirement: InsertHousekeepingTaskRequirement): Promise<HousekeepingTaskRequirement>;
-  updateHousekeepingTaskRequirement(id: string, requirement: Partial<InsertHousekeepingTaskRequirement>): Promise<HousekeepingTaskRequirement>;
-  deleteHousekeepingTaskRequirement(id: string): Promise<void>;
-  
-  // Inventory usage log operations
-  getInventoryUsageLogs(hotelId: string, filters?: { taskId?: string; staffId?: string }): Promise<InventoryUsageLog[]>;
-  createInventoryUsageLog(log: InsertInventoryUsageLog): Promise<InventoryUsageLog>;
-  
-  // Staff discipline operations
-  getStaffDisciplineRecords(hotelId: string, filters?: { staffId?: string; taskId?: string }): Promise<StaffDiscipline[]>;
-  createStaffDisciplineRecord(record: InsertStaffDiscipline): Promise<StaffDiscipline>;
-  
-  // Housekeeping task completion with inventory deduction
-  completeHousekeepingTask(taskId: string, staffId: string): Promise<{ success: boolean; message: string; disciplineRecords?: StaffDiscipline[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1332,205 +1306,6 @@ export class DatabaseStorage implements IStorage {
       .from(leaveRequests)
       .where(eq(leaveRequests.id, id));
     return leaveRequest || undefined;
-  }
-
-  async getHousekeepingTaskRequirements(hotelId: string, taskType?: string): Promise<HousekeepingTaskRequirement[]> {
-    const conditions = [eq(housekeepingTaskRequirements.hotelId, hotelId)];
-    if (taskType) {
-      conditions.push(eq(housekeepingTaskRequirements.taskType, taskType));
-    }
-    return await db
-      .select()
-      .from(housekeepingTaskRequirements)
-      .where(and(...conditions))
-      .orderBy(asc(housekeepingTaskRequirements.taskType));
-  }
-
-  async createHousekeepingTaskRequirement(requirement: InsertHousekeepingTaskRequirement): Promise<HousekeepingTaskRequirement> {
-    const [created] = await db
-      .insert(housekeepingTaskRequirements)
-      .values(requirement)
-      .returning();
-    return created;
-  }
-
-  async updateHousekeepingTaskRequirement(id: string, requirement: Partial<InsertHousekeepingTaskRequirement>): Promise<HousekeepingTaskRequirement> {
-    const [updated] = await db
-      .update(housekeepingTaskRequirements)
-      .set({ ...requirement, updatedAt: new Date() })
-      .where(eq(housekeepingTaskRequirements.id, id))
-      .returning();
-    return updated;
-  }
-
-  async deleteHousekeepingTaskRequirement(id: string): Promise<void> {
-    await db
-      .delete(housekeepingTaskRequirements)
-      .where(eq(housekeepingTaskRequirements.id, id));
-  }
-
-  async getInventoryUsageLogs(hotelId: string, filters?: { taskId?: string; staffId?: string }): Promise<InventoryUsageLog[]> {
-    const conditions = [eq(inventoryUsageLogs.hotelId, hotelId)];
-    if (filters?.taskId) {
-      conditions.push(eq(inventoryUsageLogs.taskId, filters.taskId));
-    }
-    if (filters?.staffId) {
-      conditions.push(eq(inventoryUsageLogs.staffId, filters.staffId));
-    }
-    return await db
-      .select()
-      .from(inventoryUsageLogs)
-      .where(and(...conditions))
-      .orderBy(desc(inventoryUsageLogs.createdAt));
-  }
-
-  async createInventoryUsageLog(log: InsertInventoryUsageLog): Promise<InventoryUsageLog> {
-    const [created] = await db
-      .insert(inventoryUsageLogs)
-      .values(log)
-      .returning();
-    return created;
-  }
-
-  async getStaffDisciplineRecords(hotelId: string, filters?: { staffId?: string; taskId?: string }): Promise<StaffDiscipline[]> {
-    const conditions = [eq(staffDiscipline.hotelId, hotelId)];
-    if (filters?.staffId) {
-      conditions.push(eq(staffDiscipline.staffId, filters.staffId));
-    }
-    if (filters?.taskId) {
-      conditions.push(eq(staffDiscipline.taskId, filters.taskId));
-    }
-    return await db
-      .select()
-      .from(staffDiscipline)
-      .where(and(...conditions))
-      .orderBy(desc(staffDiscipline.createdAt));
-  }
-
-  async createStaffDisciplineRecord(record: InsertStaffDiscipline): Promise<StaffDiscipline> {
-    const [created] = await db
-      .insert(staffDiscipline)
-      .values(record)
-      .returning();
-    return created;
-  }
-
-  async completeHousekeepingTask(taskId: string, staffId: string): Promise<{ success: boolean; message: string; disciplineRecords?: StaffDiscipline[] }> {
-    return await db.transaction(async (tx) => {
-      const [task] = await tx
-        .select()
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .for('update');
-
-      if (!task) {
-        return { success: false, message: "Task not found" };
-      }
-
-      if (task.status === 'completed') {
-        return { success: false, message: "Task already completed" };
-      }
-
-      if (task.assignedTo !== staffId) {
-        return { success: false, message: "Task not assigned to this staff member" };
-      }
-
-      if (!task.taskType) {
-        await tx
-          .update(tasks)
-          .set({ status: 'completed', updatedAt: new Date() })
-          .where(eq(tasks.id, taskId));
-        return { success: true, message: "Task completed (no inventory requirements)" };
-      }
-
-      const requirements = await tx
-        .select()
-        .from(housekeepingTaskRequirements)
-        .where(and(
-          eq(housekeepingTaskRequirements.hotelId, task.hotelId!),
-          eq(housekeepingTaskRequirements.taskType, task.taskType)
-        ));
-
-      if (requirements.length === 0) {
-        await tx
-          .update(tasks)
-          .set({ status: 'completed', updatedAt: new Date() })
-          .where(eq(tasks.id, taskId));
-        return { success: true, message: "Task completed (no inventory requirements defined)" };
-      }
-
-      const disciplineRecords: StaffDiscipline[] = [];
-
-      for (const requirement of requirements) {
-        const [item] = await tx
-          .select()
-          .from(inventoryItems)
-          .where(eq(inventoryItems.id, requirement.inventoryItemId))
-          .for('update');
-
-        if (!item) {
-          throw new Error(`Inventory item ${requirement.inventoryItemId} not found`);
-        }
-
-        const currentQty = parseFloat(item.stockQty || '0');
-        const requiredQty = parseFloat(requirement.qtyRequired);
-        const maxAllowed = requirement.maxAllowed ? parseFloat(requirement.maxAllowed) : null;
-
-        if (currentQty < requiredQty) {
-          throw new Error(`Insufficient stock for ${item.name}. Required: ${requiredQty}, Available: ${currentQty}`);
-        }
-
-        const newQty = currentQty - requiredQty;
-
-        await tx
-          .update(inventoryItems)
-          .set({ stockQty: newQty.toString(), updatedAt: new Date() })
-          .where(eq(inventoryItems.id, item.id));
-
-        await tx
-          .insert(inventoryUsageLogs)
-          .values({
-            hotelId: task.hotelId!,
-            taskId: task.id,
-            staffId: staffId,
-            inventoryItemId: item.id,
-            qtyDeducted: requiredQty.toString(),
-            beforeQty: currentQty.toString(),
-            afterQty: newQty.toString()
-          });
-
-        if (maxAllowed && requiredQty > maxAllowed) {
-          const [disciplineRecord] = await tx
-            .insert(staffDiscipline)
-            .values({
-              hotelId: task.hotelId!,
-              staffId: staffId,
-              taskId: task.id,
-              inventoryItemId: item.id,
-              ruleViolated: `Excessive usage of ${item.name}`,
-              qtyUsed: requiredQty.toString(),
-              qtyAllowed: maxAllowed.toString(),
-              severity: 'medium',
-              notes: `Used ${requiredQty} ${item.unit || 'units'}, maximum allowed is ${maxAllowed} ${item.unit || 'units'}`
-            })
-            .returning();
-          disciplineRecords.push(disciplineRecord);
-        }
-      }
-
-      await tx
-        .update(tasks)
-        .set({ status: 'completed', updatedAt: new Date() })
-        .where(eq(tasks.id, taskId));
-
-      return {
-        success: true,
-        message: disciplineRecords.length > 0 
-          ? `Task completed with ${disciplineRecords.length} discipline record(s)`
-          : "Task completed successfully",
-        disciplineRecords: disciplineRecords.length > 0 ? disciplineRecords : undefined
-      };
-    });
   }
 }
 
