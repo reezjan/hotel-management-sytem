@@ -12,6 +12,7 @@ export const ROLES = {
   CASHIER: 'cashier',
   SECURITY_HEAD: 'security_head',
   SECURITY_GUARD: 'security_guard',
+  SURVEILLANCE_OFFICER: 'surveillance_officer',
   FINANCE: 'finance',
   FRONT_DESK: 'front_desk'
 } as const;
@@ -30,6 +31,7 @@ export const ROLE_NAMES = {
   [ROLES.CASHIER]: 'Cashier',
   [ROLES.SECURITY_HEAD]: 'Security Head',
   [ROLES.SECURITY_GUARD]: 'Security Guard',
+  [ROLES.SURVEILLANCE_OFFICER]: 'Surveillance Officer',
   [ROLES.FINANCE]: 'Finance',
   [ROLES.FRONT_DESK]: 'Front Desk'
 } as const;
@@ -48,6 +50,7 @@ export const ROLE_DASHBOARDS = {
   [ROLES.CASHIER]: '/cashier',
   [ROLES.SECURITY_HEAD]: '/security-head',
   [ROLES.SECURITY_GUARD]: '/security-guard',
+  [ROLES.SURVEILLANCE_OFFICER]: '/surveillance-officer',
   [ROLES.FINANCE]: '/finance',
   [ROLES.FRONT_DESK]: '/front-desk'
 } as const;
@@ -60,6 +63,7 @@ export const DUTY_ROLES = [
   ROLES.BARISTA,
   ROLES.CASHIER,
   ROLES.SECURITY_GUARD,
+  ROLES.SURVEILLANCE_OFFICER,
   ROLES.FRONT_DESK
 ];
 
@@ -215,6 +219,13 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Clock', label: 'Duty Status', id: 'duty' },
     { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
     { icon: 'Car', label: 'Vehicle Check', id: 'vehicles' },
+    { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
+  ],
+  [ROLES.SURVEILLANCE_OFFICER]: [
+    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
+    { icon: 'Clock', label: 'Duty Status', id: 'duty' },
+    { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
+    { icon: 'Car', label: 'Vehicle Logs', id: 'vehicles' },
     { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
   ],
   [ROLES.FINANCE]: [

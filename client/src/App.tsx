@@ -96,6 +96,7 @@ function Router() {
       <ProtectedRoute path="/cashier" component={CashierDashboard} allowedRoles={["cashier"]} />
       <ProtectedRoute path="/security-head" component={SecurityHeadDashboard} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-guard" component={SecurityGuardDashboard} allowedRoles={["security_guard"]} />
+      <ProtectedRoute path="/surveillance-officer" component={SecurityGuardDashboard} allowedRoles={["surveillance_officer"]} />
       <ProtectedRoute path="/finance" component={FinanceDashboard} allowedRoles={["finance"]} />
       <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
       <Route path="/auth" component={AuthPage} />
