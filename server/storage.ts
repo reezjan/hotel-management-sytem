@@ -165,6 +165,7 @@ export interface IStorage {
   // KOT operations
   getKotOrdersByHotel(hotelId: string): Promise<KotOrder[]>;
   getKotItems(kotId: string): Promise<KotItem[]>;
+  getKotItemById(id: string): Promise<KotItem | undefined>;
   createKotOrder(kot: any): Promise<KotOrder>;
   updateKotOrder(id: string, kot: any): Promise<KotOrder>;
   updateKotItem(id: string, item: Partial<KotItem>): Promise<KotItem>;
@@ -678,13 +679,13 @@ export class DatabaseStorage implements IStorage {
             itemKotId: kotItems.kotId,
             itemMenuItemId: kotItems.menuItemId,
             itemQty: kotItems.qty,
-            itemNotes: kotItems.notes,
+            itemNotes: kotItems.description, // Changed from .notes to .description to match schema
             itemStatus: kotItems.status,
             itemDeclineReason: kotItems.declineReason,
             menuItemId: menuItems.id,
             menuItemName: menuItems.name,
             menuItemPrice: menuItems.price,
-            menuItemCategory: menuItems.category
+            menuItemCategory: menuItems.categoryId // Reading categoryId from DB but aliasing as category for API contract
           })
           .from(kotItems)
           .leftJoin(menuItems, eq(kotItems.menuItemId, menuItems.id))
@@ -702,7 +703,7 @@ export class DatabaseStorage implements IStorage {
             id: row.menuItemId,
             name: row.menuItemName,
             price: row.menuItemPrice,
-            category: row.menuItemCategory
+            category: row.menuItemCategory // Keeping original field name for API contract
           } : null
         }));
         
@@ -722,6 +723,15 @@ export class DatabaseStorage implements IStorage {
       .from(kotItems)
       .where(eq(kotItems.kotId, kotId))
       .orderBy(asc(kotItems.createdAt));
+  }
+
+  async getKotItemById(id: string): Promise<KotItem | undefined> {
+    const [item] = await db
+      .select()
+      .from(kotItems)
+      .where(eq(kotItems.id, id))
+      .limit(1);
+    return item;
   }
 
   async createKotOrder(kotData: any): Promise<KotOrder> {

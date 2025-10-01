@@ -238,6 +238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const kotOrders = await storage.getKotOrdersByHotel(user.hotelId);
       res.json(kotOrders);
     } catch (error) {
+      console.error("Error fetching KOT orders:", error);
       res.status(500).json({ message: "Failed to fetch KOT orders" });
     }
   });
@@ -1756,14 +1757,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
 
       // Get the KOT item with its order to verify hotel ownership
-      const kotItem = await storage.getKotItems(id);
-      if (!kotItem || kotItem.length === 0) {
+      const kotItem = await storage.getKotItemById(id);
+      if (!kotItem) {
         return res.status(404).json({ message: "KOT item not found" });
       }
 
       // Verify the KOT item belongs to the user's hotel
       const kotOrder = await db.query.kotOrders.findFirst({
-        where: (orders, { eq }) => eq(orders.id, kotItem[0].kotId!)
+        where: (orders, { eq }) => eq(orders.id, kotItem.kotId!)
       });
 
       if (!kotOrder || kotOrder.hotelId !== user.hotelId) {
