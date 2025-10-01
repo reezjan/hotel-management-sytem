@@ -16,6 +16,7 @@ const ROLES = [
   { name: 'barista', description: 'Barista' },
   { name: 'security_head', description: 'Security head' },
   { name: 'security_guard', description: 'Security guard' },
+  { name: 'surveillance_officer', description: 'Surveillance officer' },
   { name: 'finance', description: 'Finance' },
   { name: 'front_desk', description: 'Front desk' },
   { name: 'cashier', description: 'Cashier' }
@@ -51,7 +52,8 @@ const ROLE_PERMISSIONS = [
   { creatorRole: 'restaurant_bar_manager', createeRole: 'cashier' },
   
   // Security head permissions
-  { creatorRole: 'security_head', createeRole: 'security_guard' }
+  { creatorRole: 'security_head', createeRole: 'security_guard' },
+  { creatorRole: 'security_head', createeRole: 'surveillance_officer' }
 ];
 
 async function seed() {
