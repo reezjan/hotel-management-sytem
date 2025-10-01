@@ -371,7 +371,7 @@ export const vouchers = pgTable("vouchers", {
 export const vehicleLogs = pgTable("vehicle_logs", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   hotelId: uuid("hotel_id").references(() => hotels.id),
-  vehicleNumber: text("vehicle_number"),
+  vehicleNumber: text("vehicle_number").notNull(),
   vehicleType: text("vehicle_type"),
   driverName: text("driver_name"),
   purpose: text("purpose"),
@@ -591,7 +591,8 @@ export const insertWastageSchema = createInsertSchema(wastages).omit({
 export const insertVehicleLogSchema = createInsertSchema(vehicleLogs).omit({
   id: true,
   hotelId: true,
-  recordedBy: true
+  recordedBy: true,
+  checkIn: true
 });
 
 export const updateKotItemSchema = z.object({

@@ -592,10 +592,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      // Auto-assign to security head if the reporter is a waiter, kitchen_staff, bartender, barista, or security_guard
+      let assignedTo = req.body.assignedTo;
+      const userRole = user.role?.name || '';
+      const rolesAssignedToSecurityHead = ['waiter', 'kitchen_staff', 'bartender', 'barista', 'security_guard', 'surveillance_officer'];
+      
+      if (rolesAssignedToSecurityHead.includes(userRole)) {
+        // Find security head for this hotel
+        const securityHeadRole = await storage.getRoleByName('security_head');
+        if (securityHeadRole) {
+          const users = await storage.getUsersByHotel(user.hotelId);
+          const securityHead = users.find((u: any) => u.roleId === securityHeadRole.id && u.isActive);
+          if (securityHead) {
+            assignedTo = securityHead.id;
+          }
+        }
+      }
+      
       const requestData = insertMaintenanceRequestSchema.parse({
         ...req.body,
         hotelId: user.hotelId,
-        reportedBy: user.id
+        reportedBy: user.id,
+        assignedTo
       });
       const request = await storage.createMaintenanceRequest(requestData);
       res.status(201).json(request);
@@ -1835,6 +1854,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Verify the inventory item exists and belongs to the user's hotel
+      if (!wastageData.itemId) {
+        return res.status(400).json({ message: "Item ID is required" });
+      }
       const inventoryItem = await storage.getInventoryItem(wastageData.itemId);
       if (!inventoryItem || inventoryItem.hotelId !== user.hotelId) {
         return res.status(404).json({ message: "Inventory item not found" });
@@ -2330,11 +2352,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
-      const logData = insertVehicleLogSchema.parse({
-        ...req.body,
+      const logData = {
+        ...insertVehicleLogSchema.parse(req.body),
         hotelId: user.hotelId,
         recordedBy: user.id
-      });
+      };
       const log = await storage.createVehicleLog(logData);
       res.status(201).json(log);
     } catch (error) {

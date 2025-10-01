@@ -617,38 +617,11 @@ export class DatabaseStorage implements IStorage {
 
   // Maintenance operations
   async getMaintenanceRequestsByHotel(hotelId: string): Promise<any[]> {
-    const results = await db
-      .select({
-        id: maintenanceRequests.id,
-        hotelId: maintenanceRequests.hotelId,
-        reportedBy: {
-          id: users.id,
-          username: users.username,
-          email: users.email,
-          role: {
-            id: roles.id,
-            name: roles.name,
-            description: roles.description
-          }
-        },
-        title: maintenanceRequests.title,
-        location: maintenanceRequests.location,
-        description: maintenanceRequests.description,
-        photo: maintenanceRequests.photo,
-        priority: maintenanceRequests.priority,
-        status: maintenanceRequests.status,
-        assignedTo: maintenanceRequests.assignedTo,
-        resolvedAt: maintenanceRequests.resolvedAt,
-        createdAt: maintenanceRequests.createdAt,
-        updatedAt: maintenanceRequests.updatedAt
-      })
+    return await db
+      .select()
       .from(maintenanceRequests)
-      .leftJoin(users, eq(maintenanceRequests.reportedBy, users.id))
-      .leftJoin(roles, eq(users.roleId, roles.id))
       .where(eq(maintenanceRequests.hotelId, hotelId))
       .orderBy(desc(maintenanceRequests.createdAt));
-    
-    return results;
   }
 
   async createMaintenanceRequest(requestData: InsertMaintenanceRequest): Promise<MaintenanceRequest> {

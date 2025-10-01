@@ -4,6 +4,14 @@
 
 This is a comprehensive multi-role hotel management system designed to manage all aspects of hotel operations. It supports 15 distinct user roles with tailored interfaces and permissions, covering functions from Super Admin to front-line staff. The system centralizes management of room reservations, restaurant operations, housekeeping, security, finance, and administration. Key capabilities include role-based authentication, real-time duty status tracking, thermal printer integration, a KOT (Kitchen Order Ticket) system with inventory management, comprehensive audit logging, and support for multiple payment methods (cash, POS, Fonepay) with detailed financial tracking.
 
+## Recent Changes
+
+### October 1, 2025
+- **Fixed Vehicle Check-In**: Corrected vehicle log creation to properly save `hotelId` and `recordedBy` fields to database. The issue was that the insert schema was stripping these fields during validation. Now validates request body first, then adds server-controlled fields.
+- **Fixed Maintenance Request Routing**: Updated auto-assignment logic so maintenance requests from waiters, kitchen staff, and bartenders are automatically assigned to the Security Head within their hotel (not their direct supervisor).
+- **Completed Sidebar Navigation**: Added missing path mappings for all 15 user roles including surveillance officer, security head, housekeeping staff, kitchen staff, bartender, barista, and security guard.
+- **Database Schema Alignment**: Verified and corrected vehicle logs schema to match actual database columns (snake_case: check_in, check_out, recorded_by).
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
