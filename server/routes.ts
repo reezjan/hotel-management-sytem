@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { db } from "./db";
-import { users, roles } from "@shared/schema";
+import { users, roles, roleCreationPermissions } from "@shared/schema";
 import { eq, and, isNull, asc, sql } from "drizzle-orm";
 import {
   insertUserSchema,
@@ -567,6 +567,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Complete housekeeping task with automatic inventory deduction
+  app.patch("/api/hotels/current/tasks/:id/complete", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+      
+      // Verify the task belongs to current hotel
+      const existingTask = await storage.getTask(id);
+      if (!existingTask || existingTask.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+
+      // Verify user is authorized to complete this task (assigned to them or is a manager/owner/housekeeping_supervisor)
+      const roleName = user.role?.name ?? user.role;
+      const privilegedRoles = ['restaurant_bar_manager', 'manager', 'owner', 'housekeeping_supervisor'];
+      const isPrivileged = privilegedRoles.includes(roleName);
+      if (existingTask.assignedTo !== user.id && !isPrivileged) {
+        return res.status(403).json({ message: "Not authorized to complete this task" });
+      }
+
+      // Complete the task with inventory deduction and discipline tracking
+      const result = await storage.completeHousekeepingTask(id, user.id);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.message });
+      }
+
+      res.json({
+        success: true,
+        message: result.message,
+        disciplineRecords: result.disciplineRecords
+      });
+    } catch (error: any) {
+      console.error("Task completion error:", error);
+      res.status(400).json({ message: error.message || "Failed to complete task" });
+    }
+  });
+
   app.get("/api/hotels/current/maintenance-requests", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -638,9 +682,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle role conversion and password hashing
       const { role, password, confirmPassword, ...userData } = req.body;
       
-      // Get role ID from role name
+      // Get role ID and role name
       let roleId = userData.roleId;
       let targetRoleName = role;
+      
+      // If role name is provided, get the roleId
       if (role && !roleId) {
         const roleRecord = await storage.getRoleByName(role);
         if (roleRecord) {
@@ -650,15 +696,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: `Role '${role}' not found` });
         }
       }
+      // If only roleId is provided, fetch the role name
+      else if (roleId && !targetRoleName) {
+        const allRoles = await storage.getAllRoles();
+        const roleRecord = allRoles.find(r => r.id === roleId);
+        if (roleRecord) {
+          targetRoleName = roleRecord.name;
+        } else {
+          return res.status(400).json({ message: `Role with id '${roleId}' not found` });
+        }
+      }
+      // If neither is provided, return error
+      else if (!roleId && !targetRoleName) {
+        return res.status(400).json({ message: "Role or roleId must be provided" });
+      }
 
-      // Role-based authorization - check what roles current user can create
+      // Role-based authorization - check what roles current user can create using database permissions
       const currentUserRoleName = currentUser.role?.name || '';
-      const rolePermissions = {
-        restaurant_bar_manager: ['waiter', 'kitchen_staff', 'bartender', 'barista', 'cashier']
-      };
+      
+      // Query the roleCreationPermissions table
+      const permissions = await db
+        .select()
+        .from(roleCreationPermissions)
+        .where(
+          and(
+            eq(roleCreationPermissions.creatorRole, currentUserRoleName),
+            eq(roleCreationPermissions.createeRole, targetRoleName)
+          )
+        );
 
-      const allowedRoles = rolePermissions[currentUserRoleName as keyof typeof rolePermissions] || [];
-      if (!allowedRoles.includes(targetRoleName)) {
+      if (permissions.length === 0) {
+        // Get allowed roles for better error message
+        const allowedPermissions = await db
+          .select()
+          .from(roleCreationPermissions)
+          .where(eq(roleCreationPermissions.creatorRole, currentUserRoleName));
+        
+        const allowedRoles = allowedPermissions.map(p => p.createeRole);
+        
         return res.status(403).json({ 
           message: `You do not have permission to create users with role '${targetRoleName}'`,
           allowedRoles 
@@ -1627,6 +1702,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(400).json({ message: "Failed to delete task" });
+    }
+  });
+
+  app.patch("/api/housekeeping/tasks/:id/complete", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const currentUser = req.user as any;
+      if (!currentUser?.id) {
+        return res.status(400).json({ message: "User not found" });
+      }
+
+      const { id } = req.params;
+      
+      const result = await storage.completeHousekeepingTask(id, currentUser.id);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.message });
+      }
+
+      res.json(result);
+    } catch (error: any) {
+      console.error("Housekeeping task completion error:", error);
+      res.status(500).json({ 
+        message: "Failed to complete housekeeping task"
+      });
     }
   });
 
