@@ -106,6 +106,13 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'reservations': '/reservations',
         'customers': '/customer-details',
         'print': '/print-receipts'
+      },
+      'surveillance_officer': {
+        'dashboard': '/surveillance-officer',
+        'duty': '/duty-status',
+        'tasks': '/my-tasks',
+        'vehicles': '/vehicle-logs',
+        'maintenance': '/maintenance-reports'
       }
     };
 
@@ -129,6 +136,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       'cashier': '/cashier',
       'security_head': '/security-head',
       'security_guard': '/security-guard',
+      'surveillance_officer': '/surveillance-officer',
       'finance': '/finance',
       'front_desk': '/front-desk'
     };
