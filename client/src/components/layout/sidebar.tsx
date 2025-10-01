@@ -113,6 +113,40 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'tasks': '/my-tasks',
         'vehicles': '/vehicle-logs',
         'maintenance': '/maintenance-reports'
+      },
+      'housekeeping_staff': {
+        'dashboard': '/housekeeping-staff',
+        'duty': '/duty-status',
+        'tasks': '/my-tasks',
+        'maintenance': '/maintenance-reports'
+      },
+      'kitchen_staff': {
+        'dashboard': '/kitchen-staff',
+        'duty': '/duty-status',
+        'tasks': '/my-tasks',
+        'kot': '/kot-orders',
+        'maintenance': '/maintenance-reports'
+      },
+      'bartender': {
+        'dashboard': '/bartender',
+        'duty': '/duty-status',
+        'tasks': '/my-tasks',
+        'kot': '/kot-orders',
+        'maintenance': '/maintenance-reports'
+      },
+      'barista': {
+        'dashboard': '/barista',
+        'duty': '/duty-status',
+        'tasks': '/my-tasks',
+        'kot': '/kot-orders',
+        'maintenance': '/maintenance-reports'
+      },
+      'security_guard': {
+        'dashboard': '/security-guard',
+        'duty': '/duty-status',
+        'tasks': '/my-tasks',
+        'vehicles': '/vehicle-check',
+        'maintenance': '/maintenance-reports'
       }
     };
 
