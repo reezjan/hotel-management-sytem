@@ -109,10 +109,10 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'surveillance_officer': {
         'dashboard': '/surveillance-officer',
-        'duty': '/duty-status',
-        'tasks': '/my-tasks',
-        'vehicles': '/vehicle-logs',
-        'maintenance': '/maintenance-reports'
+        'duty': '/surveillance-officer/duty-status',
+        'tasks': '/surveillance-officer/my-tasks',
+        'vehicles': '/surveillance-officer/vehicle-logs',
+        'maintenance': '/surveillance-officer/maintenance-reports'
       },
       'housekeeping_staff': {
         'dashboard': '/housekeeping-staff',

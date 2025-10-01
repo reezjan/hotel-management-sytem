@@ -48,6 +48,10 @@ import CashierDashboard from "@/pages/dashboard/cashier";
 import SecurityHeadDashboard from "@/pages/dashboard/security-head";
 import SecurityGuardDashboard from "@/pages/dashboard/security-guard";
 import SurveillanceOfficerDashboard from "@/pages/dashboard/surveillance-officer";
+import SurveillanceOfficerDutyStatus from "@/pages/dashboard/surveillance-officer/duty-status";
+import SurveillanceOfficerMyTasks from "@/pages/dashboard/surveillance-officer/my-tasks";
+import SurveillanceOfficerVehicleLogs from "@/pages/dashboard/surveillance-officer/vehicle-logs";
+import SurveillanceOfficerMaintenanceReports from "@/pages/dashboard/surveillance-officer/maintenance-reports";
 import FinanceDashboard from "@/pages/dashboard/finance";
 import FrontDeskDashboard from "@/pages/dashboard/front-desk";
 
@@ -98,6 +102,10 @@ function Router() {
       <ProtectedRoute path="/security-head" component={SecurityHeadDashboard} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-guard" component={SecurityGuardDashboard} allowedRoles={["security_guard"]} />
       <ProtectedRoute path="/surveillance-officer" component={SurveillanceOfficerDashboard} allowedRoles={["surveillance_officer"]} />
+      <ProtectedRoute path="/surveillance-officer/duty-status" component={SurveillanceOfficerDutyStatus} allowedRoles={["surveillance_officer"]} />
+      <ProtectedRoute path="/surveillance-officer/my-tasks" component={SurveillanceOfficerMyTasks} allowedRoles={["surveillance_officer"]} />
+      <ProtectedRoute path="/surveillance-officer/vehicle-logs" component={SurveillanceOfficerVehicleLogs} allowedRoles={["surveillance_officer"]} />
+      <ProtectedRoute path="/surveillance-officer/maintenance-reports" component={SurveillanceOfficerMaintenanceReports} allowedRoles={["surveillance_officer"]} />
       <ProtectedRoute path="/finance" component={FinanceDashboard} allowedRoles={["finance"]} />
       <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
       <Route path="/auth" component={AuthPage} />
