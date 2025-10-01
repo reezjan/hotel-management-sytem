@@ -2334,11 +2334,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const user = req.user as any;
       if (!user || !user.hotelId) {
-        return res.status(400).json({ message: "User not associated with a hotel" });
+        // Return empty array if user has no hotel (e.g., super admin)
+        return res.json([]);
       }
       const logs = await storage.getVehicleLogsByHotel(user.hotelId);
       res.json(logs);
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Vehicle logs fetch error:", error);
       res.status(500).json({ message: "Failed to fetch vehicle logs" });
     }
   });
@@ -2352,8 +2354,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      // Validate request body first, then add server-controlled fields
+      const validatedData = insertVehicleLogSchema.parse(req.body);
       const logData = {
-        ...insertVehicleLogSchema.parse(req.body),
+        ...validatedData,
         hotelId: user.hotelId,
         recordedBy: user.id
       };

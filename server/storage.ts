@@ -853,11 +853,11 @@ export class DatabaseStorage implements IStorage {
 
   // Vehicle operations
   async getVehicleLogsByHotel(hotelId: string): Promise<VehicleLog[]> {
-    return await db
+    const result = await db
       .select()
       .from(vehicleLogs)
-      .where(eq(vehicleLogs.hotelId, hotelId))
-      .orderBy(desc(vehicleLogs.checkIn));
+      .where(eq(vehicleLogs.hotelId, hotelId));
+    return result.sort((a, b) => (b.checkIn?.getTime() || 0) - (a.checkIn?.getTime() || 0));
   }
 
   async createVehicleLog(log: InsertVehicleLog): Promise<VehicleLog> {
