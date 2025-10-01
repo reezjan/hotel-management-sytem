@@ -2168,7 +2168,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Vehicle routes
+  // Vehicle routes - specific routes must come before parameterized routes
+  app.get("/api/hotels/current/vehicle-logs", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.json([]);
+      }
+      const logs = await storage.getVehicleLogsByHotel(user.hotelId);
+      res.json(logs);
+    } catch (error: any) {
+      console.error("Vehicle logs fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch vehicle logs" });
+    }
+  });
+
   app.get("/api/hotels/:hotelId/vehicle-logs", async (req, res) => {
     try {
       const { hotelId } = req.params;
@@ -2323,25 +2340,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Leave request update error:", error);
       res.status(400).json({ message: "Failed to update leave request" });
-    }
-  });
-
-  // Vehicle log routes
-  app.get("/api/hotels/current/vehicle-logs", async (req, res) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-      const user = req.user as any;
-      if (!user || !user.hotelId) {
-        // Return empty array if user has no hotel (e.g., super admin)
-        return res.json([]);
-      }
-      const logs = await storage.getVehicleLogsByHotel(user.hotelId);
-      res.json(logs);
-    } catch (error: any) {
-      console.error("Vehicle logs fetch error:", error);
-      res.status(500).json({ message: "Failed to fetch vehicle logs" });
     }
   });
 

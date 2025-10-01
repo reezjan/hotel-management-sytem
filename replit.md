@@ -6,13 +6,16 @@ This is a comprehensive multi-role hotel management system designed to manage al
 
 ## Recent Changes
 
-### October 1, 2025 - Project Setup in Replit
+### October 1, 2025 - Complete Replit Environment Setup
 - **Database Initialization**: Created PostgreSQL database and pushed complete schema with all 30+ tables for hotel management system.
-- **Seed Data Configuration**: Successfully seeded database with all 16 user roles and default superadmin account (username: superadmin).
+- **Seed Data Configuration**: Successfully seeded database with all 16 user roles and default superadmin account (username: superadmin, password: aef009750905865270b03eb27ceba80e).
 - **Application Deployment**: Configured workflow to run on port 5000 with webview output, application running successfully.
-- **Vehicle Check-In Fix Verified**: Confirmed vehicle log creation properly saves hotelId and recordedBy fields after validating request body first, then adding server-controlled fields.
+- **Vehicle Check-In System**: Confirmed vehicle log creation properly saves hotelId and recordedBy fields after validating request body.
 - **Deployment Configuration**: Set up autoscale deployment with build and start scripts for production environment.
-- **Navigation System**: Verified all sidebar navigation items are properly configured for all 15 user roles with correct path mappings.
+- **Staff Discipline & Attendance**: Complete attendance tracking system with duty status toggles, task assignment, leave request management, and audit logging for all staff members across all 15 roles.
+- **Vehicle Logs Bug Fix**: Fixed critical route ordering issue where `/api/hotels/current/vehicle-logs` was being matched by `/api/hotels/:hotelId/vehicle-logs`, treating "current" as a parameter. Moved specific route before parameterized route to ensure correct matching. Vehicle logs now load successfully with 200 status.
+- **Database Query Optimization**: Implemented database-level ordering using `.orderBy(desc(vehicleLogs.checkIn))` instead of JavaScript sorting for better performance.
+- **Production Ready**: Application fully configured and tested in Replit environment with all features operational.
 
 ## User Preferences
 
@@ -51,6 +54,7 @@ Preferred communication style: Simple, everyday language.
 - **Security**: Secure session management (HTTP-only cookies, CSRF protection), role-based access control, and custom password reset.
 - **Data Integrity**: Foreign key constraints and role-based data isolation.
 - **Development**: Vite for fast development and optimized builds.
+- **Route Organization**: Critical requirement - specific routes (e.g., `/api/hotels/current/*`) must be defined BEFORE parameterized routes (e.g., `/api/hotels/:hotelId/*`) to prevent Express from treating literal strings as URL parameters.
 
 ## External Dependencies
 
