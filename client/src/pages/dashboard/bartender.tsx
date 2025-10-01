@@ -450,6 +450,76 @@ export default function BartenderDashboard() {
               </div>
             </DialogContent>
           </Dialog>
+
+          <Dialog open={maintenanceDialogOpen} onOpenChange={setMaintenanceDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Wrench className="w-4 h-4 mr-2" /> Maintenance Request
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Maintenance Request</DialogTitle>
+                <DialogDescription>Report a maintenance issue</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Title</Label>
+                  <Input
+                    value={maintenanceData.title}
+                    onChange={(e) => setMaintenanceData({ ...maintenanceData, title: e.target.value })}
+                    placeholder="Brief title"
+                  />
+                </div>
+                <div>
+                  <Label>Location</Label>
+                  <Input
+                    value={maintenanceData.location}
+                    onChange={(e) => setMaintenanceData({ ...maintenanceData, location: e.target.value })}
+                    placeholder="e.g., Bar Area"
+                  />
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    value={maintenanceData.description}
+                    onChange={(e) => setMaintenanceData({ ...maintenanceData, description: e.target.value })}
+                    placeholder="Describe the issue"
+                  />
+                </div>
+                <div>
+                  <Label>Priority</Label>
+                  <Select
+                    value={maintenanceData.priority}
+                    onValueChange={(value) => setMaintenanceData({ ...maintenanceData, priority: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Photo (Optional)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                  />
+                  {maintenanceData.photo && (
+                    <img src={maintenanceData.photo} alt="Preview" className="mt-2 max-w-full h-32 object-cover rounded" />
+                  )}
+                </div>
+                <Button onClick={submitMaintenance} className="w-full" disabled={createMaintenanceMutation.isPending}>
+                  Submit Request
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <Card>
@@ -504,6 +574,46 @@ export default function BartenderDashboard() {
                   )}
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <span>Maintenance Requests</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {!Array.isArray(maintenanceRequests) || maintenanceRequests.length === 0 ? (
+                <p className="text-gray-500 col-span-full text-center py-4">No maintenance requests</p>
+              ) : (
+                (maintenanceRequests as MaintenanceRequest[]).map((request: MaintenanceRequest) => (
+                  <Card key={request.id}>
+                    <CardHeader>
+                      <CardTitle className="flex justify-between items-center">
+                        <span>{request.title}</span>
+                        <Badge variant={
+                          request.priority === 'high' ? 'destructive' :
+                          request.priority === 'medium' ? 'default' : 'secondary'
+                        }>
+                          {request.priority}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm"><strong>Location:</strong> {request.location}</p>
+                      <p className="text-sm"><strong>Status:</strong> {request.status}</p>
+                      <p className="text-sm mt-2">{request.description}</p>
+                      {request.photo && (
+                        <img src={request.photo} alt="Issue" className="mt-2 max-w-full h-32 object-cover rounded" />
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
