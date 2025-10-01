@@ -56,15 +56,6 @@ export default function WaiterBilling() {
     }
   });
 
-  const updateTableStatusMutation = useMutation({
-    mutationFn: async ({ tableId, status }: { tableId: string; status: string }) => {
-      await apiRequest("PUT", `/api/hotels/current/restaurant-tables/${tableId}`, { status });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/restaurant-tables"] });
-      toast({ title: "Table status updated" });
-    }
-  });
 
   // Filter orders that have approved or ready items
   const selectedTableOrders = kotOrders.filter(
@@ -175,22 +166,6 @@ export default function WaiterBilling() {
     }
   };
 
-  const handleMarkTableClear = async () => {
-    if (!selectedTable) {
-      toast({ title: "Error", description: "Please select a table", variant: "destructive" });
-      return;
-    }
-
-    try {
-      await updateTableStatusMutation.mutateAsync({
-        tableId: selectedTable,
-        status: 'available'
-      });
-      setSelectedTable("");
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to clear table", variant: "destructive" });
-    }
-  };
 
   const handlePrintBill = () => {
     const hotelName = hotel?.name || "HOTEL";
@@ -429,20 +404,6 @@ export default function WaiterBilling() {
                   </>
                 )}
 
-                {selectedTable && (
-                  <div className="pt-4 border-t">
-                    <Button 
-                      className="w-full" 
-                      onClick={handleMarkTableClear}
-                      variant="outline"
-                      data-testid="button-mark-table-clear"
-                      disabled={updateTableStatusMutation.isPending}
-                    >
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      Mark Table as Clear
-                    </Button>
-                  </div>
-                )}
               </div>
             )}
           </CardContent>

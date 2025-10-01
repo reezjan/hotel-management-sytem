@@ -151,12 +151,19 @@ export default function WaiterDashboard() {
   };
 
   const handleEditOrder = (order: any) => {
-    // Load existing order items and open the order modal for editing
-    setSelectedTable(tables.find(t => t.id === order.tableId));
-    // Note: In a full implementation, you'd need to fetch and load the existing order items
+    // Load existing order items and prepare for editing
+    const table = tables.find((t: any) => t.id === order.tableId);
+    setSelectedTable(table);
+    
+    // Convert order items to the format expected by currentOrder
+    const orderItems = order.items?.map((item: any) => {
+      const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
+      return menuItem ? { ...menuItem, quantity: item.qty } : null;
+    }).filter(Boolean) || [];
+    
+    setCurrentOrder(orderItems);
     setIsViewOrdersModalOpen(false);
     setIsOrderModalOpen(true);
-    toast({ title: "Edit functionality - add items to modify order" });
   };
 
   return (
