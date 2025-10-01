@@ -63,7 +63,7 @@ export default function WaiterOrders() {
 
   const handleEditOrder = (orderId: string) => {
     toast({ title: "Edit order in main dashboard", description: "Right-click on the table to edit orders" });
-    setLocation(`/dashboard/waiter`);
+    setLocation(`/waiter`);
   };
 
   return (

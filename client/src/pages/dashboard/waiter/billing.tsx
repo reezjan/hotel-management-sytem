@@ -16,6 +16,8 @@ export default function WaiterBilling() {
   const queryClient = useQueryClient();
   const [selectedTable, setSelectedTable] = useState<string>("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("");
+  const [voucherCode, setVoucherCode] = useState<string>("");
+  const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"]
@@ -53,6 +55,26 @@ export default function WaiterBilling() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
+    }
+  });
+
+  const validateVoucherMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const response = await apiRequest("POST", "/api/vouchers/validate", { code });
+      return response;
+    },
+    onSuccess: (data: any) => {
+      setAppliedVoucher(data);
+      toast({ title: "Voucher applied successfully!" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message || "Invalid voucher code", variant: "destructive" });
+    }
+  });
+
+  const redeemVoucherMutation = useMutation({
+    mutationFn: async (voucherId: string) => {
+      await apiRequest("POST", "/api/vouchers/redeem", { voucherId });
     }
   });
 
@@ -115,12 +137,24 @@ export default function WaiterBilling() {
     });
 
     const totalTax = Object.values(taxBreakdown).reduce((sum: number, t: any) => sum + t.amount, 0);
-    const grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
+    let grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
+    
+    // Apply voucher discount
+    let discountAmount = 0;
+    if (appliedVoucher) {
+      if (appliedVoucher.discountType === 'percentage') {
+        discountAmount = Math.round((grandTotal * (parseFloat(appliedVoucher.discountAmount) / 100)) * 100) / 100;
+      } else if (appliedVoucher.discountType === 'fixed') {
+        discountAmount = Math.min(parseFloat(appliedVoucher.discountAmount), grandTotal);
+      }
+      grandTotal = Math.round((grandTotal - discountAmount) * 100) / 100;
+    }
 
     return {
       subtotal,
       taxBreakdown,
       totalTax,
+      discountAmount,
       grandTotal
     };
   };
@@ -139,13 +173,18 @@ export default function WaiterBilling() {
     }
 
     try {
+      // Redeem voucher if applied
+      if (appliedVoucher) {
+        await redeemVoucherMutation.mutateAsync(appliedVoucher.id);
+      }
+
       // Create transaction
       await createTransactionMutation.mutateAsync({
         txnType: selectedPaymentMethod === 'cash' ? 'cash_in' : selectedPaymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
         amount: billCalc.grandTotal.toFixed(2),
         paymentMethod: selectedPaymentMethod,
         purpose: 'restaurant_sale',
-        reference: `Table: ${tables.find((t: any) => t.id === selectedTable)?.name || selectedTable}`
+        reference: `Table: ${tables.find((t: any) => t.id === selectedTable)?.name || selectedTable}${appliedVoucher ? ` | Voucher: ${appliedVoucher.code}` : ''}`
       });
 
       // Mark all orders as served
@@ -161,9 +200,25 @@ export default function WaiterBilling() {
       // Reset selection
       setSelectedTable("");
       setSelectedPaymentMethod("");
+      setVoucherCode("");
+      setAppliedVoucher(null);
     } catch (error) {
       toast({ title: "Error", description: "Failed to process payment", variant: "destructive" });
     }
+  };
+
+  const handleApplyVoucher = () => {
+    if (!voucherCode.trim()) {
+      toast({ title: "Error", description: "Please enter a voucher code", variant: "destructive" });
+      return;
+    }
+    validateVoucherMutation.mutate(voucherCode.trim());
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setVoucherCode("");
+    toast({ title: "Voucher removed" });
   };
 
 
@@ -244,6 +299,14 @@ export default function WaiterBilling() {
       <span>${formatCurrency(details.amount)}</span>
     </div>`;
     });
+
+    if (billCalc.discountAmount > 0 && appliedVoucher) {
+      billContent += `
+    <div style="display: flex; justify-content: space-between; padding: 3px 0; color: #16a34a;">
+      <span>Discount (${appliedVoucher.code}):</span>
+      <span>-${formatCurrency(billCalc.discountAmount)}</span>
+    </div>`;
+    }
 
     billContent += `
     <div style="display: flex; justify-content: space-between; padding: 10px 0 5px 0; margin-top: 5px; border-top: 2px dashed #000; font-weight: bold; font-size: 14px;">
@@ -363,10 +426,65 @@ export default function WaiterBilling() {
                           <span>{formatCurrency(details.amount)}</span>
                         </div>
                       ))}
+                      {billCalc.discountAmount > 0 && appliedVoucher && (
+                        <div className="flex justify-between text-sm text-green-600">
+                          <span>Discount ({appliedVoucher.code}):</span>
+                          <span>-{formatCurrency(billCalc.discountAmount)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-lg font-bold pt-2 border-t">
                         <span>Total:</span>
                         <span>{formatCurrency(billCalc.grandTotal)}</span>
                       </div>
+                    </div>
+
+                    <div className="border rounded-lg p-4 space-y-3">
+                      <label className="text-sm font-medium text-foreground">
+                        Discount Voucher (Optional)
+                      </label>
+                      {!appliedVoucher ? (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Enter voucher code"
+                            value={voucherCode}
+                            onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            data-testid="input-voucher-code"
+                          />
+                          <Button 
+                            onClick={handleApplyVoucher}
+                            disabled={!voucherCode.trim() || validateVoucherMutation.isPending}
+                            data-testid="button-apply-voucher"
+                          >
+                            Apply
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            <div>
+                              <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                                Voucher Applied: {appliedVoucher.code}
+                              </p>
+                              <p className="text-xs text-green-700 dark:text-green-300">
+                                {appliedVoucher.discountType === 'percentage' 
+                                  ? `${appliedVoucher.discountAmount}% discount` 
+                                  : `${formatCurrency(parseFloat(appliedVoucher.discountAmount))} off`}
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleRemoveVoucher}
+                            data-testid="button-remove-voucher"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     <div>
