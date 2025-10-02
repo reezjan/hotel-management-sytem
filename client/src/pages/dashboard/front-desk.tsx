@@ -41,26 +41,37 @@ export default function FrontDeskDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [isCheckOutModalOpen, setIsCheckOutModalOpen] = useState(false);
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isRoomServiceModalOpen, setIsRoomServiceModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
+  const [selectedCheckoutPaymentMethod, setSelectedCheckoutPaymentMethod] = useState("");
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
+  const [selectedVoucher, setSelectedVoucher] = useState<string>("");
 
   const { data: rooms = [] } = useQuery({
-    queryKey: ["/api/hotels/hotel-id/rooms"]
+    queryKey: ["/api/hotels", user?.hotelId, "rooms"],
+    enabled: !!user?.hotelId
   });
 
   const { data: tasks = [] } = useQuery({
-    queryKey: ["/api/users", user?.id, "tasks"]
+    queryKey: ["/api/users", user?.id, "tasks"],
+    enabled: !!user?.id
   });
 
   const { data: roomServiceOrders = [] } = useQuery({
-    queryKey: ["/api/hotels/hotel-id/room-service-orders"]
+    queryKey: ["/api/hotels", user?.hotelId, "room-service-orders"],
+    enabled: !!user?.hotelId
   });
 
   const { data: mealPlans = [] } = useQuery({
     queryKey: ["/api/hotels", user?.hotelId, "meal-plans"],
+    enabled: !!user?.hotelId
+  });
+
+  const { data: vouchers = [] } = useQuery({
+    queryKey: ["/api/hotels", user?.hotelId, "vouchers"],
     enabled: !!user?.hotelId
   });
 
@@ -148,7 +159,7 @@ export default function FrontDeskDashboard() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/hotel-id/rooms"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
       toast({ title: "Guest checked in successfully" });
       checkInForm.reset();
       setIsCheckInModalOpen(false);
@@ -158,15 +169,39 @@ export default function FrontDeskDashboard() {
   });
 
   const checkOutGuestMutation = useMutation({
-    mutationFn: async (roomId: string) => {
-      await apiRequest("PUT", `/api/rooms/${roomId}`, {
+    mutationFn: async (data: { roomId: string; totalAmount: number; discountAmount: number; finalAmount: number; voucherId?: string }) => {
+      // Update room occupancy
+      await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
         isOccupied: false,
         occupantDetails: null
       });
+
+      // Create checkout transaction
+      if (data.finalAmount > 0) {
+        await apiRequest("POST", "/api/transactions", {
+          hotelId: user?.hotelId,
+          txnType: selectedCheckoutPaymentMethod === 'cash' ? 'cash_in' : selectedCheckoutPaymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
+          amount: data.finalAmount,
+          paymentMethod: selectedCheckoutPaymentMethod,
+          purpose: 'room_checkout_payment',
+          reference: `Checkout - Room ${selectedRoom?.roomNumber}${data.voucherId ? ` (Voucher Applied)` : ''}`,
+          createdBy: user?.id
+        });
+      }
+
+      // Update voucher used count if voucher was used
+      if (data.voucherId) {
+        await apiRequest("POST", `/api/vouchers/redeem`, { voucherId: data.voucherId });
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/hotel-id/rooms"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "vouchers"] });
       toast({ title: "Guest checked out successfully" });
+      setIsCheckOutModalOpen(false);
+      setSelectedRoom(null);
+      setSelectedVoucher("");
+      setSelectedCheckoutPaymentMethod("");
     }
   });
 
@@ -205,7 +240,7 @@ export default function FrontDeskDashboard() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/hotel-id/room-service-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "room-service-orders"] });
       toast({ title: "Room service order created successfully" });
       roomServiceForm.reset();
       setIsRoomServiceModalOpen(false);
@@ -240,9 +275,8 @@ export default function FrontDeskDashboard() {
   };
 
   const handleCheckOut = (room: any) => {
-    if (confirm(`Are you sure you want to check out guest from ${room.roomNumber}?`)) {
-      checkOutGuestMutation.mutate(room.id);
-    }
+    setSelectedRoom(room);
+    setIsCheckOutModalOpen(true);
   };
 
   const onSubmitCheckIn = (data: any) => {
@@ -771,6 +805,203 @@ export default function FrontDeskDashboard() {
                 </div>
               </form>
             </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Checkout Modal */}
+        <Dialog open={isCheckOutModalOpen} onOpenChange={setIsCheckOutModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-2xl">Guest Check-out</DialogTitle>
+            </DialogHeader>
+            
+            {selectedRoom && (
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Room & Guest Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Room Number</p>
+                        <p className="font-semibold">{selectedRoom.roomNumber}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Guest Name</p>
+                        <p className="font-semibold">{selectedRoom.occupantDetails?.name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Check-in Date</p>
+                        <p className="font-semibold">{selectedRoom.occupantDetails?.checkInDate ? formatDate(selectedRoom.occupantDetails.checkInDate) : 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Check-out Date</p>
+                        <p className="font-semibold">{selectedRoom.occupantDetails?.checkOutDate ? formatDate(selectedRoom.occupantDetails.checkOutDate) : 'N/A'}</p>
+                      </div>
+                    </div>
+                    
+                    {selectedRoom.occupantDetails?.mealPlan && (
+                      <div className="mt-4 p-3 bg-muted rounded-md">
+                        <p className="text-sm font-medium mb-1">Meal Plan</p>
+                        <p className="text-sm">{selectedRoom.occupantDetails.mealPlan.planType} - {selectedRoom.occupantDetails.mealPlan.planName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {selectedRoom.occupantDetails.mealPlan.numberOfPersons} person(s) × NPR {parseFloat(selectedRoom.occupantDetails.mealPlan.pricePerPerson).toFixed(2)} = NPR {parseFloat(selectedRoom.occupantDetails.mealPlan.totalCost).toFixed(2)}
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Apply Discount Voucher (Optional)</label>
+                    <select 
+                      value={selectedVoucher}
+                      onChange={(e) => setSelectedVoucher(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      data-testid="select-voucher"
+                    >
+                      <option value="">No voucher</option>
+                      {vouchers.filter((v: any) => {
+                        const now = new Date();
+                        const validFrom = new Date(v.validFrom);
+                        const validUntil = new Date(v.validUntil);
+                        return now >= validFrom && now <= validUntil && v.usedCount < v.maxUses;
+                      }).map((voucher: any) => (
+                        <option key={voucher.id} value={voucher.id}>
+                          {voucher.code} - {voucher.discountType === 'percentage' ? `${voucher.discountAmount}%` : `NPR ${parseFloat(voucher.discountAmount).toFixed(2)}`} off
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {(() => {
+                    const roomPrice = selectedRoom.pricePerNight || 0;
+                    const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
+                    const totalAmount = parseFloat(roomPrice) + parseFloat(mealPlanCost);
+                    const selectedVoucherData = vouchers.find((v: any) => v.id === selectedVoucher);
+                    let discountAmount = 0;
+                    
+                    if (selectedVoucherData) {
+                      if (selectedVoucherData.discountType === 'percentage') {
+                        discountAmount = (totalAmount * parseFloat(selectedVoucherData.discountAmount)) / 100;
+                      } else {
+                        discountAmount = parseFloat(selectedVoucherData.discountAmount);
+                      }
+                    }
+                    
+                    const finalAmount = Math.max(0, totalAmount - discountAmount);
+
+                    return (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Payment Summary</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                          <div className="flex justify-between">
+                            <span>Room Charges</span>
+                            <span>NPR {totalAmount.toFixed(2)}</span>
+                          </div>
+                          {discountAmount > 0 && (
+                            <div className="flex justify-between text-green-600">
+                              <span>Discount</span>
+                              <span>- NPR {discountAmount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between font-bold text-lg pt-2 border-t">
+                            <span>Total Amount</span>
+                            <span>NPR {finalAmount.toFixed(2)}</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
+
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Payment Method</label>
+                    <div className="flex space-x-2">
+                      <Button
+                        type="button"
+                        variant={selectedCheckoutPaymentMethod === 'cash' ? 'default' : 'outline'}
+                        onClick={() => setSelectedCheckoutPaymentMethod('cash')}
+                        data-testid="button-checkout-payment-cash"
+                      >
+                        <DollarSign className="h-4 w-4 mr-2" />
+                        Cash
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={selectedCheckoutPaymentMethod === 'pos' ? 'default' : 'outline'}
+                        onClick={() => setSelectedCheckoutPaymentMethod('pos')}
+                        data-testid="button-checkout-payment-pos"
+                      >
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        POS
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={selectedCheckoutPaymentMethod === 'fonepay' ? 'default' : 'outline'}
+                        onClick={() => setSelectedCheckoutPaymentMethod('fonepay')}
+                        data-testid="button-checkout-payment-fonepay"
+                      >
+                        <Smartphone className="h-4 w-4 mr-2" />
+                        Fonepay
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-3 pt-4">
+                    <Button
+                      className="flex-1"
+                      disabled={!selectedCheckoutPaymentMethod || checkOutGuestMutation.isPending}
+                      onClick={() => {
+                        const roomPrice = selectedRoom.pricePerNight || 0;
+                        const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
+                        const totalAmount = parseFloat(roomPrice) + parseFloat(mealPlanCost);
+                        const selectedVoucherData = vouchers.find((v: any) => v.id === selectedVoucher);
+                        let discountAmount = 0;
+                        
+                        if (selectedVoucherData) {
+                          if (selectedVoucherData.discountType === 'percentage') {
+                            discountAmount = (totalAmount * parseFloat(selectedVoucherData.discountAmount)) / 100;
+                          } else {
+                            discountAmount = parseFloat(selectedVoucherData.discountAmount);
+                          }
+                        }
+                        
+                        const finalAmount = Math.max(0, totalAmount - discountAmount);
+
+                        checkOutGuestMutation.mutate({
+                          roomId: selectedRoom.id,
+                          totalAmount,
+                          discountAmount,
+                          finalAmount,
+                          voucherId: selectedVoucher || undefined
+                        });
+                      }}
+                      data-testid="button-confirm-checkout"
+                    >
+                      {checkOutGuestMutation.isPending ? "Processing..." : "Complete Check-out & Print Receipt"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => {
+                        setIsCheckOutModalOpen(false);
+                        setSelectedRoom(null);
+                        setSelectedVoucher("");
+                        setSelectedCheckoutPaymentMethod("");
+                      }}
+                      data-testid="button-cancel-checkout"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
 
