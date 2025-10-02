@@ -181,7 +181,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/hotels/current/low-stock-items", async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const items = await storage.getLowStockItems(user.hotelId);
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch low stock items" });
+    }
+  });
+
   app.get("/api/hotels/current/inventory/consumptions", async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const consumptions = await storage.getInventoryConsumptionsByHotel(user.hotelId);
+      res.json(consumptions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch inventory consumptions" });
+    }
+  });
+
+  app.get("/api/hotels/current/inventory-consumptions", async (req, res) => {
     try {
       const user = req.user as any;
       if (!user || !user.hotelId) {
@@ -1613,6 +1639,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Task routes
+  app.get("/api/tasks/my-tasks", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.id) {
+        return res.status(400).json({ message: "User not found" });
+      }
+      const tasks = await storage.getTasksByUser(user.id);
+      res.json(tasks);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch tasks" });
+    }
+  });
+
   app.get("/api/users/:userId/tasks", async (req, res) => {
     try {
       const { userId } = req.params;
