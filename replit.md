@@ -6,6 +6,11 @@ This is a comprehensive multi-role hotel management system designed to manage al
 
 ## Recent Changes
 
+### October 2, 2025 - Storekeeper Inventory System Bug Fixes
+- **Critical Route Fix**: Fixed GET endpoint from `/api/hotels/current/inventory` to `/api/hotels/current/inventory-items` to match frontend query expectations, resolving inventory items not displaying in the storekeeper dashboard.
+- **Sidebar Cleanup**: Removed "Duty Status" link from storekeeper sidebar navigation as requested, streamlining the interface.
+- **Stock Issue Feature Verified**: Confirmed full implementation of inventory stock out/deduction feature including tracking of who received items (issuedToUserId), which department, quantities in both package and base units, and notes for complete audit trail.
+
 ### October 2, 2025 - Storekeeper Inventory Management System Overhaul
 - **Complete UI Rewrite**: Completely rewrote inventory-management.tsx to use proper schema fields (packageStockQty, baseStockQty, packageUnit, baseUnit) instead of incorrect currentQty field.
 - **Multi-Tab Interface**: Implemented comprehensive tabbed interface with Inventory Items, Transaction History, and Low Stock Alert tabs for better organization.

@@ -168,7 +168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/hotels/current/inventory", async (req, res) => {
+  app.get("/api/hotels/current/inventory-items", async (req, res) => {
     try {
       const user = req.user as any;
       if (!user || !user.hotelId) {
