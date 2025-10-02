@@ -241,7 +241,6 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.STOREKEEPER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Clock', label: 'Duty Status', id: 'duty' },
     { icon: 'Package', label: 'Inventory Tracking', id: 'inventory' },
     { icon: 'Edit', label: 'Inventory Management', id: 'management' },
     { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
