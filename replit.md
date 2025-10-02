@@ -6,10 +6,20 @@ This is a comprehensive multi-role hotel management system designed to manage al
 
 ## Recent Changes (October 2025)
 
-### Front Desk Enhancements - Complete Professional Overhaul
+### Front Desk Enhancements - Complete Professional Overhaul (October 2, 2025)
+- **Room Type & Price Display Enhancement**: 
+  - Updated check-in to save room type ID and name in occupantDetails for better tracking
+  - Checkout modal now displays room type and room price separately in guest information section
+  - Payment summary now itemizes room charges and meal plan charges separately with subtotal
+  - Voucher code now displays in discount line for better transparency
 - **TypeScript Type Safety**: Added comprehensive type definitions for all queries using proper Room, Task, RoomServiceOrder, MealPlan, Voucher, MenuItem, and MenuCategory types from shared schema.
 - **Data Isolation Fix**: Updated all react-query hooks to use dynamic hotel ID from authenticated user context instead of hardcoded values, ensuring proper multi-tenant data isolation with `enabled` guards.
 - **Navigation Simplification**: Removed non-existent front desk sub-pages (duty, tasks, checkin) from sidebar to fix 404 errors and improve user experience.
+- **Feature Verification**: Confirmed all frontdesk features working correctly:
+  - Maintenance request system sends requests to manager with proper priority levels
+  - Food ordering system with search by name and category filtering adds items to room bill
+  - Cash deposit requests to finance with payment method selection and transaction creation
+  - Voucher system validates codes, applies discounts, and tracks redemptions
 
 ### Professional Check-in System
 - **Enhanced Check-in Form**: Added nationality field for guest registration with proper form validation.
