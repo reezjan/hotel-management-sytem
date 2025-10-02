@@ -94,7 +94,9 @@ export const roomTypes = pgTable("room_types", {
   id: serial("id").primaryKey(),
   hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
   name: text("name"),
-  description: text("description")
+  description: text("description"),
+  priceInhouse: numeric("price_inhouse", { precision: 12, scale: 2 }),
+  priceWalkin: numeric("price_walkin", { precision: 12, scale: 2 })
 });
 
 // Rooms Table
