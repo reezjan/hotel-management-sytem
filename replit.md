@@ -2,83 +2,22 @@
 
 ## Overview
 
-This is a comprehensive multi-role hotel management system designed to manage all aspects of hotel operations. It supports 15 distinct user roles with tailored interfaces and permissions, covering functions from Super Admin to front-line staff. The system centralizes management of room reservations, restaurant operations, housekeeping, security, finance, and administration. Key capabilities include role-based authentication, real-time duty status tracking, thermal printer integration, a KOT (Kitchen Order Ticket) system with inventory management, comprehensive audit logging, and support for multiple payment methods (cash, POS, Fonepay) with detailed financial tracking.
+This is a comprehensive multi-role hotel management system designed to manage all aspects of hotel operations. It supports 15 distinct user roles with tailored interfaces and permissions, covering functions from Super Admin to front-line staff. The system centralizes management of room reservations, restaurant operations, housekeeping, security, finance, and administration. Key capabilities include role-based authentication, real-time duty status tracking, thermal printer integration, a KOT (Kitchen Order Ticket) system with inventory management, comprehensive audit logging, and support for multiple payment methods (cash, POS, Fonepay) with detailed financial tracking. The system also includes a complete meal plan system (EP, BB, AP, MAP) with configurable pricing, and an overhauled storekeeper inventory management system with dual unit tracking, transaction history, and maintenance requests.
 
-## Recent Changes
+## Recent Changes (October 2025)
 
-### October 2, 2025 - Meal Plan System Implementation
-- **Meal Plans Feature**: Implemented complete meal plan system supporting EP (European Plan), BB (Bed and Breakfast), AP (American Plan), and MAP (Modern American Plan) with configurable pricing per person.
-- **Database Schema**: Added `mealPlans` table with fields for planType, planName, pricePerPerson, description, and isActive status, linked to hotels via foreign key.
-- **Manager Dashboard**: Created comprehensive meal plan management interface at `/dashboard/manager/meal-plans` allowing managers, owners, and super_admins to create, update, and soft-delete meal plans with validation.
-- **Front Desk Integration**: Integrated meal plans as optional add-ons during guest check-in process:
-  - Meal plan dropdown selection showing plan type, name, and price per person
-  - Number of persons input field (conditionally shown when meal plan selected)
-  - Automatic total cost calculation (price per person × number of persons)
-  - Meal plan details stored in room `occupantDetails` for billing purposes
-- **API Endpoints**: Implemented RESTful routes for meal plan CRUD operations:
-  - `GET /api/hotels/:hotelId/meal-plans` - Fetch active meal plans
-  - `POST /api/hotels/:hotelId/meal-plans` - Create new meal plan (manager+)
-  - `PUT /api/hotels/:hotelId/meal-plans/:id` - Update meal plan (manager+)
-  - `DELETE /api/hotels/:hotelId/meal-plans/:id` - Soft delete meal plan (manager+)
-- **Storage Layer**: Added complete meal plan CRUD methods to storage interface with proper hotel scoping and role-based access control.
-- **Deployment Configuration**: Updated deployment settings to VM target with build and start scripts for production readiness.
-
-### October 2, 2025 - Fresh Import Setup & Storekeeper API Fixes
-- **Project Import Completed**: Successfully set up fresh GitHub import in Replit environment with all required dependencies and database.
-- **Database Setup**: Created PostgreSQL database, pushed schema with all 30+ tables, and seeded with 17 roles and superadmin account.
-- **Superadmin Credentials**: Created default account with username `superadmin` and password `aef009750905865270b03eb27ceba80e`.
-- **Missing API Endpoints Fixed**: Added three critical endpoints for storekeeper dashboard:
-  - `GET /api/hotels/current/low-stock-items` - Fetches items below reorder level
-  - `GET /api/tasks/my-tasks` - Fetches tasks for authenticated user  
-  - `GET /api/hotels/current/inventory-consumptions` - Alternative endpoint path for consumptions
-- **Stock Issuance Verified**: Confirmed POST `/api/hotels/current/inventory-transactions` endpoint supports full stock deduction/issuance with tracking of:
-  - Who received stock (issuedToUserId)
-  - Which department (department field)
-  - Quantities in package and base units (qtyPackage, qtyBase)
-  - Reason/notes (notes field)
-  - Transaction type (transactionType: "issue" or "receive")
-- **Workflow Configuration**: Set up Server workflow with webview output on port 5000 for Replit proxy support.
-- **Deployment Configuration**: Configured autoscale deployment with build and production start scripts.
-
-### October 2, 2025 - Storekeeper Inventory System Bug Fixes
-- **Critical Route Fix**: Fixed GET endpoint from `/api/hotels/current/inventory` to `/api/hotels/current/inventory-items` to match frontend query expectations, resolving inventory items not displaying in the storekeeper dashboard.
-- **Sidebar Cleanup**: Removed "Duty Status" link from storekeeper sidebar navigation as requested, streamlining the interface.
-- **Stock Issue Feature Verified**: Confirmed full implementation of inventory stock out/deduction feature including tracking of who received items (issuedToUserId), which department, quantities in both package and base units, and notes for complete audit trail.
-
-### October 2, 2025 - Storekeeper Inventory Management System Overhaul
-- **Complete UI Rewrite**: Completely rewrote inventory-management.tsx to use proper schema fields (packageStockQty, baseStockQty, packageUnit, baseUnit) instead of incorrect currentQty field.
-- **Multi-Tab Interface**: Implemented comprehensive tabbed interface with Inventory Items, Transaction History, and Low Stock Alert tabs for better organization.
-- **Package/Base Unit System**: Added dual unit tracking system supporting items with package units (e.g., 40kg flour bags) and items with only base units (e.g., individual pens).
-- **Unit Conversion Logic**: Implemented automatic conversion between package and base units based on baseUnitsPerPackage with critical fix preventing corruption of items without package units.
-- **Stock Issuance Tracking**: Added Issue Stock feature tracking who takes items (issuedToUserId), which department receives them, quantities in both units, and notes for complete audit trail.
-- **Transaction History**: Complete audit log showing all receive/issue transactions with user names, departments, quantities, and timestamps.
-- **Stock Validation**: Implemented validation to prevent over-issuance based on available baseStockQty.
-- **Maintenance Requests**: Created maintenance-requests.tsx page for storekeeper to send maintenance requests to hotel manager (not restaurant manager) with photo upload support.
-- **Backend Routes**: Added GET/POST /api/hotels/current/inventory-transactions routes with proper hotel scoping and validation.
-- **Critical Bug Fix**: Fixed package/base unit conversion bug where items without packageUnit were having packageStockQty incorrectly updated. Now items without package units only update baseStockQty and record qtyBase in transactions, preventing data corruption.
-- **Navigation Updates**: Added Maintenance Requests link to storekeeper sidebar and routing in App.tsx.
-
-### October 2, 2025 - Fresh GitHub Import Setup & Configuration
-- **Database Provisioning**: Created new PostgreSQL database and successfully pushed complete schema with all 30+ tables.
-- **Database Seeding**: Ran seed script to create all 17 user roles (including storekeeper and surveillance_officer) with proper role creation permissions.
-- **Superadmin Account**: Created default superadmin account with credentials (username: superadmin, password: aef009750905865270b03eb27ceba80e).
-- **Manager Permissions Fix**: Added 'storekeeper' to manager's allowed roles in server/routes.ts rolePermissions (line 1282), enabling managers to create storekeeper accounts. Also added 'surveillance_officer' to security_head permissions.
-- **Navigation Configuration**: Verified all storekeeper sidebar navigation links are properly configured in constants.ts and sidebar.tsx with correct routing paths.
-- **Workflow Setup**: Configured "Start application" workflow with webview output type on port 5000 for proper Replit iframe proxy support.
-- **Application Testing**: Verified application runs successfully - login page loads, Vite HMR connected, Express server serving on port 5000.
-- **Deployment Configuration**: Set up autoscale deployment target with build and production start scripts for publishing.
-- **Clean Workflow**: Removed failed "Server" workflow, keeping only the working "Start application" workflow.
-
-### October 1, 2025 - Complete Replit Environment Setup
-- **Database Initialization**: Created PostgreSQL database and pushed complete schema with all 30+ tables for hotel management system.
-- **Seed Data Configuration**: Successfully seeded database with all 16 user roles and default superadmin account (username: superadmin, password: aef009750905865270b03eb27ceba80e).
-- **Application Deployment**: Configured workflow to run on port 5000 with webview output, application running successfully.
-- **Vehicle Check-In System**: Confirmed vehicle log creation properly saves hotelId and recordedBy fields after validating request body.
-- **Deployment Configuration**: Set up autoscale deployment with build and start scripts for production environment.
-- **Staff Discipline & Attendance**: Complete attendance tracking system with duty status toggles, task assignment, leave request management, and audit logging for all staff members across all 15 roles.
-- **Vehicle Logs Bug Fix**: Fixed critical route ordering issue where `/api/hotels/current/vehicle-logs` was being matched by `/api/hotels/:hotelId/vehicle-logs`, treating "current" as a parameter. Moved specific route before parameterized route to ensure correct matching. Vehicle logs now load successfully with 200 status.
-- **Database Query Optimization**: Implemented database-level ordering using `.orderBy(desc(vehicleLogs.checkIn))` instead of JavaScript sorting for better performance.
-- **Production Ready**: Application fully configured and tested in Replit environment with all features operational.
+### Front Desk Enhancements
+- **Data Isolation Fix**: Updated all react-query hooks to use dynamic hotel ID from authenticated user context instead of hardcoded values, ensuring proper multi-tenant data isolation with `enabled` guards.
+- **Navigation Simplification**: Removed non-existent front desk sub-pages (duty, tasks, checkin) from sidebar to fix 404 errors and improve user experience.
+- **Professional Checkout Dialog**: Implemented comprehensive checkout flow with:
+  - Guest and room information display
+  - Meal plan cost integration
+  - Voucher discount system with real-time validation (date range and usage limits)
+  - Automatic discount calculation (percentage or fixed amount)
+  - Payment method selection (cash, POS, Fonepay)
+  - Payment summary breakdown
+  - Transaction recording and voucher usage tracking
+- **Query Key Consistency**: All room, voucher, and transaction mutations properly invalidate caches using structured query keys for reliable data refresh.
 
 ## User Preferences
 
@@ -106,11 +45,14 @@ Preferred communication style: Simple, everyday language.
 
 ### Feature Specifications
 - **Multi-Role System**: 15 distinct, hierarchical user roles with granular permission control and role creation.
-- **Inventory Management**: Automatic stock deduction based on recipes and order processing.
+- **Meal Plan System**: Supports EP, BB, AP, MAP with configurable pricing and integration into guest check-in.
+- **Inventory Management**: Automatic stock deduction based on recipes and order processing, dual unit tracking (package/base), transaction history, low stock alerts, and maintenance requests.
 - **Financial Tracking**: Comprehensive transaction recording, cascading tax calculation, voucher system, and multi-payment method support.
 - **Audit Logging**: Soft-delete functionality and detailed audit trails.
 - **Maintenance & Tasks**: Integrated task and maintenance request management with photo upload capabilities.
 - **Billing System**: Dynamic billing with order quantity editing, voucher discounts, and multi-payment options.
+- **Staff Management**: Complete attendance tracking, duty status toggles, task assignment, and leave request management.
+- **Vehicle Management**: Vehicle check-in/check-out logging with detailed tracking.
 
 ### System Design Choices
 - **Scalability**: Serverless PostgreSQL hosting.
