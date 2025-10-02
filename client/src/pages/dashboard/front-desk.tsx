@@ -59,6 +59,11 @@ export default function FrontDeskDashboard() {
     queryKey: ["/api/hotels/hotel-id/room-service-orders"]
   });
 
+  const { data: mealPlans = [] } = useQuery({
+    queryKey: ["/api/hotels", user?.hotelId, "meal-plans"],
+    enabled: !!user?.hotelId
+  });
+
   const checkInForm = useForm({
     defaultValues: {
       guestName: "",
@@ -68,7 +73,9 @@ export default function FrontDeskDashboard() {
       checkInDate: "",
       checkOutDate: "",
       roomId: "",
-      advancePayment: ""
+      advancePayment: "",
+      mealPlanId: "",
+      numberOfPersons: ""
     }
   });
 
@@ -104,6 +111,8 @@ export default function FrontDeskDashboard() {
 
   const checkInGuestMutation = useMutation({
     mutationFn: async (data: any) => {
+      const selectedMealPlan = mealPlans.find((plan: any) => plan.id === data.mealPlanId);
+      
       // Update room occupancy
       await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
         isOccupied: true,
@@ -113,7 +122,15 @@ export default function FrontDeskDashboard() {
           phone: data.guestPhone,
           idNumber: data.idNumber,
           checkInDate: data.checkInDate,
-          checkOutDate: data.checkOutDate
+          checkOutDate: data.checkOutDate,
+          mealPlan: selectedMealPlan ? {
+            planId: selectedMealPlan.id,
+            planType: selectedMealPlan.planType,
+            planName: selectedMealPlan.planName,
+            pricePerPerson: selectedMealPlan.pricePerPerson,
+            numberOfPersons: Number(data.numberOfPersons) || 0,
+            totalCost: Number(selectedMealPlan.pricePerPerson) * (Number(data.numberOfPersons) || 0)
+          } : null
         }
       });
 
@@ -618,6 +635,45 @@ export default function FrontDeskDashboard() {
                       </FormItem>
                     )}
                   />
+                  
+                  <FormField
+                    control={checkInForm.control}
+                    name="mealPlanId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Meal Plan (Optional)</FormLabel>
+                        <FormControl>
+                          <select 
+                            {...field} 
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            data-testid="select-meal-plan"
+                          >
+                            <option value="">No meal plan</option>
+                            {mealPlans.map((plan: any) => (
+                              <option key={plan.id} value={plan.id}>
+                                {plan.planType} - {plan.planName} (NPR {parseFloat(plan.pricePerPerson).toFixed(2)}/person)
+                              </option>
+                            ))}
+                          </select>
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  {checkInForm.watch('mealPlanId') && (
+                    <FormField
+                      control={checkInForm.control}
+                      name="numberOfPersons"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Number of Persons</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="number" min="1" placeholder="1" data-testid="input-number-of-persons" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   
                   <FormField
                     control={checkInForm.control}
