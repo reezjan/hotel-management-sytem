@@ -187,6 +187,8 @@ export default function FrontDeskDashboard() {
           checkOutDate: data.checkOutDate,
           guestType: data.guestType || "walkin",
           officeName: data.officeName || null,
+          roomTypeId: roomType?.id || null,
+          roomTypeName: roomType?.name || null,
           roomPrice: roomType ? (data.guestType === "inhouse" ? roomType.priceInhouse : roomType.priceWalkin) : 0,
           mealPlan: selectedMealPlan ? {
             planId: selectedMealPlan.id,
@@ -1197,6 +1199,14 @@ export default function FrontDeskDashboard() {
                         <p className="font-semibold">{selectedRoom.roomNumber}</p>
                       </div>
                       <div>
+                        <p className="text-sm text-muted-foreground">Room Type</p>
+                        <p className="font-semibold">{selectedRoom.occupantDetails?.roomTypeName || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Room Price</p>
+                        <p className="font-semibold">{formatCurrency(Number(selectedRoom.occupantDetails?.roomPrice || 0))}</p>
+                      </div>
+                      <div>
                         <p className="text-sm text-muted-foreground">Guest Name</p>
                         <p className="font-semibold">{selectedRoom.occupantDetails?.name || 'N/A'}</p>
                       </div>
@@ -1276,17 +1286,27 @@ export default function FrontDeskDashboard() {
                         <CardContent className="space-y-2">
                           <div className="flex justify-between">
                             <span>Room Charges</span>
-                            <span>NPR {totalAmount.toFixed(2)}</span>
+                            <span data-testid="checkout-room-price">NPR {parseFloat(roomPrice.toString()).toFixed(2)}</span>
+                          </div>
+                          {mealPlanCost > 0 && (
+                            <div className="flex justify-between">
+                              <span>Meal Plan Charges</span>
+                              <span data-testid="checkout-meal-price">NPR {parseFloat(mealPlanCost.toString()).toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between pt-1 border-t">
+                            <span>Subtotal</span>
+                            <span data-testid="checkout-subtotal">NPR {totalAmount.toFixed(2)}</span>
                           </div>
                           {discountAmount > 0 && (
                             <div className="flex justify-between text-green-600">
-                              <span>Discount</span>
-                              <span>- NPR {discountAmount.toFixed(2)}</span>
+                              <span>Discount {validatedVoucher ? `(${validatedVoucher.code})` : ''}</span>
+                              <span data-testid="checkout-discount">- NPR {discountAmount.toFixed(2)}</span>
                             </div>
                           )}
                           <div className="flex justify-between font-bold text-lg pt-2 border-t">
                             <span>Total Amount</span>
-                            <span>NPR {finalAmount.toFixed(2)}</span>
+                            <span data-testid="checkout-total">NPR {finalAmount.toFixed(2)}</span>
                           </div>
                         </CardContent>
                       </Card>
