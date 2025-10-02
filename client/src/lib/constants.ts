@@ -141,6 +141,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'CreditCard', label: 'Vendor Payments', id: 'payments' },
     { icon: 'Tag', label: 'Discount Vouchers', id: 'vouchers' },
     { icon: 'DoorOpen', label: 'Room Setup', id: 'rooms' },
+    { icon: 'DollarSign', label: 'Room Pricing', id: 'pricing' },
     { icon: 'Waves', label: 'Amenities', id: 'amenities' },
     { icon: 'Receipt', label: 'Transactions', id: 'transactions' }
   ],

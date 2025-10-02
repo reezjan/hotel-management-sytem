@@ -42,6 +42,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'payments': '/manager/vendor-payments',
         'vouchers': '/manager/discount-vouchers',
         'rooms': '/manager/room-setup',
+        'pricing': '/manager/room-pricing',
         'amenities': '/manager/amenities',
         'transactions': '/manager/transactions'
       },

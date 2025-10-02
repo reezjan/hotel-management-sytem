@@ -20,6 +20,7 @@ import StaffManagement from "@/pages/dashboard/manager/staff-management";
 import VendorPayments from "@/pages/dashboard/manager/vendor-payments";
 import DiscountVouchers from "@/pages/dashboard/manager/discount-vouchers";
 import RoomSetup from "@/pages/dashboard/manager/room-setup";
+import RoomPricing from "@/pages/dashboard/manager/room-pricing";
 import AmenitiesSetup from "@/pages/dashboard/manager/amenities";
 import ManagerTransactions from "@/pages/dashboard/manager/transactions";
 import ManagerLeaveApprovals from "@/pages/dashboard/manager/leave-approvals";
@@ -81,6 +82,7 @@ function Router() {
       <ProtectedRoute path="/manager/vendor-payments" component={VendorPayments} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/discount-vouchers" component={DiscountVouchers} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/room-setup" component={RoomSetup} allowedRoles={["manager", "owner"]} />
+      <ProtectedRoute path="/manager/room-pricing" component={RoomPricing} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/amenities" component={AmenitiesSetup} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/transactions" component={ManagerTransactions} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["manager", "owner"]} />
