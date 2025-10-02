@@ -59,6 +59,13 @@ export default function FrontDeskDashboard() {
   const [foodSearchQuery, setFoodSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [foodOrderItems, setFoodOrderItems] = useState<Array<{ item: MenuItem; quantity: number }>>([]);
+  const [guestType, setGuestType] = useState<"inhouse" | "walkin">("walkin");
+  const [officeName, setOfficeName] = useState("");
+
+  const { data: hotel } = useQuery<any>({
+    queryKey: ["/api/hotels", user?.hotelId],
+    enabled: !!user?.hotelId
+  });
 
   const { data: rooms = [] } = useQuery<Array<Room & { roomType?: RoomType }>>({
     queryKey: ["/api/hotels", user?.hotelId, "rooms"],
@@ -161,6 +168,8 @@ export default function FrontDeskDashboard() {
   const checkInGuestMutation = useMutation({
     mutationFn: async (data: any) => {
       const selectedMealPlan = mealPlans.find((plan) => plan.id === data.mealPlanId);
+      const room = rooms.find(r => r.id === data.roomId);
+      const roomType = room?.roomType;
       
       // Update room occupancy
       await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
@@ -173,6 +182,9 @@ export default function FrontDeskDashboard() {
           nationality: data.nationality,
           checkInDate: data.checkInDate,
           checkOutDate: data.checkOutDate,
+          guestType: data.guestType || "walkin",
+          officeName: data.officeName || null,
+          roomPrice: roomType ? (data.guestType === "inhouse" ? roomType.priceInhouse : roomType.priceWalkin) : 0,
           mealPlan: selectedMealPlan ? {
             planId: selectedMealPlan.id,
             planType: selectedMealPlan.planType,
@@ -204,6 +216,8 @@ export default function FrontDeskDashboard() {
       setIsCheckInModalOpen(false);
       setSelectedRoom(null);
       setSelectedPaymentMethod("");
+      setGuestType("walkin");
+      setOfficeName("");
     }
   });
 
@@ -333,13 +347,13 @@ export default function FrontDeskDashboard() {
 
   const todaysCheckIns = occupiedRooms.filter(r => {
     const today = new Date().toDateString();
-    const checkInDate = r.occupantDetails?.checkInDate;
+    const checkInDate = (r.occupantDetails as any)?.checkInDate;
     return checkInDate && new Date(checkInDate).toDateString() === today;
   });
 
   const todaysCheckOuts = occupiedRooms.filter(r => {
     const today = new Date().toDateString();
-    const checkOutDate = r.occupantDetails?.checkOutDate;
+    const checkOutDate = (r.occupantDetails as any)?.checkOutDate;
     return checkOutDate && new Date(checkOutDate).toDateString() === today;
   });
 
@@ -349,6 +363,8 @@ export default function FrontDeskDashboard() {
 
   const handleCheckIn = (room: any) => {
     setSelectedRoom(room);
+    setGuestType("walkin");
+    setOfficeName("");
     setIsCheckInModalOpen(true);
   };
 
@@ -362,7 +378,11 @@ export default function FrontDeskDashboard() {
       toast({ title: "Error", description: "Please select payment method for advance payment", variant: "destructive" });
       return;
     }
-    checkInGuestMutation.mutate({ ...data, roomId: selectedRoom?.id });
+    if (guestType === "inhouse" && !officeName.trim()) {
+      toast({ title: "Error", description: "Office name is required for in-house guests", variant: "destructive" });
+      return;
+    }
+    checkInGuestMutation.mutate({ ...data, roomId: selectedRoom?.id, guestType, officeName: guestType === "inhouse" ? officeName : null });
   };
 
   const onSubmitReservation = (data: any) => {
@@ -446,6 +466,10 @@ export default function FrontDeskDashboard() {
     const guest = room.occupantDetails;
     const mealPlan = guest?.mealPlan;
     const roomType = rooms.find(r => r.id === room.id)?.roomType;
+    const hotelName = hotel?.name || 'HOTEL MANAGEMENT';
+    const hotelAddress = hotel?.address || '';
+    const hotelPhone = hotel?.phone || '';
+    const hotelVatNo = hotel?.vatNo || '';
     
     let receiptHTML = `
       <!DOCTYPE html>
@@ -474,7 +498,10 @@ export default function FrontDeskDashboard() {
           </style>
         </head>
         <body>
-          <div class="center bold" style="font-size: 16px;">HOTEL MANAGEMENT</div>
+          <div class="center bold" style="font-size: 16px;">${hotelName.toUpperCase()}</div>
+          ${hotelAddress ? `<div class="center">${hotelAddress}</div>` : ''}
+          ${hotelPhone ? `<div class="center">Phone: ${hotelPhone}</div>` : ''}
+          ${hotelVatNo ? `<div class="center">VAT No: ${hotelVatNo}</div>` : ''}
           <div class="center">================================</div>
           <div class="center bold">${type === 'checkin' ? 'CHECK-IN RECEIPT' : type === 'checkout' ? 'CHECK-OUT RECEIPT' : 'BILL'}</div>
           <div class="center">================================</div>
@@ -490,6 +517,8 @@ export default function FrontDeskDashboard() {
           ${guest?.email ? `<div>Email: ${guest.email}</div>` : ''}
           ${guest?.nationality ? `<div>Nationality: ${guest.nationality}</div>` : ''}
           ${guest?.idNumber ? `<div>ID: ${guest.idNumber}</div>` : ''}
+          ${guest?.guestType ? `<div>Type: ${guest.guestType === 'inhouse' ? 'In-House' : 'Walk-in'}</div>` : ''}
+          ${guest?.officeName ? `<div>Office: ${guest.officeName}</div>` : ''}
           <div class="line"></div>
           ${type === 'checkin' ? `
             <div class="bold">CHECK-IN INFORMATION</div>
@@ -506,18 +535,25 @@ export default function FrontDeskDashboard() {
             <div class="bold">CHECK-OUT INFORMATION</div>
             <div>Check-in: ${guest?.checkInDate ? new Date(guest.checkInDate).toLocaleDateString() : 'N/A'}</div>
             <div>Check-out: ${new Date().toLocaleDateString()}</div>
-            ${roomType ? `
-              <div class="line"></div>
-              <div class="bold">ROOM CHARGES</div>
+            <div class="line"></div>
+            <div class="bold">CHARGES SUMMARY</div>
+            ${guest?.roomPrice ? `
               <div class="item-row">
-                <span>Room Rate:</span>
-                <span>${formatCurrency(Number(roomType.priceWalkin || roomType.priceInhouse || 0))}</span>
+                <span>Room Charges:</span>
+                <span>${formatCurrency(Number(guest.roomPrice))}</span>
               </div>
             ` : ''}
             ${mealPlan ? `
               <div class="item-row">
                 <span>Meal Plan:</span>
                 <span>${formatCurrency(mealPlan.totalCost)}</span>
+              </div>
+            ` : ''}
+            ${guest?.roomPrice || mealPlan ? `
+              <div class="line"></div>
+              <div class="item-row total">
+                <span>TOTAL:</span>
+                <span>${formatCurrency((Number(guest?.roomPrice || 0) + Number(mealPlan?.totalCost || 0)))}</span>
               </div>
             ` : ''}
           ` : ''}
@@ -714,9 +750,9 @@ export default function FrontDeskDashboard() {
                   >
                     {room.isOccupied ? 'Occupied' : 'Available'}
                   </Badge>
-                  {room.isOccupied && room.occupantDetails && (
+                  {room.isOccupied && room.occupantDetails ? (
                     <div className="mt-2 space-y-1">
-                      <p className="text-xs text-foreground font-medium">{room.occupantDetails.name}</p>
+                      <p className="text-xs text-foreground font-medium">{(room.occupantDetails as any)?.name || 'Guest'}</p>
                       <div className="flex space-x-1">
                         <Button
                           size="sm"
@@ -738,8 +774,7 @@ export default function FrontDeskDashboard() {
                         </Button>
                       </div>
                     </div>
-                  )}
-                  {!room.isOccupied && (
+                  ) : !room.isOccupied ? (
                     <Button
                       size="sm"
                       className="mt-2 h-6 text-xs"
@@ -748,7 +783,7 @@ export default function FrontDeskDashboard() {
                     >
                       Check In
                     </Button>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -773,11 +808,11 @@ export default function FrontDeskDashboard() {
                       <h4 className="font-medium text-foreground">{task.title}</h4>
                       <p className="text-sm text-muted-foreground">{task.description}</p>
                       <div className="flex items-center space-x-2 mt-2">
-                        <Badge className={getStatusColor(task.status)} variant="secondary">
+                        <Badge className={getStatusColor(task.status || 'pending')} variant="secondary">
                           {task.status}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(task.createdAt).toLocaleDateString()}
+                          {task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -830,11 +865,11 @@ export default function FrontDeskDashboard() {
                       </h4>
                       <p className="text-sm text-muted-foreground">{order.specialInstructions}</p>
                       <div className="flex items-center space-x-2 mt-2">
-                        <Badge className={getStatusColor(order.status)} variant="secondary">
+                        <Badge className={getStatusColor(order.status || 'pending')} variant="secondary">
                           {order.status}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(order.createdAt).toLocaleDateString()}
+                          {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -921,7 +956,54 @@ export default function FrontDeskDashboard() {
                       </FormItem>
                     )}
                   />
-                  
+                </div>
+
+                <div className="space-y-4 border-t pt-4">
+                  <h4 className="font-medium">Guest Type</h4>
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      variant={guestType === 'walkin' ? 'default' : 'outline'}
+                      onClick={() => { setGuestType('walkin'); setOfficeName(''); }}
+                      className="flex-1"
+                      data-testid="button-guest-type-walkin"
+                    >
+                      Walk-in
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={guestType === 'inhouse' ? 'default' : 'outline'}
+                      onClick={() => setGuestType('inhouse')}
+                      className="flex-1"
+                      data-testid="button-guest-type-inhouse"
+                    >
+                      In-House
+                    </Button>
+                  </div>
+                  {guestType === 'inhouse' && (
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Office Name *</label>
+                      <Input 
+                        value={officeName}
+                        onChange={(e) => setOfficeName(e.target.value)}
+                        placeholder="Enter office/company name"
+                        data-testid="input-office-name"
+                      />
+                    </div>
+                  )}
+                  <div className="text-sm text-muted-foreground">
+                    {selectedRoom && selectedRoom.roomType && (
+                      <div className="flex justify-between p-2 bg-muted rounded">
+                        <span>Room Rate ({guestType === 'inhouse' ? 'In-House' : 'Walk-in'}):</span>
+                        <span className="font-semibold">
+                          NPR {parseFloat(guestType === 'inhouse' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={checkInForm.control}
                     name="mealPlanId"
@@ -1129,17 +1211,17 @@ export default function FrontDeskDashboard() {
                   </div>
 
                   {(() => {
-                    const roomPrice = selectedRoom.pricePerNight || 0;
+                    const roomPrice = selectedRoom.occupantDetails?.roomPrice || 0;
                     const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
-                    const totalAmount = parseFloat(roomPrice) + parseFloat(mealPlanCost);
+                    const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString());
                     const selectedVoucherData = vouchers.find((v: any) => v.id === selectedVoucher);
                     let discountAmount = 0;
                     
                     if (selectedVoucherData) {
                       if (selectedVoucherData.discountType === 'percentage') {
-                        discountAmount = (totalAmount * parseFloat(selectedVoucherData.discountAmount)) / 100;
+                        discountAmount = (totalAmount * parseFloat(selectedVoucherData.discountAmount?.toString() || "0")) / 100;
                       } else {
-                        discountAmount = parseFloat(selectedVoucherData.discountAmount);
+                        discountAmount = parseFloat(selectedVoucherData.discountAmount?.toString() || "0");
                       }
                     }
                     
@@ -1208,17 +1290,17 @@ export default function FrontDeskDashboard() {
                       className="flex-1"
                       disabled={!selectedCheckoutPaymentMethod || checkOutGuestMutation.isPending}
                       onClick={() => {
-                        const roomPrice = selectedRoom.pricePerNight || 0;
+                        const roomPrice = selectedRoom.occupantDetails?.roomPrice || 0;
                         const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
-                        const totalAmount = parseFloat(roomPrice) + parseFloat(mealPlanCost);
+                        const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString());
                         const selectedVoucherData = vouchers.find((v: any) => v.id === selectedVoucher);
                         let discountAmount = 0;
                         
                         if (selectedVoucherData) {
                           if (selectedVoucherData.discountType === 'percentage') {
-                            discountAmount = (totalAmount * parseFloat(selectedVoucherData.discountAmount)) / 100;
+                            discountAmount = (totalAmount * parseFloat(selectedVoucherData.discountAmount?.toString() || "0")) / 100;
                           } else {
-                            discountAmount = parseFloat(selectedVoucherData.discountAmount);
+                            discountAmount = parseFloat(selectedVoucherData.discountAmount?.toString() || "0");
                           }
                         }
                         
@@ -1418,7 +1500,7 @@ export default function FrontDeskDashboard() {
                         <SelectContent>
                           {occupiedRooms.map((room) => (
                             <SelectItem key={room.id} value={room.id}>
-                              {room.roomNumber} - {room.occupantDetails?.name}
+                              {room.roomNumber} - {(room.occupantDetails as any)?.name || 'Guest'}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1682,7 +1764,7 @@ export default function FrontDeskDashboard() {
                     <SelectContent>
                       {occupiedRooms.map((room) => (
                         <SelectItem key={room.id} value={room.id}>
-                          Room {room.roomNumber} - {room.occupantDetails?.name}
+                          Room {room.roomNumber} - {(room.occupantDetails as any)?.name || 'Guest'}
                         </SelectItem>
                       ))}
                     </SelectContent>
