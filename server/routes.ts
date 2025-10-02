@@ -1276,10 +1276,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rolePermissions = {
         super_admin: ['super_admin', 'owner'],
         owner: ['manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head', 'finance'],
-        manager: ['housekeeping_supervisor', 'restaurant_bar_manager', 'security_head', 'finance', 'front_desk'],
+        manager: ['housekeeping_supervisor', 'restaurant_bar_manager', 'security_head', 'finance', 'front_desk', 'storekeeper'],
         housekeeping_supervisor: ['housekeeping_staff'],
         restaurant_bar_manager: ['waiter', 'kitchen_staff', 'bartender', 'barista', 'cashier'],
-        security_head: ['security_guard']
+        security_head: ['security_guard', 'surveillance_officer']
       };
 
       const allowedRoles = rolePermissions[currentUserRoleName as keyof typeof rolePermissions] || [];

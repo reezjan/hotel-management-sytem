@@ -150,7 +150,13 @@ export const inventoryItems = pgTable("inventory_items", {
   description: text("description"),
   unit: text("unit"),
   stockQty: numeric("stock_qty", { precision: 12, scale: 3 }).default('0'),
+  packageUnit: text("package_unit"),
+  baseUnit: text("base_unit"),
+  baseUnitsPerPackage: numeric("base_units_per_package", { precision: 12, scale: 3 }),
+  packageStockQty: numeric("package_stock_qty", { precision: 12, scale: 3 }).default('0'),
+  baseStockQty: numeric("base_stock_qty", { precision: 12, scale: 3 }).default('0'),
   reorderLevel: numeric("reorder_level", { precision: 12, scale: 3 }).default('0'),
+  storageLocation: text("storage_location"),
   costPerUnit: numeric("cost_per_unit", { precision: 12, scale: 2 }).default('0'),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -176,6 +182,21 @@ export const wastages = pgTable("wastages", {
   itemId: uuid("item_id").references(() => inventoryItems.id),
   qty: numeric("qty", { precision: 12, scale: 3 }).notNull(),
   reason: text("reason").notNull(),
+  recordedBy: uuid("recorded_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
+// Inventory Transactions Table
+export const inventoryTransactions = pgTable("inventory_transactions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  itemId: uuid("item_id").references(() => inventoryItems.id),
+  transactionType: text("transaction_type").notNull(),
+  qtyPackage: numeric("qty_package", { precision: 12, scale: 3 }),
+  qtyBase: numeric("qty_base", { precision: 12, scale: 3 }),
+  issuedToUserId: uuid("issued_to_user_id").references(() => users.id),
+  department: text("department"),
+  notes: text("notes"),
   recordedBy: uuid("recorded_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });

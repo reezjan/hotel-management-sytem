@@ -6,16 +6,16 @@ This is a comprehensive multi-role hotel management system designed to manage al
 
 ## Recent Changes
 
-### October 2, 2025 - GitHub Import Setup for Replit Environment
-- **Project Import**: Successfully imported hotel management system from GitHub repository to Replit.
-- **Dependencies**: Installed all npm dependencies (500 packages) for both frontend and backend.
-- **Database Configuration**: Verified DATABASE_URL is configured and connected to PostgreSQL database (heliumdb).
-- **Schema Deployment**: Pushed complete database schema with 30+ tables to PostgreSQL using Drizzle Kit.
-- **Role & Permissions**: Added storekeeper role and configured manager permissions to create/delete storekeeper accounts as requested.
-- **Database Seeding**: Successfully seeded database with all 17 user roles (including storekeeper), role creation permissions, and default superadmin account (username: superadmin, password: aef009750905865270b03eb27ceba80e).
-- **Workflow Configuration**: Configured "Start application" workflow with webview output type on port 5000 for proper Replit proxy support.
-- **Application Verification**: Tested application startup - login page loads successfully, Vite HMR connected, backend API running on port 5000.
-- **Deployment Ready**: Configured autoscale deployment target with build and production start scripts.
+### October 2, 2025 - Fresh GitHub Import Setup & Configuration
+- **Database Provisioning**: Created new PostgreSQL database and successfully pushed complete schema with all 30+ tables.
+- **Database Seeding**: Ran seed script to create all 17 user roles (including storekeeper and surveillance_officer) with proper role creation permissions.
+- **Superadmin Account**: Created default superadmin account with credentials (username: superadmin, password: aef009750905865270b03eb27ceba80e).
+- **Manager Permissions Fix**: Added 'storekeeper' to manager's allowed roles in server/routes.ts rolePermissions (line 1282), enabling managers to create storekeeper accounts. Also added 'surveillance_officer' to security_head permissions.
+- **Navigation Configuration**: Verified all storekeeper sidebar navigation links are properly configured in constants.ts and sidebar.tsx with correct routing paths.
+- **Workflow Setup**: Configured "Start application" workflow with webview output type on port 5000 for proper Replit iframe proxy support.
+- **Application Testing**: Verified application runs successfully - login page loads, Vite HMR connected, Express server serving on port 5000.
+- **Deployment Configuration**: Set up autoscale deployment target with build and production start scripts for publishing.
+- **Clean Workflow**: Removed failed "Server" workflow, keeping only the working "Start application" workflow.
 
 ### October 1, 2025 - Complete Replit Environment Setup
 - **Database Initialization**: Created PostgreSQL database and pushed complete schema with all 30+ tables for hotel management system.
