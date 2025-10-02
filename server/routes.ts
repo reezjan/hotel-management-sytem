@@ -813,6 +813,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Inventory transactions routes
+  app.get("/api/hotels/current/inventory-transactions", async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const transactions = await storage.getInventoryTransactionsByHotel(user.hotelId);
+      res.json(transactions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch inventory transactions" });
+    }
+  });
+
+  app.post("/api/hotels/current/inventory-transactions", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const transactionData = {
+        ...req.body,
+        hotelId: user.hotelId
+      };
+      const transaction = await storage.createInventoryTransaction(transactionData);
+      res.status(201).json(transaction);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to create inventory transaction" });
+    }
+  });
+
   app.get("/api/hotels/current/room-types", async (req, res) => {
     try {
       const user = req.user as any;

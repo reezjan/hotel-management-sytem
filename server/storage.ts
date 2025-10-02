@@ -13,6 +13,7 @@ import {
   kotItems,
   inventoryItems,
   inventoryConsumptions,
+  inventoryTransactions,
   vendors,
   restaurantTables,
   hotelTaxes,
@@ -183,6 +184,8 @@ export interface IStorage {
   createInventoryItem(item: any): Promise<InventoryItem>;
   updateInventoryItem(id: string, item: any): Promise<InventoryItem>;
   deleteInventoryItem(id: string): Promise<void>;
+  getInventoryTransactionsByHotel(hotelId: string): Promise<any[]>;
+  createInventoryTransaction(transaction: any): Promise<any>;
   
   // Vendor operations
   getVendorsByHotel(hotelId: string): Promise<Vendor[]>;
@@ -1114,6 +1117,22 @@ export class DatabaseStorage implements IStorage {
       .update(inventoryItems)
       .set({ deletedAt: new Date() })
       .where(eq(inventoryItems.id, id));
+  }
+
+  async getInventoryTransactionsByHotel(hotelId: string): Promise<any[]> {
+    return await db
+      .select()
+      .from(inventoryTransactions)
+      .where(eq(inventoryTransactions.hotelId, hotelId))
+      .orderBy(desc(inventoryTransactions.createdAt));
+  }
+
+  async createInventoryTransaction(transactionData: any): Promise<any> {
+    const [transaction] = await db
+      .insert(inventoryTransactions)
+      .values(transactionData)
+      .returning();
+    return transaction;
   }
 
   // Recipe-based inventory deduction for KOT operations

@@ -6,6 +6,19 @@ This is a comprehensive multi-role hotel management system designed to manage al
 
 ## Recent Changes
 
+### October 2, 2025 - Storekeeper Inventory Management System Overhaul
+- **Complete UI Rewrite**: Completely rewrote inventory-management.tsx to use proper schema fields (packageStockQty, baseStockQty, packageUnit, baseUnit) instead of incorrect currentQty field.
+- **Multi-Tab Interface**: Implemented comprehensive tabbed interface with Inventory Items, Transaction History, and Low Stock Alert tabs for better organization.
+- **Package/Base Unit System**: Added dual unit tracking system supporting items with package units (e.g., 40kg flour bags) and items with only base units (e.g., individual pens).
+- **Unit Conversion Logic**: Implemented automatic conversion between package and base units based on baseUnitsPerPackage with critical fix preventing corruption of items without package units.
+- **Stock Issuance Tracking**: Added Issue Stock feature tracking who takes items (issuedToUserId), which department receives them, quantities in both units, and notes for complete audit trail.
+- **Transaction History**: Complete audit log showing all receive/issue transactions with user names, departments, quantities, and timestamps.
+- **Stock Validation**: Implemented validation to prevent over-issuance based on available baseStockQty.
+- **Maintenance Requests**: Created maintenance-requests.tsx page for storekeeper to send maintenance requests to hotel manager (not restaurant manager) with photo upload support.
+- **Backend Routes**: Added GET/POST /api/hotels/current/inventory-transactions routes with proper hotel scoping and validation.
+- **Critical Bug Fix**: Fixed package/base unit conversion bug where items without packageUnit were having packageStockQty incorrectly updated. Now items without package units only update baseStockQty and record qtyBase in transactions, preventing data corruption.
+- **Navigation Updates**: Added Maintenance Requests link to storekeeper sidebar and routing in App.tsx.
+
 ### October 2, 2025 - Fresh GitHub Import Setup & Configuration
 - **Database Provisioning**: Created new PostgreSQL database and successfully pushed complete schema with all 30+ tables.
 - **Database Seeding**: Ran seed script to create all 17 user roles (including storekeeper and surveillance_officer) with proper role creation permissions.
