@@ -620,10 +620,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
-      // Auto-assign to security head if the reporter is a waiter, kitchen_staff, bartender, barista, or security_guard
+      // Auto-assign maintenance requests based on reporter role
       let assignedTo = req.body.assignedTo;
       const userRole = user.role?.name || '';
       const rolesAssignedToSecurityHead = ['waiter', 'kitchen_staff', 'bartender', 'barista', 'security_guard', 'surveillance_officer'];
+      const rolesAssignedToManager = ['front_desk'];
       
       if (rolesAssignedToSecurityHead.includes(userRole)) {
         // Find security head for this hotel
@@ -633,6 +634,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const securityHead = users.find((u: any) => u.roleId === securityHeadRole.id && u.isActive);
           if (securityHead) {
             assignedTo = securityHead.id;
+          }
+        }
+      } else if (rolesAssignedToManager.includes(userRole)) {
+        // Find manager for this hotel
+        const managerRole = await storage.getRoleByName('manager');
+        if (managerRole) {
+          const users = await storage.getUsersByHotel(user.hotelId);
+          const manager = users.find((u: any) => u.roleId === managerRole.id && u.isActive);
+          if (manager) {
+            assignedTo = manager.id;
           }
         }
       }
@@ -1569,11 +1580,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/rooms/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const roomData = insertRoomSchema.partial().parse(req.body);
+      // Extract occupantDetails separately since it's a jsonb field that may not validate properly
+      const { occupantDetails, ...restBody } = req.body;
+      const validatedData = insertRoomSchema.partial().parse(restBody);
+      // Add occupantDetails back if it exists
+      const roomData = occupantDetails !== undefined 
+        ? { ...validatedData, occupantDetails } 
+        : validatedData;
       const room = await storage.updateRoom(id, roomData);
       res.json(room);
     } catch (error) {
-      res.status(400).json({ message: "Failed to update room" });
+      console.error("Room update error:", error);
+      res.status(400).json({ message: "Failed to update room", error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
 
@@ -2281,6 +2299,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(orders);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch room service orders" });
+    }
+  });
+
+  app.post("/api/room-service-orders", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const orderData = {
+        hotelId: user.hotelId,
+        roomId: req.body.roomId,
+        requestedBy: user.id,
+        status: req.body.status || 'pending',
+        specialInstructions: req.body.specialInstructions
+      };
+      
+      const order = await storage.createRoomServiceOrder(orderData);
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Room service order creation error:", error);
+      res.status(400).json({ message: "Failed to create room service order" });
     }
   });
 

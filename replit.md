@@ -38,6 +38,18 @@ This is a comprehensive multi-role hotel management system designed to manage al
   - Transaction recording and voucher usage tracking
 - **Query Key Consistency**: All room, voucher, and transaction mutations properly invalidate caches using structured query keys for reliable data refresh.
 
+### Critical Front Desk Fixes (October 2, 2025 - Latest)
+- **Maintenance Request Routing Fixed**: Front desk maintenance requests now properly route to manager role (not restaurant_bar_manager) with auto-assignment logic to find active managers.
+- **Check-in Data Persistence Fixed**: Room update endpoint now properly handles JSONB occupantDetails field by extracting it before validation and merging back after, preventing data loss during check-in.
+- **Food Ordering Billing Completely Fixed**: 
+  - Food charges now stored in room's occupantDetails.foodCharges array with itemized details (item name, quantity, price, total)
+  - Each food order includes timestamp and orderer information
+  - Checkout payment summary displays separate "Food & Beverage Charges" line item
+  - Checkout total correctly includes room charges + meal plan + food charges
+  - Voucher discounts apply to complete total including food charges
+  - All food charges properly recorded in checkout transactions
+- **Room Service Orders**: Creates audit trail for all food orders with itemized lists for record keeping.
+
 ### New Front Desk Features
 - **Maintenance Request System**: Front desk can now send maintenance requests directly to the manager with priority levels (low, medium, high, urgent), location tracking, and detailed descriptions.
 - **Food Ordering System**: Advanced food ordering with:
@@ -46,8 +58,9 @@ This is a comprehensive multi-role hotel management system designed to manage al
   - Real-time menu item display with prices
   - Quantity management with increment/decrement controls
   - Order total calculation
-  - Direct integration with room billing
-  - Items automatically added to room service orders
+  - Complete billing integration with itemized charges
+  - Charges stored in occupantDetails.foodCharges and included in checkout
+  - Room service orders created for audit trail
 - **Cash Deposit Requests**: Front desk can send cash deposit requests to finance department with:
   - Amount specification
   - Payment method selection (cash, POS, Fonepay)
@@ -75,13 +88,17 @@ This is a comprehensive multi-role hotel management system designed to manage al
 - **Schema Migration**: Successfully pushed all schema changes including rooms, vouchers, meal plans, menu items, maintenance requests, and transactions.
 - **Seed Data**: Loaded all 17 roles and created superadmin user with proper permissions.
 
-### Replit Environment Setup (October 2025)
+### Replit Environment Setup (October 2, 2025)
+- **GitHub Import Setup**: Successfully imported and configured the hotel management system from GitHub.
 - **Deployment Configuration**: Set up for autoscale deployment with production build and start scripts.
-- **Development Workflow**: Configured `Server` workflow running `npm run dev` on port 5000 with webview output.
-- **Host Configuration**: Vite configured with `allowedHosts: true` and `host: 0.0.0.0` to work with Replit's proxy environment.
+- **Development Workflow**: Configured `Start application` workflow running `npm run dev` on port 5000 with webview output.
+- **Host Configuration**: Vite already configured with `allowedHosts: true` and `host: 0.0.0.0` to work with Replit's proxy environment.
 - **Database Integration**: PostgreSQL database provisioned with environment variables (DATABASE_URL, PGPORT, etc.) automatically configured.
 - **Port Configuration**: Both frontend (Vite) and backend (Express) run on port 5000 as required by Replit.
-- **Initial Setup Complete**: Dependencies installed, database schema pushed, seed data loaded, application running successfully.
+- **Dependencies**: All npm packages installed successfully (500 packages).
+- **Database Schema**: Successfully pushed all tables using `npm run db:push`.
+- **Seed Data**: Loaded all 17 roles and created superadmin user with credentials.
+- **Application Status**: Server running successfully on port 5000, login page accessible and functional.
 
 ## User Preferences
 

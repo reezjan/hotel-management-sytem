@@ -218,6 +218,7 @@ export interface IStorage {
   
   // Room service operations
   getRoomServiceOrdersByHotel(hotelId: string): Promise<RoomServiceOrder[]>;
+  createRoomServiceOrder(order: any): Promise<RoomServiceOrder>;
   
   // Leave request operations
   getLeaveRequestsByHotel(hotelId: string): Promise<LeaveRequest[]>;
@@ -915,6 +916,14 @@ export class DatabaseStorage implements IStorage {
       .from(roomServiceOrders)
       .where(eq(roomServiceOrders.hotelId, hotelId))
       .orderBy(desc(roomServiceOrders.createdAt));
+  }
+
+  async createRoomServiceOrder(orderData: any): Promise<RoomServiceOrder> {
+    const [order] = await db
+      .insert(roomServiceOrders)
+      .values(orderData)
+      .returning();
+    return order;
   }
 
   // Inventory consumption operations
