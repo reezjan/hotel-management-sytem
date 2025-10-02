@@ -56,6 +56,9 @@ export default function FrontDeskDashboard() {
   const [selectedCheckoutPaymentMethod, setSelectedCheckoutPaymentMethod] = useState("");
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [selectedVoucher, setSelectedVoucher] = useState<string>("");
+  const [voucherCode, setVoucherCode] = useState<string>("");
+  const [validatedVoucher, setValidatedVoucher] = useState<any>(null);
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
   const [foodSearchQuery, setFoodSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [foodOrderItems, setFoodOrderItems] = useState<Array<{ item: MenuItem; quantity: number }>>([]);
@@ -260,6 +263,36 @@ export default function FrontDeskDashboard() {
     }
   });
 
+  const handleValidateVoucher = async () => {
+    if (!voucherCode.trim()) {
+      toast({ title: "Please enter a voucher code", variant: "destructive" });
+      return;
+    }
+
+    setIsValidatingVoucher(true);
+    try {
+      const response = await fetch('/api/vouchers/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: voucherCode }),
+        credentials: 'include'
+      });
+      const data = await response.json();
+      
+      if (data.valid) {
+        setValidatedVoucher(data.voucher);
+        toast({ title: "Voucher applied successfully!" });
+      } else {
+        setValidatedVoucher(null);
+        toast({ title: "Invalid voucher", description: data.message || "Voucher code is invalid", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error validating voucher", variant: "destructive" });
+    } finally {
+      setIsValidatingVoucher(false);
+    }
+  };
+
   const checkOutGuestMutation = useMutation({
     mutationFn: async (data: { roomId: string; totalAmount: number; discountAmount: number; finalAmount: number; voucherId?: string }) => {
       // Update room occupancy
@@ -293,6 +326,8 @@ export default function FrontDeskDashboard() {
       setIsCheckOutModalOpen(false);
       setSelectedRoom(null);
       setSelectedVoucher("");
+      setVoucherCode("");
+      setValidatedVoucher(null);
       setSelectedCheckoutPaymentMethod("");
     }
   });
@@ -1190,38 +1225,44 @@ export default function FrontDeskDashboard() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">Apply Discount Voucher (Optional)</label>
-                    <select 
-                      value={selectedVoucher}
-                      onChange={(e) => setSelectedVoucher(e.target.value)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      data-testid="select-voucher"
-                    >
-                      <option value="">No voucher</option>
-                      {vouchers.filter((v: any) => {
-                        const now = new Date();
-                        const validFrom = new Date(v.validFrom);
-                        const validUntil = new Date(v.validUntil);
-                        return now >= validFrom && now <= validUntil && v.usedCount < v.maxUses;
-                      }).map((voucher: any) => (
-                        <option key={voucher.id} value={voucher.id}>
-                          {voucher.code} - {voucher.discountType === 'percentage' ? `${voucher.discountAmount}%` : `NPR ${parseFloat(voucher.discountAmount).toFixed(2)}`} off
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <Input
+                        value={voucherCode}
+                        onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                        placeholder="Enter voucher code"
+                        className="flex-1"
+                        data-testid="input-voucher-code"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleValidateVoucher}
+                        disabled={isValidatingVoucher || !voucherCode.trim()}
+                        data-testid="button-validate-voucher"
+                      >
+                        {isValidatingVoucher ? "Validating..." : "Apply"}
+                      </Button>
+                    </div>
+                    {validatedVoucher && (
+                      <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                        <p className="text-sm text-green-700 dark:text-green-400">
+                          ✓ Voucher "{validatedVoucher.code}" applied: {validatedVoucher.discountType === 'percentage' ? `${validatedVoucher.discountAmount}%` : `NPR ${parseFloat(validatedVoucher.discountAmount).toFixed(2)}`} off
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {(() => {
                     const roomPrice = selectedRoom.occupantDetails?.roomPrice || 0;
                     const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
                     const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString());
-                    const selectedVoucherData = vouchers.find((v: any) => v.id === selectedVoucher);
                     let discountAmount = 0;
                     
-                    if (selectedVoucherData) {
-                      if (selectedVoucherData.discountType === 'percentage') {
-                        discountAmount = (totalAmount * parseFloat(selectedVoucherData.discountAmount?.toString() || "0")) / 100;
+                    if (validatedVoucher) {
+                      if (validatedVoucher.discountType === 'percentage') {
+                        discountAmount = (totalAmount * parseFloat(validatedVoucher.discountAmount?.toString() || "0")) / 100;
                       } else {
-                        discountAmount = parseFloat(selectedVoucherData.discountAmount?.toString() || "0");
+                        discountAmount = parseFloat(validatedVoucher.discountAmount?.toString() || "0");
                       }
                     }
                     
@@ -1293,14 +1334,13 @@ export default function FrontDeskDashboard() {
                         const roomPrice = selectedRoom.occupantDetails?.roomPrice || 0;
                         const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
                         const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString());
-                        const selectedVoucherData = vouchers.find((v: any) => v.id === selectedVoucher);
                         let discountAmount = 0;
                         
-                        if (selectedVoucherData) {
-                          if (selectedVoucherData.discountType === 'percentage') {
-                            discountAmount = (totalAmount * parseFloat(selectedVoucherData.discountAmount?.toString() || "0")) / 100;
+                        if (validatedVoucher) {
+                          if (validatedVoucher.discountType === 'percentage') {
+                            discountAmount = (totalAmount * parseFloat(validatedVoucher.discountAmount?.toString() || "0")) / 100;
                           } else {
-                            discountAmount = parseFloat(selectedVoucherData.discountAmount?.toString() || "0");
+                            discountAmount = parseFloat(validatedVoucher.discountAmount?.toString() || "0");
                           }
                         }
                         
@@ -1311,7 +1351,7 @@ export default function FrontDeskDashboard() {
                           totalAmount,
                           discountAmount,
                           finalAmount,
-                          voucherId: selectedVoucher || undefined
+                          voucherId: validatedVoucher?.id || undefined
                         });
                       }}
                       data-testid="button-confirm-checkout"
@@ -1326,6 +1366,8 @@ export default function FrontDeskDashboard() {
                         setIsCheckOutModalOpen(false);
                         setSelectedRoom(null);
                         setSelectedVoucher("");
+                        setVoucherCode("");
+                        setValidatedVoucher(null);
                         setSelectedCheckoutPaymentMethod("");
                       }}
                       data-testid="button-cancel-checkout"
