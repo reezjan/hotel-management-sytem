@@ -244,6 +244,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Clock', label: 'Duty Status', id: 'duty' },
     { icon: 'Package', label: 'Inventory Tracking', id: 'inventory' },
     { icon: 'Edit', label: 'Inventory Management', id: 'management' },
+    { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
     { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
     { icon: 'TrendingDown', label: 'Consumption Tracking', id: 'consumption' }
   ]

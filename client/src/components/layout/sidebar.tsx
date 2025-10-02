@@ -153,6 +153,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'duty': '/storekeeper/duty-status',
         'inventory': '/storekeeper/inventory-tracking',
         'management': '/storekeeper/inventory-management',
+        'maintenance': '/storekeeper/maintenance-requests',
         'tasks': '/storekeeper/my-tasks',
         'consumption': '/storekeeper/consumption-tracking'
       }

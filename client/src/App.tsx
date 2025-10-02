@@ -58,6 +58,7 @@ import StorekeeperDashboard from "@/pages/dashboard/storekeeper";
 import StorekeeperDutyStatus from "@/pages/dashboard/storekeeper/duty-status";
 import StorekeeperInventoryTracking from "@/pages/dashboard/storekeeper/inventory-tracking";
 import StorekeeperInventoryManagement from "@/pages/dashboard/storekeeper/inventory-management";
+import StorekeeperMaintenanceRequests from "@/pages/dashboard/storekeeper/maintenance-requests";
 import StorekeeperMyTasks from "@/pages/dashboard/storekeeper/my-tasks";
 import StorekeeperConsumptionTracking from "@/pages/dashboard/storekeeper/consumption-tracking";
 
@@ -120,6 +121,7 @@ function Router() {
       <ProtectedRoute path="/storekeeper/duty-status" component={StorekeeperDutyStatus} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/inventory-tracking" component={StorekeeperInventoryTracking} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/inventory-management" component={StorekeeperInventoryManagement} allowedRoles={["storekeeper"]} />
+      <ProtectedRoute path="/storekeeper/maintenance-requests" component={StorekeeperMaintenanceRequests} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/my-tasks" component={StorekeeperMyTasks} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/consumption-tracking" component={StorekeeperConsumptionTracking} allowedRoles={["storekeeper"]} />
       
