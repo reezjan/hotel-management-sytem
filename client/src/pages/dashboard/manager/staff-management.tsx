@@ -48,7 +48,7 @@ export default function StaffManagement() {
   });
 
   // Roles that a manager can create
-  const managerCanCreate = ["housekeeping_supervisor", "restaurant_bar_manager", "security_head", "finance", "front_desk"];
+  const managerCanCreate = ["housekeeping_supervisor", "restaurant_bar_manager", "security_head", "finance", "front_desk", "storekeeper"];
   const availableRoles = allRoles.filter((role: any) => managerCanCreate.includes(role.name));
 
   // Create staff mutation
