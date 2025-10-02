@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Trash2, Plus, Edit, Ticket, Clock, Users, Percent } from "lucide-react";
 import { toast } from "sonner";
+import { DashboardLayout } from "@/components/layout/dashboard-layout";
 
 interface Voucher {
   id: string;
@@ -227,18 +228,19 @@ export default function DiscountVouchers() {
 
   if (userLoading || vouchersLoading) {
     return (
-      <div className="p-6">
+      <DashboardLayout title="Discount Vouchers">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
           <div className="h-32 bg-gray-200 rounded"></div>
           <div className="h-64 bg-gray-200 rounded"></div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <DashboardLayout title="Discount Vouchers">
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Discount Vouchers</h1>
@@ -484,5 +486,6 @@ export default function DiscountVouchers() {
         </CardContent>
       </Card>
     </div>
+    </DashboardLayout>
   );
 }

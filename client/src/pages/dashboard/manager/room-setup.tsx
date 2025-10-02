@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, Edit, Plus, DoorOpen, Building2 } from "lucide-react";
+import { DashboardLayout } from "@/components/layout/dashboard-layout";
 
 interface RoomType {
   id: number;
@@ -302,11 +303,16 @@ export default function RoomSetupPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading...</div>;
+    return (
+      <DashboardLayout title="Room Setup">
+        <div className="flex items-center justify-center h-64">Loading...</div>
+      </DashboardLayout>
+    );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <DashboardLayout title="Room Setup">
+      <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Room Setup</h1>
@@ -626,5 +632,6 @@ export default function RoomSetupPage() {
         </Card>
       </div>
     </div>
+    </DashboardLayout>
   );
 }

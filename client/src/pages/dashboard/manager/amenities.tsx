@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, Building, Waves, Wrench } from 'lucide-react';
 import { toast } from 'sonner';
+import { DashboardLayout } from '@/components/layout/dashboard-layout';
 
 interface Hall {
   id: string;
@@ -293,14 +294,15 @@ export default function AmenitiesPage() {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <DashboardLayout title="Amenities Management">
         <div className="text-center">Loading amenities...</div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="p-6">
+    <DashboardLayout title="Amenities Management">
+      <div>
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Amenities Management</h1>
         <p className="text-muted-foreground mt-2">
@@ -719,5 +721,6 @@ export default function AmenitiesPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </DashboardLayout>
   );
 }
