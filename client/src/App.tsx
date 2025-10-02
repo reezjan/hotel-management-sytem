@@ -24,6 +24,7 @@ import RoomPricing from "@/pages/dashboard/manager/room-pricing";
 import AmenitiesSetup from "@/pages/dashboard/manager/amenities";
 import ManagerTransactions from "@/pages/dashboard/manager/transactions";
 import ManagerLeaveApprovals from "@/pages/dashboard/manager/leave-approvals";
+import ManagerMealPlans from "@/pages/dashboard/manager/meal-plans";
 import HousekeepingSupervisorDashboard from "@/pages/dashboard/housekeeping-supervisor";
 import HousekeepingStaffDashboard from "@/pages/dashboard/housekeeping-staff";
 import RestaurantBarManagerDashboard from "@/pages/dashboard/restaurant-bar-manager";
@@ -84,6 +85,7 @@ function Router() {
       <ProtectedRoute path="/manager/room-setup" component={RoomSetup} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/room-pricing" component={RoomPricing} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/amenities" component={AmenitiesSetup} allowedRoles={["manager", "owner"]} />
+      <ProtectedRoute path="/manager/meal-plans" component={ManagerMealPlans} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/transactions" component={ManagerTransactions} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/housekeeping-supervisor" component={HousekeepingSupervisorDashboard} allowedRoles={["housekeeping_supervisor"]} />

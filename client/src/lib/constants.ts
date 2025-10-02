@@ -143,20 +143,14 @@ export const NAVIGATION_ITEMS = {
     { icon: 'DoorOpen', label: 'Room Setup', id: 'rooms' },
     { icon: 'DollarSign', label: 'Room Pricing', id: 'pricing' },
     { icon: 'Waves', label: 'Amenities', id: 'amenities' },
+    { icon: 'UtensilsCrossed', label: 'Meal Plans', id: 'meal-plans' },
     { icon: 'Receipt', label: 'Transactions', id: 'transactions' }
   ],
   [ROLES.CASHIER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' }
   ],
   [ROLES.FRONT_DESK]: [
-    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Clock', label: 'Duty Status', id: 'duty' },
-    { icon: 'CheckSquare', label: 'Task Management', id: 'tasks' },
-    { icon: 'UserCheck', label: 'Check-in/Out', id: 'checkin' },
-    { icon: 'Bell', label: 'Room Service', id: 'roomservice' },
-    { icon: 'Calendar', label: 'Reservations', id: 'reservations' },
-    { icon: 'Users', label: 'Customer Details', id: 'customers' },
-    { icon: 'Printer', label: 'Print Receipts', id: 'print' }
+    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' }
   ],
   [ROLES.HOUSEKEEPING_SUPERVISOR]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },

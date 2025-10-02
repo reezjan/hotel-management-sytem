@@ -44,6 +44,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'rooms': '/manager/room-setup',
         'pricing': '/manager/room-pricing',
         'amenities': '/manager/amenities',
+        'meal-plans': '/manager/meal-plans',
         'transactions': '/manager/transactions'
       },
       'housekeeping_supervisor': {
