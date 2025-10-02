@@ -19,7 +19,8 @@ const ROLES = [
   { name: 'surveillance_officer', description: 'Surveillance officer' },
   { name: 'finance', description: 'Finance' },
   { name: 'front_desk', description: 'Front desk' },
-  { name: 'cashier', description: 'Cashier' }
+  { name: 'cashier', description: 'Cashier' },
+  { name: 'storekeeper', description: 'Storekeeper' }
 ];
 
 const ROLE_PERMISSIONS = [
@@ -40,6 +41,7 @@ const ROLE_PERMISSIONS = [
   { creatorRole: 'manager', createeRole: 'security_head' },
   { creatorRole: 'manager', createeRole: 'finance' },
   { creatorRole: 'manager', createeRole: 'front_desk' },
+  { creatorRole: 'manager', createeRole: 'storekeeper' },
   
   // Housekeeping supervisor permissions
   { creatorRole: 'housekeeping_supervisor', createeRole: 'housekeeping_staff' },
