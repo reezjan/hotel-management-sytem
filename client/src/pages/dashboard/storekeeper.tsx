@@ -10,24 +10,24 @@ import { getStatusColor } from "@/lib/utils";
 export default function StorekeeperDashboard() {
   const { user } = useAuth();
 
-  const { data: inventoryItems = [], isLoading: loadingInventory } = useQuery({
+  const { data: inventoryItems = [], isLoading: loadingInventory } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory-items"]
   });
 
-  const { data: lowStockItems = [], isLoading: loadingLowStock } = useQuery({
+  const { data: lowStockItems = [], isLoading: loadingLowStock } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/low-stock-items"]
   });
 
-  const { data: consumptions = [], isLoading: loadingConsumptions } = useQuery({
+  const { data: consumptions = [], isLoading: loadingConsumptions } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory-consumptions"]
   });
 
-  const { data: tasks = [], isLoading: loadingTasks } = useQuery({
+  const { data: tasks = [], isLoading: loadingTasks } = useQuery<any[]>({
     queryKey: ["/api/tasks/my-tasks"]
   });
 
   const pendingTasks = tasks.filter((t: any) => t.status === 'pending');
-  const dutyStatus = user?.dutyStatus || 'off';
+  const dutyStatus = (user as any)?.dutyStatus || 'off';
 
   const recentActivity = consumptions.slice(0, 10).map((consumption: any) => {
     const item = inventoryItems.find((i: any) => i.id === consumption.inventoryItemId);
