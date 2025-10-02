@@ -65,6 +65,14 @@ This is a comprehensive multi-role hotel management system designed to manage al
 - **Schema Migration**: Successfully pushed all schema changes including rooms, vouchers, meal plans, menu items, maintenance requests, and transactions.
 - **Seed Data**: Loaded all 17 roles and created superadmin user with proper permissions.
 
+### Replit Environment Setup (October 2025)
+- **Deployment Configuration**: Set up for autoscale deployment with production build and start scripts.
+- **Development Workflow**: Configured `Server` workflow running `npm run dev` on port 5000 with webview output.
+- **Host Configuration**: Vite configured with `allowedHosts: true` and `host: 0.0.0.0` to work with Replit's proxy environment.
+- **Database Integration**: PostgreSQL database provisioned with environment variables (DATABASE_URL, PGPORT, etc.) automatically configured.
+- **Port Configuration**: Both frontend (Vite) and backend (Express) run on port 5000 as required by Replit.
+- **Initial Setup Complete**: Dependencies installed, database schema pushed, seed data loaded, application running successfully.
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

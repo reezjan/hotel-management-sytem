@@ -443,11 +443,24 @@ export class DatabaseStorage implements IStorage {
 
   // Room operations
   async getRoomsByHotel(hotelId: string): Promise<Room[]> {
-    return await db
-      .select()
+    const results = await db
+      .select({
+        id: rooms.id,
+        hotelId: rooms.hotelId,
+        roomNumber: rooms.roomNumber,
+        roomTypeId: rooms.roomTypeId,
+        isOccupied: rooms.isOccupied,
+        occupantDetails: rooms.occupantDetails,
+        createdAt: rooms.createdAt,
+        updatedAt: rooms.updatedAt,
+        deletedAt: rooms.deletedAt,
+        roomType: roomTypes
+      })
       .from(rooms)
+      .leftJoin(roomTypes, eq(rooms.roomTypeId, roomTypes.id))
       .where(and(eq(rooms.hotelId, hotelId), isNull(rooms.deletedAt)))
       .orderBy(asc(rooms.roomNumber));
+    return results as any;
   }
 
   async getRoom(id: string): Promise<Room | undefined> {
