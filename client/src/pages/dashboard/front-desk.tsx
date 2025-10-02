@@ -476,16 +476,48 @@ export default function FrontDeskDashboard() {
     }
 
     try {
-      // Add items to room bill
-      for (const { item, quantity } of foodOrderItems) {
-        await apiRequest("POST", "/api/room-service-orders", {
-          hotelId: user?.hotelId,
-          roomId: selectedRoom.id,
-          requestedBy: user?.id,
-          status: 'pending',
-          specialInstructions: `${item.name} x ${quantity} - ${formatCurrency(Number(item.price) * quantity)}`
-        });
-      }
+      // Calculate total amount
+      const totalAmount = foodOrderItems.reduce((sum, { item, quantity }) => 
+        sum + Number(item.price) * quantity, 0
+      );
+
+      // Create itemized list for room service order
+      const itemsList = foodOrderItems.map(({ item, quantity }) => 
+        `${item.name} x ${quantity} - ${formatCurrency(Number(item.price) * quantity)}`
+      ).join('\n');
+
+      // Get current occupant details and add food charges
+      const currentOccupantDetails = selectedRoom.occupantDetails || {};
+      const existingFoodCharges = currentOccupantDetails.foodCharges || [];
+      
+      const newFoodCharge = {
+        items: foodOrderItems.map(({ item, quantity }) => ({
+          name: item.name,
+          quantity,
+          price: Number(item.price),
+          total: Number(item.price) * quantity
+        })),
+        totalAmount,
+        orderedAt: new Date().toISOString(),
+        orderedBy: user?.username
+      };
+
+      // Update room with food charges in occupantDetails
+      await apiRequest("PUT", `/api/rooms/${selectedRoom.id}`, {
+        occupantDetails: {
+          ...currentOccupantDetails,
+          foodCharges: [...existingFoodCharges, newFoodCharge]
+        }
+      });
+
+      // Create room service order for record keeping
+      await apiRequest("POST", "/api/room-service-orders", {
+        hotelId: user?.hotelId,
+        roomId: selectedRoom.id,
+        requestedBy: user?.id,
+        status: 'completed',
+        specialInstructions: `Food Order:\n${itemsList}\nTotal: ${formatCurrency(totalAmount)}`
+      });
 
       toast({ title: "Food order added to room bill successfully" });
       setFoodOrderItems([]);
@@ -494,6 +526,7 @@ export default function FrontDeskDashboard() {
       setIsFoodOrderModalOpen(false);
       setSelectedRoom(null);
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "room-service-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
     } catch (error) {
       toast({ title: "Error", description: "Failed to submit food order", variant: "destructive" });
     }
@@ -1265,7 +1298,9 @@ export default function FrontDeskDashboard() {
                   {(() => {
                     const roomPrice = selectedRoom.occupantDetails?.roomPrice || 0;
                     const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
-                    const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString());
+                    const foodCharges = selectedRoom.occupantDetails?.foodCharges || [];
+                    const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
+                    const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
                     let discountAmount = 0;
                     
                     if (validatedVoucher) {
@@ -1292,6 +1327,12 @@ export default function FrontDeskDashboard() {
                             <div className="flex justify-between">
                               <span>Meal Plan Charges</span>
                               <span data-testid="checkout-meal-price">NPR {parseFloat(mealPlanCost.toString()).toFixed(2)}</span>
+                            </div>
+                          )}
+                          {totalFoodCharges > 0 && (
+                            <div className="flex justify-between">
+                              <span>Food & Beverage Charges</span>
+                              <span data-testid="checkout-food-price">NPR {totalFoodCharges.toFixed(2)}</span>
                             </div>
                           )}
                           <div className="flex justify-between pt-1 border-t">
@@ -1353,7 +1394,9 @@ export default function FrontDeskDashboard() {
                       onClick={() => {
                         const roomPrice = selectedRoom.occupantDetails?.roomPrice || 0;
                         const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
-                        const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString());
+                        const foodCharges = selectedRoom.occupantDetails?.foodCharges || [];
+                        const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
+                        const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
                         let discountAmount = 0;
                         
                         if (validatedVoucher) {
