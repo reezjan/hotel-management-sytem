@@ -54,6 +54,12 @@ import SurveillanceOfficerVehicleLogs from "@/pages/dashboard/surveillance-offic
 import SurveillanceOfficerMaintenanceReports from "@/pages/dashboard/surveillance-officer/maintenance-reports";
 import FinanceDashboard from "@/pages/dashboard/finance";
 import FrontDeskDashboard from "@/pages/dashboard/front-desk";
+import StorekeeperDashboard from "@/pages/dashboard/storekeeper";
+import StorekeeperDutyStatus from "@/pages/dashboard/storekeeper/duty-status";
+import StorekeeperInventoryTracking from "@/pages/dashboard/storekeeper/inventory-tracking";
+import StorekeeperInventoryManagement from "@/pages/dashboard/storekeeper/inventory-management";
+import StorekeeperMyTasks from "@/pages/dashboard/storekeeper/my-tasks";
+import StorekeeperConsumptionTracking from "@/pages/dashboard/storekeeper/consumption-tracking";
 
 function Router() {
   return (
@@ -108,6 +114,15 @@ function Router() {
       <ProtectedRoute path="/surveillance-officer/maintenance-reports" component={SurveillanceOfficerMaintenanceReports} allowedRoles={["surveillance_officer"]} />
       <ProtectedRoute path="/finance" component={FinanceDashboard} allowedRoles={["finance"]} />
       <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
+      
+      {/* Storekeeper Routes */}
+      <ProtectedRoute path="/storekeeper" component={StorekeeperDashboard} allowedRoles={["storekeeper"]} />
+      <ProtectedRoute path="/storekeeper/duty-status" component={StorekeeperDutyStatus} allowedRoles={["storekeeper"]} />
+      <ProtectedRoute path="/storekeeper/inventory-tracking" component={StorekeeperInventoryTracking} allowedRoles={["storekeeper"]} />
+      <ProtectedRoute path="/storekeeper/inventory-management" component={StorekeeperInventoryManagement} allowedRoles={["storekeeper"]} />
+      <ProtectedRoute path="/storekeeper/my-tasks" component={StorekeeperMyTasks} allowedRoles={["storekeeper"]} />
+      <ProtectedRoute path="/storekeeper/consumption-tracking" component={StorekeeperConsumptionTracking} allowedRoles={["storekeeper"]} />
+      
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>

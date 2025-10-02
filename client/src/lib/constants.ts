@@ -14,7 +14,8 @@ export const ROLES = {
   SECURITY_GUARD: 'security_guard',
   SURVEILLANCE_OFFICER: 'surveillance_officer',
   FINANCE: 'finance',
-  FRONT_DESK: 'front_desk'
+  FRONT_DESK: 'front_desk',
+  STOREKEEPER: 'storekeeper'
 } as const;
 
 export const ROLE_NAMES = {
@@ -33,7 +34,8 @@ export const ROLE_NAMES = {
   [ROLES.SECURITY_GUARD]: 'Security Guard',
   [ROLES.SURVEILLANCE_OFFICER]: 'Surveillance Officer',
   [ROLES.FINANCE]: 'Finance',
-  [ROLES.FRONT_DESK]: 'Front Desk'
+  [ROLES.FRONT_DESK]: 'Front Desk',
+  [ROLES.STOREKEEPER]: 'Storekeeper'
 } as const;
 
 export const ROLE_DASHBOARDS = {
@@ -52,7 +54,8 @@ export const ROLE_DASHBOARDS = {
   [ROLES.SECURITY_GUARD]: '/security-guard',
   [ROLES.SURVEILLANCE_OFFICER]: '/surveillance-officer',
   [ROLES.FINANCE]: '/finance',
-  [ROLES.FRONT_DESK]: '/front-desk'
+  [ROLES.FRONT_DESK]: '/front-desk',
+  [ROLES.STOREKEEPER]: '/storekeeper'
 } as const;
 
 export const DUTY_ROLES = [
@@ -64,7 +67,8 @@ export const DUTY_ROLES = [
   ROLES.CASHIER,
   ROLES.SECURITY_GUARD,
   ROLES.SURVEILLANCE_OFFICER,
-  ROLES.FRONT_DESK
+  ROLES.FRONT_DESK,
+  ROLES.STOREKEEPER
 ];
 
 export const TASK_STATUSES = {
@@ -234,5 +238,13 @@ export const NAVIGATION_ITEMS = {
     { icon: 'TrendingDown', label: 'Cash Out Tracking', id: 'cashout' },
     { icon: 'CreditCard', label: 'Vendor Payments', id: 'payments' },
     { icon: 'PieChart', label: 'Financial Summary', id: 'summary' }
+  ],
+  [ROLES.STOREKEEPER]: [
+    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
+    { icon: 'Clock', label: 'Duty Status', id: 'duty' },
+    { icon: 'Package', label: 'Inventory Tracking', id: 'inventory' },
+    { icon: 'Edit', label: 'Inventory Management', id: 'management' },
+    { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
+    { icon: 'TrendingDown', label: 'Consumption Tracking', id: 'consumption' }
   ]
 };
