@@ -147,6 +147,14 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'tasks': '/my-tasks',
         'vehicles': '/vehicle-check',
         'maintenance': '/maintenance-reports'
+      },
+      'storekeeper': {
+        'dashboard': '/storekeeper',
+        'duty': '/storekeeper/duty-status',
+        'inventory': '/storekeeper/inventory-tracking',
+        'management': '/storekeeper/inventory-management',
+        'tasks': '/storekeeper/my-tasks',
+        'consumption': '/storekeeper/consumption-tracking'
       }
     };
 
@@ -172,7 +180,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       'security_guard': '/security-guard',
       'surveillance_officer': '/surveillance-officer',
       'finance': '/finance',
-      'front_desk': '/front-desk'
+      'front_desk': '/front-desk',
+      'storekeeper': '/storekeeper'
     };
     
     return roleDashboards[role] || `/${role}`;
