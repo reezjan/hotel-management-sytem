@@ -28,13 +28,17 @@ import {
   Clock,
   CheckSquare,
   Plus,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Wrench,
+  Search,
+  Utensils
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { formatCurrency, getStatusColor, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import type { Room, Task, RoomServiceOrder, MealPlan, Voucher, MenuItem, MenuCategory, RoomType } from "@shared/schema";
 
 export default function FrontDeskDashboard() {
   const { user } = useAuth();
@@ -44,34 +48,50 @@ export default function FrontDeskDashboard() {
   const [isCheckOutModalOpen, setIsCheckOutModalOpen] = useState(false);
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
   const [isRoomServiceModalOpen, setIsRoomServiceModalOpen] = useState(false);
+  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
+  const [isCashDepositModalOpen, setIsCashDepositModalOpen] = useState(false);
+  const [isFoodOrderModalOpen, setIsFoodOrderModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
   const [selectedCheckoutPaymentMethod, setSelectedCheckoutPaymentMethod] = useState("");
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [selectedVoucher, setSelectedVoucher] = useState<string>("");
+  const [foodSearchQuery, setFoodSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [foodOrderItems, setFoodOrderItems] = useState<Array<{ item: MenuItem; quantity: number }>>([]);
 
-  const { data: rooms = [] } = useQuery({
+  const { data: rooms = [] } = useQuery<Array<Room & { roomType?: RoomType }>>({
     queryKey: ["/api/hotels", user?.hotelId, "rooms"],
     enabled: !!user?.hotelId
   });
 
-  const { data: tasks = [] } = useQuery({
+  const { data: tasks = [] } = useQuery<Task[]>({
     queryKey: ["/api/users", user?.id, "tasks"],
     enabled: !!user?.id
   });
 
-  const { data: roomServiceOrders = [] } = useQuery({
+  const { data: roomServiceOrders = [] } = useQuery<RoomServiceOrder[]>({
     queryKey: ["/api/hotels", user?.hotelId, "room-service-orders"],
     enabled: !!user?.hotelId
   });
 
-  const { data: mealPlans = [] } = useQuery({
+  const { data: mealPlans = [] } = useQuery<MealPlan[]>({
     queryKey: ["/api/hotels", user?.hotelId, "meal-plans"],
     enabled: !!user?.hotelId
   });
 
-  const { data: vouchers = [] } = useQuery({
+  const { data: vouchers = [] } = useQuery<Voucher[]>({
     queryKey: ["/api/hotels", user?.hotelId, "vouchers"],
+    enabled: !!user?.hotelId
+  });
+
+  const { data: menuItems = [] } = useQuery<Array<MenuItem & { category?: MenuCategory }>>({
+    queryKey: ["/api/hotels", user?.hotelId, "menu-items"],
+    enabled: !!user?.hotelId
+  });
+
+  const { data: menuCategories = [] } = useQuery<MenuCategory[]>({
+    queryKey: ["/api/hotels", user?.hotelId, "menu-categories"],
     enabled: !!user?.hotelId
   });
 
@@ -81,12 +101,30 @@ export default function FrontDeskDashboard() {
       guestEmail: "",
       guestPhone: "",
       idNumber: "",
+      nationality: "",
       checkInDate: "",
       checkOutDate: "",
       roomId: "",
       advancePayment: "",
       mealPlanId: "",
       numberOfPersons: ""
+    }
+  });
+
+  const maintenanceForm = useForm({
+    defaultValues: {
+      title: "",
+      location: "",
+      description: "",
+      priority: "medium"
+    }
+  });
+
+  const cashDepositForm = useForm({
+    defaultValues: {
+      amount: "",
+      purpose: "",
+      paymentMethod: "cash"
     }
   });
 
@@ -122,7 +160,7 @@ export default function FrontDeskDashboard() {
 
   const checkInGuestMutation = useMutation({
     mutationFn: async (data: any) => {
-      const selectedMealPlan = mealPlans.find((plan: any) => plan.id === data.mealPlanId);
+      const selectedMealPlan = mealPlans.find((plan) => plan.id === data.mealPlanId);
       
       // Update room occupancy
       await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
@@ -132,6 +170,7 @@ export default function FrontDeskDashboard() {
           email: data.guestEmail,
           phone: data.guestPhone,
           idNumber: data.idNumber,
+          nationality: data.nationality,
           checkInDate: data.checkInDate,
           checkOutDate: data.checkOutDate,
           mealPlan: selectedMealPlan ? {
@@ -165,6 +204,45 @@ export default function FrontDeskDashboard() {
       setIsCheckInModalOpen(false);
       setSelectedRoom(null);
       setSelectedPaymentMethod("");
+    }
+  });
+
+  const createMaintenanceMutation = useMutation({
+    mutationFn: async (data: any) => {
+      await apiRequest("POST", "/api/maintenance-requests", {
+        hotelId: user?.hotelId,
+        reportedBy: user?.id,
+        title: data.title,
+        location: data.location,
+        description: data.description,
+        priority: data.priority,
+        status: 'pending'
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Maintenance request sent to manager successfully" });
+      maintenanceForm.reset();
+      setIsMaintenanceModalOpen(false);
+    }
+  });
+
+  const createCashDepositMutation = useMutation({
+    mutationFn: async (data: any) => {
+      await apiRequest("POST", "/api/transactions", {
+        hotelId: user?.hotelId,
+        txnType: data.paymentMethod === 'cash' ? 'cash_in' : data.paymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
+        amount: Number(data.amount),
+        paymentMethod: data.paymentMethod,
+        purpose: data.purpose || 'cash_deposit',
+        reference: `Cash deposit by ${user?.username}`,
+        createdBy: user?.id
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "transactions"] });
+      toast({ title: "Cash deposit request sent to finance successfully" });
+      cashDepositForm.reset();
+      setIsCashDepositModalOpen(false);
     }
   });
 
@@ -295,44 +373,169 @@ export default function FrontDeskDashboard() {
     createRoomServiceOrderMutation.mutate(data);
   };
 
-  const handlePrintReceipt = (room: any, type: 'checkin' | 'checkout') => {
+  const onSubmitMaintenance = (data: any) => {
+    createMaintenanceMutation.mutate(data);
+  };
+
+  const onSubmitCashDeposit = (data: any) => {
+    createCashDepositMutation.mutate(data);
+  };
+
+  const filteredMenuItems = menuItems.filter((item) => {
+    const matchesSearch = !foodSearchQuery || item.name?.toLowerCase().includes(foodSearchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === "all" || item.categoryId === selectedCategory;
+    return matchesSearch && matchesCategory && item.active;
+  });
+
+  const addFoodItem = (item: MenuItem) => {
+    const existing = foodOrderItems.find(i => i.item.id === item.id);
+    if (existing) {
+      setFoodOrderItems(foodOrderItems.map(i => 
+        i.item.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+      ));
+    } else {
+      setFoodOrderItems([...foodOrderItems, { item, quantity: 1 }]);
+    }
+  };
+
+  const removeFoodItem = (itemId: string) => {
+    setFoodOrderItems(foodOrderItems.filter(i => i.item.id !== itemId));
+  };
+
+  const updateFoodQuantity = (itemId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeFoodItem(itemId);
+    } else {
+      setFoodOrderItems(foodOrderItems.map(i => 
+        i.item.id === itemId ? { ...i, quantity } : i
+      ));
+    }
+  };
+
+  const submitFoodOrder = async () => {
+    if (!selectedRoom || foodOrderItems.length === 0) {
+      toast({ title: "Error", description: "Please select a room and add items", variant: "destructive" });
+      return;
+    }
+
+    try {
+      // Add items to room bill
+      for (const { item, quantity } of foodOrderItems) {
+        await apiRequest("POST", "/api/room-service-orders", {
+          hotelId: user?.hotelId,
+          roomId: selectedRoom.id,
+          requestedBy: user?.id,
+          status: 'pending',
+          specialInstructions: `${item.name} x ${quantity} - ${formatCurrency(Number(item.price) * quantity)}`
+        });
+      }
+
+      toast({ title: "Food order added to room bill successfully" });
+      setFoodOrderItems([]);
+      setFoodSearchQuery("");
+      setSelectedCategory("all");
+      setIsFoodOrderModalOpen(false);
+      setSelectedRoom(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "room-service-orders"] });
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to submit food order", variant: "destructive" });
+    }
+  };
+
+  const handlePrintReceipt = (room: any, type: 'checkin' | 'checkout' | 'bill') => {
     const guest = room.occupantDetails;
-    const receiptContent = `
-      ========================================
-                GRAND PLAZA HOTEL
-             ${type === 'checkin' ? 'Check-in' : 'Check-out'} Receipt
-      ========================================
-      Guest: ${guest?.name || 'N/A'}
-      Room: ${room.roomNumber}
-      ${type === 'checkin' ? 'Check-in' : 'Check-out'} Date: ${new Date().toLocaleDateString()}
-      Time: ${new Date().toLocaleTimeString()}
-      Front Desk: ${user?.username}
-      ========================================
-      ${type === 'checkin' ? `
-      Check-out Date: ${guest?.checkOutDate ? new Date(guest.checkOutDate).toLocaleDateString() : 'N/A'}
-      Contact: ${guest?.phone || 'N/A'}
-      Email: ${guest?.email || 'N/A'}` : ''}
-      ========================================
-      Thank you for choosing our hotel!
-      ========================================
+    const mealPlan = guest?.mealPlan;
+    const roomType = rooms.find(r => r.id === room.id)?.roomType;
+    
+    let receiptHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${type === 'checkin' ? 'Check-in' : type === 'checkout' ? 'Check-out' : 'Bill'} Receipt</title>
+          <style>
+            @media print {
+              @page { margin: 0; size: 80mm auto; }
+              body { margin: 0; padding: 0; }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              line-height: 1.4;
+              max-width: 300px;
+              margin: 0 auto;
+              padding: 10px;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .line { border-top: 1px dashed #000; margin: 5px 0; }
+            .double-line { border-top: 2px solid #000; margin: 5px 0; }
+            .item-row { display: flex; justify-content: space-between; margin: 3px 0; }
+            .total { font-size: 14px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="center bold" style="font-size: 16px;">HOTEL MANAGEMENT</div>
+          <div class="center">================================</div>
+          <div class="center bold">${type === 'checkin' ? 'CHECK-IN RECEIPT' : type === 'checkout' ? 'CHECK-OUT RECEIPT' : 'BILL'}</div>
+          <div class="center">================================</div>
+          <br>
+          <div>Date: ${new Date().toLocaleDateString()}</div>
+          <div>Time: ${new Date().toLocaleTimeString()}</div>
+          <div>Receipt #: ${Date.now().toString().slice(-8)}</div>
+          <div class="line"></div>
+          <div class="bold">GUEST DETAILS</div>
+          <div>Name: ${guest?.name || 'N/A'}</div>
+          <div>Room: ${room.roomNumber}${roomType ? ` (${roomType.name})` : ''}</div>
+          ${guest?.phone ? `<div>Phone: ${guest.phone}</div>` : ''}
+          ${guest?.email ? `<div>Email: ${guest.email}</div>` : ''}
+          ${guest?.nationality ? `<div>Nationality: ${guest.nationality}</div>` : ''}
+          ${guest?.idNumber ? `<div>ID: ${guest.idNumber}</div>` : ''}
+          <div class="line"></div>
+          ${type === 'checkin' ? `
+            <div class="bold">CHECK-IN INFORMATION</div>
+            <div>Check-in: ${guest?.checkInDate ? new Date(guest.checkInDate).toLocaleDateString() : 'N/A'}</div>
+            <div>Check-out: ${guest?.checkOutDate ? new Date(guest.checkOutDate).toLocaleDateString() : 'N/A'}</div>
+            ${mealPlan ? `
+              <div class="line"></div>
+              <div class="bold">MEAL PLAN</div>
+              <div>${mealPlan.planName} (${mealPlan.planType})</div>
+              <div>${mealPlan.numberOfPersons} person(s) x ${formatCurrency(Number(mealPlan.pricePerPerson))}</div>
+              <div class="bold">Total: ${formatCurrency(mealPlan.totalCost)}</div>
+            ` : ''}
+          ` : type === 'checkout' ? `
+            <div class="bold">CHECK-OUT INFORMATION</div>
+            <div>Check-in: ${guest?.checkInDate ? new Date(guest.checkInDate).toLocaleDateString() : 'N/A'}</div>
+            <div>Check-out: ${new Date().toLocaleDateString()}</div>
+            ${roomType ? `
+              <div class="line"></div>
+              <div class="bold">ROOM CHARGES</div>
+              <div class="item-row">
+                <span>Room Rate:</span>
+                <span>${formatCurrency(Number(roomType.priceWalkin || roomType.priceInhouse || 0))}</span>
+              </div>
+            ` : ''}
+            ${mealPlan ? `
+              <div class="item-row">
+                <span>Meal Plan:</span>
+                <span>${formatCurrency(mealPlan.totalCost)}</span>
+              </div>
+            ` : ''}
+          ` : ''}
+          <div class="double-line"></div>
+          <div class="center">Served by: ${user?.username}</div>
+          <div class="center">================================</div>
+          <div class="center bold">THANK YOU FOR YOUR STAY!</div>
+          <div class="center">================================</div>
+          <br>
+        </body>
+      </html>
     `;
 
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Receipt</title>
-            <style>
-              body { font-family: monospace; white-space: pre-line; }
-            </style>
-          </head>
-          <body>${receiptContent}</body>
-        </html>
-      `);
+      printWindow.document.write(receiptHTML);
       printWindow.document.close();
       printWindow.print();
-      printWindow.close();
     }
   };
 
@@ -433,15 +636,51 @@ export default function FrontDeskDashboard() {
               <Button 
                 variant="outline" 
                 className="h-20 flex flex-col"
+                onClick={() => setIsFoodOrderModalOpen(true)}
+                data-testid="button-food-order"
+              >
+                <Utensils className="h-6 w-6 mb-2" />
+                <span className="text-sm">Food Order</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col"
                 onClick={() => setIsRoomServiceModalOpen(true)}
                 data-testid="button-room-service"
               >
                 <HandPlatter className="h-6 w-6 mb-2" />
                 <span className="text-sm">Room Service</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-print-reports">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col"
+                onClick={() => setIsMaintenanceModalOpen(true)}
+                data-testid="button-maintenance-request"
+              >
+                <Wrench className="h-6 w-6 mb-2" />
+                <span className="text-sm">Maintenance</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col"
+                onClick={() => setIsCashDepositModalOpen(true)}
+                data-testid="button-cash-deposit"
+              >
+                <DollarSign className="h-6 w-6 mb-2" />
+                <span className="text-sm">Cash Deposit</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                onClick={() => {
+                  const room = rooms.find(r => r.isOccupied);
+                  if (room) handlePrintReceipt(room, 'bill');
+                  else toast({ title: "No occupied rooms to print", variant: "destructive" });
+                }}
+                data-testid="button-print-reports"
+              >
                 <Printer className="h-6 w-6 mb-2" />
-                <span className="text-sm">Print Reports</span>
+                <span className="text-sm">Print Bill</span>
               </Button>
             </div>
           </CardContent>
@@ -665,6 +904,19 @@ export default function FrontDeskDashboard() {
                         <FormLabel>ID Number</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Passport/ID number" data-testid="input-id-number" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={checkInForm.control}
+                    name="nationality"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nationality</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Country of origin" data-testid="input-nationality" />
                         </FormControl>
                       </FormItem>
                     )}
@@ -1233,6 +1485,345 @@ export default function FrontDeskDashboard() {
                 </div>
               </form>
             </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Maintenance Request Modal */}
+        <Dialog open={isMaintenanceModalOpen} onOpenChange={setIsMaintenanceModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Send Maintenance Request to Manager</DialogTitle>
+            </DialogHeader>
+            
+            <Form {...maintenanceForm}>
+              <form onSubmit={maintenanceForm.handleSubmit(onSubmitMaintenance)} className="space-y-4">
+                <FormField
+                  control={maintenanceForm.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Title *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Brief description" data-testid="input-maintenance-title" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={maintenanceForm.control}
+                  name="location"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Location</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Room/Area" data-testid="input-maintenance-location" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={maintenanceForm.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} placeholder="Detailed description..." rows={3} data-testid="textarea-maintenance-description" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={maintenanceForm.control}
+                  name="priority"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Priority</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-maintenance-priority">
+                            <SelectValue placeholder="Select priority" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="flex space-x-3">
+                  <Button
+                    type="submit"
+                    className="flex-1"
+                    disabled={createMaintenanceMutation.isPending}
+                    data-testid="button-submit-maintenance"
+                  >
+                    {createMaintenanceMutation.isPending ? "Sending..." : "Send to Manager"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setIsMaintenanceModalOpen(false)}
+                    data-testid="button-cancel-maintenance"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Cash Deposit Modal */}
+        <Dialog open={isCashDepositModalOpen} onOpenChange={setIsCashDepositModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Send Cash Deposit Request to Finance</DialogTitle>
+            </DialogHeader>
+            
+            <Form {...cashDepositForm}>
+              <form onSubmit={cashDepositForm.handleSubmit(onSubmitCashDeposit)} className="space-y-4">
+                <FormField
+                  control={cashDepositForm.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Amount *</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" step="0.01" placeholder="0.00" data-testid="input-deposit-amount" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={cashDepositForm.control}
+                  name="paymentMethod"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment Method</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-deposit-method">
+                            <SelectValue placeholder="Select payment method" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="pos">POS</SelectItem>
+                          <SelectItem value="fonepay">Fonepay</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={cashDepositForm.control}
+                  name="purpose"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Purpose</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} placeholder="Reason for deposit..." rows={2} data-testid="textarea-deposit-purpose" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="flex space-x-3">
+                  <Button
+                    type="submit"
+                    className="flex-1"
+                    disabled={createCashDepositMutation.isPending}
+                    data-testid="button-submit-deposit"
+                  >
+                    {createCashDepositMutation.isPending ? "Sending..." : "Send to Finance"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setIsCashDepositModalOpen(false)}
+                    data-testid="button-cancel-deposit"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Food Order Modal */}
+        <Dialog open={isFoodOrderModalOpen} onOpenChange={setIsFoodOrderModalOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Food Order - Add to Room Bill</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <FormLabel>Select Room</FormLabel>
+                  <Select onValueChange={(value) => setSelectedRoom(occupiedRooms.find(r => r.id === value))}>
+                    <SelectTrigger data-testid="select-food-order-room">
+                      <SelectValue placeholder="Select room" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {occupiedRooms.map((room) => (
+                        <SelectItem key={room.id} value={room.id}>
+                          Room {room.roomNumber} - {room.occupantDetails?.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <FormLabel>Search Food</FormLabel>
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name..."
+                        value={foodSearchQuery}
+                        onChange={(e) => setFoodSearchQuery(e.target.value)}
+                        className="pl-8"
+                        data-testid="input-food-search"
+                      />
+                    </div>
+                  </div>
+                  <div className="w-48">
+                    <FormLabel>Category</FormLabel>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger data-testid="select-food-category">
+                        <SelectValue placeholder="All categories" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {menuCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto border rounded p-2">
+                {filteredMenuItems.length === 0 ? (
+                  <div className="col-span-2 text-center py-8 text-muted-foreground">
+                    No menu items found
+                  </div>
+                ) : (
+                  filteredMenuItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="border rounded p-3 hover:bg-accent cursor-pointer"
+                      onClick={() => addFoodItem(item)}
+                      data-testid={`food-item-${item.id}`}
+                    >
+                      <h4 className="font-medium">{item.name}</h4>
+                      <p className="text-sm text-muted-foreground">{item.description}</p>
+                      <p className="text-sm font-bold mt-1">{formatCurrency(Number(item.price || 0))}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {foodOrderItems.length > 0 && (
+                <div className="border rounded p-3 space-y-2">
+                  <h3 className="font-bold">Order Items</h3>
+                  {foodOrderItems.map(({ item, quantity }) => (
+                    <div key={item.id} className="flex items-center justify-between" data-testid={`order-item-${item.id}`}>
+                      <div className="flex-1">
+                        <span className="font-medium">{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateFoodQuantity(item.id, quantity - 1)}
+                          data-testid={`decrease-qty-${item.id}`}
+                        >
+                          -
+                        </Button>
+                        <span className="w-8 text-center" data-testid={`qty-${item.id}`}>{quantity}</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateFoodQuantity(item.id, quantity + 1)}
+                          data-testid={`increase-qty-${item.id}`}
+                        >
+                          +
+                        </Button>
+                        <span className="w-24 text-right font-bold">
+                          {formatCurrency(Number(item.price) * quantity)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => removeFoodItem(item.id)}
+                          data-testid={`remove-item-${item.id}`}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="border-t pt-2 mt-2">
+                    <div className="flex justify-between font-bold text-lg">
+                      <span>Total:</span>
+                      <span data-testid="total-amount">
+                        {formatCurrency(
+                          foodOrderItems.reduce((sum, { item, quantity }) => 
+                            sum + Number(item.price) * quantity, 0
+                          )
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex space-x-3">
+                <Button
+                  className="flex-1"
+                  onClick={submitFoodOrder}
+                  disabled={!selectedRoom || foodOrderItems.length === 0}
+                  data-testid="button-submit-food-order"
+                >
+                  Add to Room Bill
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => {
+                    setIsFoodOrderModalOpen(false);
+                    setFoodOrderItems([]);
+                    setFoodSearchQuery("");
+                    setSelectedCategory("all");
+                    setSelectedRoom(null);
+                  }}
+                  data-testid="button-cancel-food-order"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
