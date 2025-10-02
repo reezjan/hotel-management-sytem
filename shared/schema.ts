@@ -414,6 +414,19 @@ export const roomServiceOrders = pgTable("room_service_orders", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
+// Meal Plans Table
+export const mealPlans = pgTable("meal_plans", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  planType: text("plan_type").notNull(),
+  planName: text("plan_name").notNull(),
+  pricePerPerson: numeric("price_per_person", { precision: 12, scale: 2 }).notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+});
+
 // Relations
 export const hotelRelations = relations(hotels, ({ many }) => ({
   users: many(users),
@@ -435,7 +448,8 @@ export const hotelRelations = relations(hotels, ({ many }) => ({
   hotelTaxes: many(hotelTaxes),
   vouchers: many(vouchers),
   vehicleLogs: many(vehicleLogs),
-  roomServiceOrders: many(roomServiceOrders)
+  roomServiceOrders: many(roomServiceOrders),
+  mealPlans: many(mealPlans)
 }));
 
 export const userRelations = relations(users, ({ one, many }) => ({
@@ -618,6 +632,14 @@ export const insertVehicleLogSchema = createInsertSchema(vehicleLogs).omit({
   checkIn: true
 });
 
+export const insertMealPlanSchema = createInsertSchema(mealPlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+}).extend({
+  pricePerPerson: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
 export const updateKotItemSchema = z.object({
   status: z.enum(['pending', 'approved', 'declined', 'ready']),
   declineReason: z.string().optional()
@@ -670,3 +692,5 @@ export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
 export type Wastage = typeof wastages.$inferSelect;
 export type InsertWastage = z.infer<typeof insertWastageSchema>;
+export type MealPlan = typeof mealPlans.$inferSelect;
+export type InsertMealPlan = z.infer<typeof insertMealPlanSchema>;

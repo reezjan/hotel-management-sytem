@@ -6,6 +6,23 @@ This is a comprehensive multi-role hotel management system designed to manage al
 
 ## Recent Changes
 
+### October 2, 2025 - Meal Plan System Implementation
+- **Meal Plans Feature**: Implemented complete meal plan system supporting EP (European Plan), BB (Bed and Breakfast), AP (American Plan), and MAP (Modern American Plan) with configurable pricing per person.
+- **Database Schema**: Added `mealPlans` table with fields for planType, planName, pricePerPerson, description, and isActive status, linked to hotels via foreign key.
+- **Manager Dashboard**: Created comprehensive meal plan management interface at `/dashboard/manager/meal-plans` allowing managers, owners, and super_admins to create, update, and soft-delete meal plans with validation.
+- **Front Desk Integration**: Integrated meal plans as optional add-ons during guest check-in process:
+  - Meal plan dropdown selection showing plan type, name, and price per person
+  - Number of persons input field (conditionally shown when meal plan selected)
+  - Automatic total cost calculation (price per person × number of persons)
+  - Meal plan details stored in room `occupantDetails` for billing purposes
+- **API Endpoints**: Implemented RESTful routes for meal plan CRUD operations:
+  - `GET /api/hotels/:hotelId/meal-plans` - Fetch active meal plans
+  - `POST /api/hotels/:hotelId/meal-plans` - Create new meal plan (manager+)
+  - `PUT /api/hotels/:hotelId/meal-plans/:id` - Update meal plan (manager+)
+  - `DELETE /api/hotels/:hotelId/meal-plans/:id` - Soft delete meal plan (manager+)
+- **Storage Layer**: Added complete meal plan CRUD methods to storage interface with proper hotel scoping and role-based access control.
+- **Deployment Configuration**: Updated deployment settings to VM target with build and start scripts for production readiness.
+
 ### October 2, 2025 - Fresh Import Setup & Storekeeper API Fixes
 - **Project Import Completed**: Successfully set up fresh GitHub import in Replit environment with all required dependencies and database.
 - **Database Setup**: Created PostgreSQL database, pushed schema with all 30+ tables, and seeded with 17 roles and superadmin account.

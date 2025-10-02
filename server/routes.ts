@@ -22,6 +22,7 @@ import {
   insertWastageSchema,
   insertVehicleLogSchema,
   updateKotItemSchema,
+  insertMealPlanSchema,
   vouchers
 } from "@shared/schema";
 
@@ -2708,6 +2709,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Duty status update error:", error);
       res.status(400).json({ message: "Failed to update duty status" });
+    }
+  });
+
+  // Meal plan routes
+  app.get("/api/hotels/:hotelId/meal-plans", async (req, res) => {
+    try {
+      const { hotelId } = req.params;
+      const plans = await storage.getMealPlansByHotel(hotelId);
+      res.json(plans);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch meal plans" });
+    }
+  });
+
+  app.post("/api/hotels/:hotelId/meal-plans", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { hotelId } = req.params;
+      
+      // Only managers, owners, and super_admins can create meal plans
+      const userRole = user.role?.name || '';
+      const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
+      
+      if (!canManage) {
+        return res.status(403).json({ message: "Only managers can manage meal plans" });
+      }
+      
+      const planData = insertMealPlanSchema.parse({
+        ...req.body,
+        hotelId
+      });
+      const plan = await storage.createMealPlan(planData);
+      res.status(201).json(plan);
+    } catch (error) {
+      console.error("Meal plan creation error:", error);
+      res.status(400).json({ message: "Invalid meal plan data" });
+    }
+  });
+
+  app.put("/api/hotels/:hotelId/meal-plans/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id, hotelId } = req.params;
+      
+      // Only managers, owners, and super_admins can update meal plans
+      const userRole = user.role?.name || '';
+      const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
+      
+      if (!canManage) {
+        return res.status(403).json({ message: "Only managers can manage meal plans" });
+      }
+      
+      const planData = insertMealPlanSchema.partial().parse(req.body);
+      const plan = await storage.updateMealPlan(id, planData);
+      res.json(plan);
+    } catch (error) {
+      console.error("Meal plan update error:", error);
+      res.status(400).json({ message: "Failed to update meal plan" });
+    }
+  });
+
+  app.delete("/api/hotels/:hotelId/meal-plans/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id, hotelId } = req.params;
+      
+      // Only managers, owners, and super_admins can delete meal plans
+      const userRole = user.role?.name || '';
+      const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
+      
+      if (!canManage) {
+        return res.status(403).json({ message: "Only managers can manage meal plans" });
+      }
+      
+      const success = await storage.deleteMealPlan(id, hotelId);
+      if (success) {
+        res.status(204).send();
+      } else {
+        res.status(404).json({ message: "Meal plan not found" });
+      }
+    } catch (error) {
+      console.error("Meal plan deletion error:", error);
+      res.status(400).json({ message: "Failed to delete meal plan" });
     }
   });
 
