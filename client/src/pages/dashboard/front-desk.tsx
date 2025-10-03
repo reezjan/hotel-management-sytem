@@ -1214,9 +1214,9 @@ export default function FrontDeskDashboard() {
 
         {/* Checkout Modal */}
         <Dialog open={isCheckOutModalOpen} onOpenChange={setIsCheckOutModalOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-2xl">Guest Check-out</DialogTitle>
+              <DialogTitle className="text-xl sm:text-2xl">Guest Check-out</DialogTitle>
             </DialogHeader>
             
             {selectedRoom && (
@@ -1296,11 +1296,22 @@ export default function FrontDeskDashboard() {
                   </div>
 
                   {(() => {
-                    const roomPrice = selectedRoom.occupantDetails?.roomPrice || 0;
+                    const roomPricePerDay = selectedRoom.occupantDetails?.roomPrice || 0;
+                    const checkInDate = selectedRoom.occupantDetails?.checkInDate ? new Date(selectedRoom.occupantDetails.checkInDate) : null;
+                    const checkOutDate = selectedRoom.occupantDetails?.checkOutDate ? new Date(selectedRoom.occupantDetails.checkOutDate) : new Date();
+                    
+                    // Calculate number of days
+                    let numberOfDays = 1;
+                    if (checkInDate && checkOutDate) {
+                      const timeDiff = checkOutDate.getTime() - checkInDate.getTime();
+                      numberOfDays = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
+                    }
+                    
+                    const totalRoomCharges = parseFloat(roomPricePerDay.toString()) * numberOfDays;
                     const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
                     const foodCharges = selectedRoom.occupantDetails?.foodCharges || [];
                     const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
-                    const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
+                    const totalAmount = totalRoomCharges + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
                     let discountAmount = 0;
                     
                     if (validatedVoucher) {
@@ -1319,9 +1330,9 @@ export default function FrontDeskDashboard() {
                           <CardTitle className="text-lg">Payment Summary</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                          <div className="flex justify-between">
-                            <span>Room Charges</span>
-                            <span data-testid="checkout-room-price">NPR {parseFloat(roomPrice.toString()).toFixed(2)}</span>
+                          <div className="flex justify-between items-start gap-2">
+                            <span className="text-sm sm:text-base">Room Charges ({numberOfDays} {numberOfDays === 1 ? 'day' : 'days'} × NPR {parseFloat(roomPricePerDay.toString()).toFixed(2)})</span>
+                            <span className="font-medium text-sm sm:text-base shrink-0" data-testid="checkout-room-price">NPR {totalRoomCharges.toFixed(2)}</span>
                           </div>
                           {mealPlanCost > 0 && (
                             <div className="flex justify-between">
@@ -1356,11 +1367,12 @@ export default function FrontDeskDashboard() {
 
                   <div>
                     <label className="text-sm font-medium mb-2 block">Payment Method</label>
-                    <div className="flex space-x-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <Button
                         type="button"
                         variant={selectedCheckoutPaymentMethod === 'cash' ? 'default' : 'outline'}
                         onClick={() => setSelectedCheckoutPaymentMethod('cash')}
+                        className="flex-1"
                         data-testid="button-checkout-payment-cash"
                       >
                         <DollarSign className="h-4 w-4 mr-2" />
@@ -1370,6 +1382,7 @@ export default function FrontDeskDashboard() {
                         type="button"
                         variant={selectedCheckoutPaymentMethod === 'pos' ? 'default' : 'outline'}
                         onClick={() => setSelectedCheckoutPaymentMethod('pos')}
+                        className="flex-1"
                         data-testid="button-checkout-payment-pos"
                       >
                         <CreditCard className="h-4 w-4 mr-2" />
@@ -1379,6 +1392,7 @@ export default function FrontDeskDashboard() {
                         type="button"
                         variant={selectedCheckoutPaymentMethod === 'fonepay' ? 'default' : 'outline'}
                         onClick={() => setSelectedCheckoutPaymentMethod('fonepay')}
+                        className="flex-1"
                         data-testid="button-checkout-payment-fonepay"
                       >
                         <Smartphone className="h-4 w-4 mr-2" />
@@ -1392,11 +1406,22 @@ export default function FrontDeskDashboard() {
                       className="flex-1"
                       disabled={!selectedCheckoutPaymentMethod || checkOutGuestMutation.isPending}
                       onClick={() => {
-                        const roomPrice = selectedRoom.occupantDetails?.roomPrice || 0;
+                        const roomPricePerDay = selectedRoom.occupantDetails?.roomPrice || 0;
+                        const checkInDate = selectedRoom.occupantDetails?.checkInDate ? new Date(selectedRoom.occupantDetails.checkInDate) : null;
+                        const checkOutDate = selectedRoom.occupantDetails?.checkOutDate ? new Date(selectedRoom.occupantDetails.checkOutDate) : new Date();
+                        
+                        // Calculate number of days
+                        let numberOfDays = 1;
+                        if (checkInDate && checkOutDate) {
+                          const timeDiff = checkOutDate.getTime() - checkInDate.getTime();
+                          numberOfDays = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
+                        }
+                        
+                        const totalRoomCharges = parseFloat(roomPricePerDay.toString()) * numberOfDays;
                         const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
                         const foodCharges = selectedRoom.occupantDetails?.foodCharges || [];
                         const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
-                        const totalAmount = parseFloat(roomPrice.toString()) + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
+                        const totalAmount = totalRoomCharges + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
                         let discountAmount = 0;
                         
                         if (validatedVoucher) {
@@ -1861,7 +1886,7 @@ export default function FrontDeskDashboard() {
             <div className="space-y-4">
               <div className="space-y-3">
                 <div>
-                  <FormLabel>Select Room</FormLabel>
+                  <label className="text-sm font-medium mb-2 block">Select Room</label>
                   <Select onValueChange={(value) => setSelectedRoom(occupiedRooms.find(r => r.id === value))}>
                     <SelectTrigger data-testid="select-food-order-room">
                       <SelectValue placeholder="Select room" />
@@ -1878,7 +1903,7 @@ export default function FrontDeskDashboard() {
 
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <FormLabel>Search Food</FormLabel>
+                    <label className="text-sm font-medium mb-2 block">Search Food</label>
                     <div className="relative">
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -1891,7 +1916,7 @@ export default function FrontDeskDashboard() {
                     </div>
                   </div>
                   <div className="w-48">
-                    <FormLabel>Category</FormLabel>
+                    <label className="text-sm font-medium mb-2 block">Category</label>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                       <SelectTrigger data-testid="select-food-category">
                         <SelectValue placeholder="All categories" />
