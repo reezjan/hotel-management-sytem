@@ -321,7 +321,16 @@ export default function FrontDeskDashboard() {
   };
 
   const checkOutGuestMutation = useMutation({
-    mutationFn: async (data: { roomId: string; totalAmount: number; discountAmount: number; finalAmount: number; voucherId?: string }) => {
+    mutationFn: async (data: { 
+      roomId: string; 
+      roomNumber: string;
+      guestName: string;
+      totalAmount: number; 
+      discountAmount: number; 
+      finalAmount: number; 
+      voucherId?: string;
+      billingDetails?: any;
+    }) => {
       // Validate payment method is selected
       if (!selectedCheckoutPaymentMethod || !['cash', 'pos', 'fonepay'].includes(selectedCheckoutPaymentMethod)) {
         throw new Error('Please select a payment method (Cash, POS, or Fonepay) before checking out');
@@ -333,7 +342,7 @@ export default function FrontDeskDashboard() {
         occupantDetails: null
       });
 
-      // Create checkout transaction
+      // Create checkout transaction with detailed billing breakdown
       if (data.finalAmount > 0) {
         await apiRequest("POST", "/api/transactions", {
           hotelId: user?.hotelId,
@@ -341,7 +350,24 @@ export default function FrontDeskDashboard() {
           amount: data.finalAmount,
           paymentMethod: selectedCheckoutPaymentMethod,
           purpose: 'room_checkout_payment',
-          reference: `Checkout - Room ${selectedRoom?.roomNumber}${data.voucherId ? ` (Voucher Applied)` : ''}`,
+          reference: `Checkout - Room ${data.roomNumber} - ${data.guestName}${data.voucherId ? ` (Voucher Applied)` : ''}`,
+          details: {
+            roomNumber: data.roomNumber,
+            guestName: data.guestName,
+            checkInDate: selectedRoom?.occupantDetails?.checkInDate,
+            checkOutDate: selectedRoom?.occupantDetails?.checkOutDate,
+            numberOfDays: data.billingDetails?.numberOfDays || 1,
+            subtotal: data.billingDetails?.subtotal || 0,
+            roomCharges: data.billingDetails?.totalRoomCharges || 0,
+            mealPlanCharges: data.billingDetails?.totalMealPlanCharges || 0,
+            foodCharges: data.billingDetails?.totalFoodCharges || 0,
+            taxBreakdown: data.billingDetails?.taxBreakdown || {},
+            totalTax: data.billingDetails?.totalTax || 0,
+            discountAmount: data.discountAmount,
+            voucherCode: validatedVoucher?.code || null,
+            grandTotal: data.finalAmount,
+            paymentMethod: selectedCheckoutPaymentMethod
+          },
           createdBy: user?.id
         });
       }
@@ -1548,10 +1574,13 @@ export default function FrontDeskDashboard() {
 
                         checkOutGuestMutation.mutate({
                           roomId: selectedRoom.id,
+                          roomNumber: selectedRoom.roomNumber,
+                          guestName: selectedRoom.occupantDetails?.name || 'Guest',
                           totalAmount: billCalc.subtotal + billCalc.totalTax,
                           discountAmount: billCalc.discountAmount,
                           finalAmount: billCalc.grandTotal,
-                          voucherId: validatedVoucher?.id || undefined
+                          voucherId: validatedVoucher?.id || undefined,
+                          billingDetails: billCalc
                         });
                       }}
                       data-testid="button-confirm-checkout"

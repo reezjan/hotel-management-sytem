@@ -83,7 +83,53 @@ export default function FinanceDashboard() {
     { key: "txnType", label: "Type", sortable: true },
     { key: "amount", label: "Amount", sortable: true, render: (value: number) => formatCurrency(value) },
     { key: "paymentMethod", label: "Method", sortable: true },
-    { key: "purpose", label: "Purpose", sortable: true },
+    { 
+      key: "purpose", 
+      label: "Purpose", 
+      sortable: true,
+      render: (value: string, row: any) => {
+        if (row.purpose === 'room_checkout_payment' && row.details) {
+          return (
+            <div className="space-y-1">
+              <div className="font-medium">{value}</div>
+              <div className="text-xs text-muted-foreground">
+                Room {row.details.roomNumber} - {row.details.guestName}
+                {row.details.numberOfDays && ` (${row.details.numberOfDays} day${row.details.numberOfDays > 1 ? 's' : ''})`}
+              </div>
+            </div>
+          );
+        }
+        return value;
+      }
+    },
+    { 
+      key: "details", 
+      label: "Details", 
+      render: (value: any, row: any) => {
+        if (row.purpose === 'room_checkout_payment' && value) {
+          return (
+            <div className="text-xs space-y-1">
+              {value.roomCharges > 0 && (
+                <div className="text-muted-foreground">Room: {formatCurrency(value.roomCharges)}</div>
+              )}
+              {value.mealPlanCharges > 0 && (
+                <div className="text-muted-foreground">Meals: {formatCurrency(value.mealPlanCharges)}</div>
+              )}
+              {value.foodCharges > 0 && (
+                <div className="text-muted-foreground">Food: {formatCurrency(value.foodCharges)}</div>
+              )}
+              {value.totalTax > 0 && (
+                <div className="text-muted-foreground">Tax: {formatCurrency(value.totalTax)}</div>
+              )}
+              {value.discountAmount > 0 && (
+                <div className="text-green-600">Discount: -{formatCurrency(value.discountAmount)}</div>
+              )}
+            </div>
+          );
+        }
+        return '-';
+      }
+    },
     { key: "createdAt", label: "Date", sortable: true }
   ];
 
