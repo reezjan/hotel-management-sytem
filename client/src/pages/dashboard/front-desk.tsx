@@ -66,7 +66,7 @@ export default function FrontDeskDashboard() {
   const [officeName, setOfficeName] = useState("");
 
   const { data: hotel } = useQuery<any>({
-    queryKey: ["/api/hotels", user?.hotelId],
+    queryKey: ["/api/hotels/current"],
     enabled: !!user?.hotelId
   });
 

@@ -6,18 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Smartphone, Building } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import type { Transaction, MaintenanceRequest, Vendor } from "@shared/schema";
 
 export default function FinanceDashboard() {
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ["/api/hotels/current/transactions"]
   });
 
-  const { data: maintenanceRequests = [] } = useQuery({
+  const { data: maintenanceRequests = [] } = useQuery<MaintenanceRequest[]>({
     queryKey: ["/api/hotels/current/maintenance-requests"]
   });
 
-  const { data: vendors = [] } = useQuery({
-    queryKey: ["/api/vendors"]
+  const { data: vendors = [] } = useQuery<Vendor[]>({
+    queryKey: ["/api/hotels/current/vendors"]
   });
 
   // Calculate financial totals - separate revenue (income) from expenses
