@@ -65,7 +65,9 @@ Run `npm run db:seed` to populate the database with:
 ## Default Credentials
 **Superadmin Account:**
 - Username: `superadmin`
-- Password: `aef009750905865270b03eb27ceba80e`
+- Password: The password is displayed in the console output when running `npm run db:seed`
+
+Note: For security, the password is not stored in this file. Run the seed command to see the login credentials.
 
 ## Features
 - Multi-role authentication system
