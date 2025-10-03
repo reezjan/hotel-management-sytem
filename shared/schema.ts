@@ -578,7 +578,23 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
   id: true,
   createdAt: true,
   deletedAt: true
-});
+}).refine(
+  (data) => {
+    // For revenue transactions (those with _in in txnType), require a valid paymentMethod
+    if (data.txnType && (data.txnType.includes('_in') || data.txnType === 'revenue')) {
+      return data.paymentMethod && ['cash', 'pos', 'fonepay'].includes(data.paymentMethod);
+    }
+    // For vendor payments, allow additional payment methods
+    if (data.txnType === 'vendor_payment') {
+      return data.paymentMethod && ['cash', 'cheque', 'bank_transfer', 'digital_wallet', 'pos', 'fonepay'].includes(data.paymentMethod);
+    }
+    return true;
+  },
+  {
+    message: "Invalid payment method for this transaction type",
+    path: ['paymentMethod']
+  }
+);
 
 export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequests).omit({
   id: true,
