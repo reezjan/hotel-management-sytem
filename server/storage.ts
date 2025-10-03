@@ -28,6 +28,7 @@ import {
   leaveRequests,
   wastages,
   mealPlans,
+  guests,
   type User,
   type UserWithRole,
   type InsertUser,
@@ -72,7 +73,9 @@ import {
   type Wastage,
   type InsertWastage,
   type MealPlan,
-  type InsertMealPlan
+  type InsertMealPlan,
+  type Guest,
+  type InsertGuest
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, desc, asc, sql } from "drizzle-orm";
@@ -236,6 +239,14 @@ export interface IStorage {
   createMealPlan(plan: InsertMealPlan): Promise<MealPlan>;
   updateMealPlan(id: string, plan: Partial<InsertMealPlan>): Promise<MealPlan>;
   deleteMealPlan(id: string, hotelId: string): Promise<boolean>;
+  
+  // Guest operations
+  getGuestsByHotel(hotelId: string): Promise<Guest[]>;
+  getGuest(id: string): Promise<Guest | undefined>;
+  createGuest(guest: InsertGuest): Promise<Guest>;
+  updateGuest(id: string, guest: Partial<InsertGuest>): Promise<Guest>;
+  deleteGuest(id: string): Promise<void>;
+  searchGuests(hotelId: string, searchTerm: string): Promise<Guest[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1436,6 +1447,66 @@ export class DatabaseStorage implements IStorage {
       ))
       .returning();
     return result.length > 0;
+  }
+
+  // Guest operations
+  async getGuestsByHotel(hotelId: string): Promise<Guest[]> {
+    return await db
+      .select()
+      .from(guests)
+      .where(and(
+        eq(guests.hotelId, hotelId),
+        isNull(guests.deletedAt)
+      ))
+      .orderBy(desc(guests.createdAt));
+  }
+
+  async getGuest(id: string): Promise<Guest | undefined> {
+    const [guest] = await db
+      .select()
+      .from(guests)
+      .where(and(
+        eq(guests.id, id),
+        isNull(guests.deletedAt)
+      ));
+    return guest || undefined;
+  }
+
+  async createGuest(guestData: InsertGuest): Promise<Guest> {
+    const [guest] = await db
+      .insert(guests)
+      .values(guestData)
+      .returning();
+    return guest;
+  }
+
+  async updateGuest(id: string, guestData: Partial<InsertGuest>): Promise<Guest> {
+    const [guest] = await db
+      .update(guests)
+      .set({ ...guestData, updatedAt: new Date() })
+      .where(eq(guests.id, id))
+      .returning();
+    return guest;
+  }
+
+  async deleteGuest(id: string): Promise<void> {
+    await db
+      .update(guests)
+      .set({ deletedAt: new Date() })
+      .where(eq(guests.id, id));
+  }
+
+  async searchGuests(hotelId: string, searchTerm: string): Promise<Guest[]> {
+    const search = `%${searchTerm.toLowerCase()}%`;
+    return await db
+      .select()
+      .from(guests)
+      .where(and(
+        eq(guests.hotelId, hotelId),
+        isNull(guests.deletedAt),
+        sql`(LOWER(${guests.firstName}) LIKE ${search} OR LOWER(${guests.lastName}) LIKE ${search} OR LOWER(${guests.phone}) LIKE ${search} OR LOWER(${guests.email}) LIKE ${search})`
+      ))
+      .orderBy(desc(guests.createdAt));
   }
 }
 

@@ -24,6 +24,7 @@ import {
   insertVehicleLogSchema,
   updateKotItemSchema,
   insertMealPlanSchema,
+  insertGuestSchema,
   vouchers
 } from "@shared/schema";
 
@@ -210,6 +211,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Vendor deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete vendor" });
+    }
+  });
+
+  // Guest routes
+  app.get("/api/hotels/current/guests", async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const guests = await storage.getGuestsByHotel(user.hotelId);
+      res.json(guests);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch guests" });
+    }
+  });
+
+  app.get("/api/hotels/current/guests/search", async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const searchTerm = req.query.q as string;
+      if (!searchTerm) {
+        return res.status(400).json({ message: "Search term required" });
+      }
+      const guests = await storage.searchGuests(user.hotelId, searchTerm);
+      res.json(guests);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to search guests" });
+    }
+  });
+
+  app.get("/api/hotels/current/guests/:id", async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+      const guest = await storage.getGuest(id);
+      if (!guest) {
+        return res.status(404).json({ message: "Guest not found" });
+      }
+      res.json(guest);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch guest" });
+    }
+  });
+
+  app.post("/api/hotels/current/guests", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const guestData = insertGuestSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId,
+        createdBy: user.id
+      });
+      const guest = await storage.createGuest(guestData);
+      res.status(201).json(guest);
+    } catch (error) {
+      console.error("Guest creation error:", error);
+      res.status(400).json({ message: "Invalid guest data", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.put("/api/hotels/current/guests/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+      const guestData = insertGuestSchema.partial().parse(req.body);
+      const guest = await storage.updateGuest(id, guestData);
+      res.json(guest);
+    } catch (error) {
+      console.error("Guest update error:", error);
+      res.status(400).json({ message: "Failed to update guest" });
+    }
+  });
+
+  app.delete("/api/hotels/current/guests/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+      await storage.deleteGuest(id);
+      res.json({ message: "Guest deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete guest" });
     }
   });
 

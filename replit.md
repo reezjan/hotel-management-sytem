@@ -72,6 +72,7 @@ Note: For security, the password is not stored in this file. Run the seed comman
 ## Features
 - Multi-role authentication system
 - Hotel setup and management
+- **Guest/Customer Management** - Full CRUD operations for guest profiles with search functionality
 - Room and hall management
 - Restaurant and bar operations (KOT, billing, menu management)
 - Inventory tracking and consumption
@@ -101,6 +102,13 @@ Note: For security, the password is not stored in this file. Run the seed comman
 - Storekeeper - Inventory management
 
 ## Recent Changes
+- 2025-10-03: Guest/Customer Management System implemented
+  - Added `guests` table to database schema with full contact and ID information
+  - Created storage interface methods (create, read, update, delete guests)
+  - Implemented API routes: GET/POST /api/hotels/current/guests and PUT/DELETE /api/hotels/current/guests/:id
+  - Built guest management UI page at `/guests` route
+  - Accessible by front_desk, manager, and owner roles
+  - Features: Add, edit, delete guests; search by name/phone/email; detailed guest profiles
 - 2025-10-03: Initial Replit setup completed
   - Configured PostgreSQL database
   - Pushed database schema with Drizzle

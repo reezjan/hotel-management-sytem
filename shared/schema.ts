@@ -91,6 +91,28 @@ export const auditLogs = pgTable("audit_logs", {
   payload: jsonb("payload")
 });
 
+// Guests Table
+export const guests = pgTable("guests", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email"),
+  phone: text("phone").notNull(),
+  address: text("address"),
+  city: text("city"),
+  country: text("country"),
+  idType: text("id_type"),
+  idNumber: text("id_number"),
+  nationality: text("nationality"),
+  dateOfBirth: timestamp("date_of_birth", { withTimezone: true }),
+  notes: text("notes"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true })
+});
+
 // Room Types Table
 export const roomTypes = pgTable("room_types", {
   id: serial("id").primaryKey(),
@@ -666,6 +688,13 @@ export const insertVendorSchema = createInsertSchema(vendors).omit({
   createdAt: true
 });
 
+export const insertGuestSchema = createInsertSchema(guests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true
+});
+
 export const updateKotItemSchema = z.object({
   status: z.enum(['pending', 'approved', 'declined', 'ready']),
   declineReason: z.string().optional()
@@ -721,3 +750,5 @@ export type Wastage = typeof wastages.$inferSelect;
 export type InsertWastage = z.infer<typeof insertWastageSchema>;
 export type MealPlan = typeof mealPlans.$inferSelect;
 export type InsertMealPlan = z.infer<typeof insertMealPlanSchema>;
+export type Guest = typeof guests.$inferSelect;
+export type InsertGuest = z.infer<typeof insertGuestSchema>;
