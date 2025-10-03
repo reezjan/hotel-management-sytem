@@ -224,7 +224,7 @@ export default function FrontDeskDashboard() {
         await apiRequest("POST", "/api/transactions", {
           hotelId: user?.hotelId,
           txnType: selectedPaymentMethod === 'cash' ? 'cash_in' : selectedPaymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
-          amount: Number(data.advancePayment),
+          amount: String(Number(data.advancePayment)),
           paymentMethod: selectedPaymentMethod,
           purpose: 'room_advance_payment',
           reference: `Room ${selectedRoom?.roomNumber} - ${data.guestName}`,
@@ -275,7 +275,7 @@ export default function FrontDeskDashboard() {
       await apiRequest("POST", "/api/transactions", {
         hotelId: user?.hotelId,
         txnType: data.paymentMethod === 'cash' ? 'cash_in' : data.paymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
-        amount: Number(data.amount),
+        amount: String(Number(data.amount)),
         paymentMethod: data.paymentMethod,
         purpose: data.purpose || 'cash_deposit',
         reference: `Cash deposit by ${user?.username}`,
@@ -347,7 +347,7 @@ export default function FrontDeskDashboard() {
         await apiRequest("POST", "/api/transactions", {
           hotelId: user?.hotelId,
           txnType: selectedCheckoutPaymentMethod === 'cash' ? 'cash_in' : selectedCheckoutPaymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
-          amount: data.finalAmount,
+          amount: String(data.finalAmount),
           paymentMethod: selectedCheckoutPaymentMethod,
           purpose: 'room_checkout_payment',
           reference: `Checkout - Room ${data.roomNumber} - ${data.guestName}${data.voucherId ? ` (Voucher Applied)` : ''}`,
