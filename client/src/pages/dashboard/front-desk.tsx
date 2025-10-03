@@ -105,6 +105,11 @@ export default function FrontDeskDashboard() {
     enabled: !!user?.hotelId
   });
 
+  const { data: hotelTaxes = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/taxes"],
+    enabled: !!user?.hotelId
+  });
+
   const checkInForm = useForm({
     defaultValues: {
       guestName: "",
@@ -396,6 +401,81 @@ export default function FrontDeskDashboard() {
 
   const handleTaskStatusUpdate = (task: any, newStatus: string) => {
     updateTaskMutation.mutate({ taskId: task.id, status: newStatus });
+  };
+
+  // Calculate checkout bill with taxes
+  const calculateCheckoutBill = (room: any) => {
+    const roomPricePerDay = room.occupantDetails?.roomPrice || 0;
+    const checkInDate = room.occupantDetails?.checkInDate ? new Date(room.occupantDetails.checkInDate) : null;
+    const checkOutDate = room.occupantDetails?.checkOutDate ? new Date(room.occupantDetails.checkOutDate) : new Date();
+    
+    // Calculate number of days
+    let numberOfDays = 1;
+    if (checkInDate && checkOutDate) {
+      const timeDiff = checkOutDate.getTime() - checkInDate.getTime();
+      numberOfDays = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
+    }
+    
+    const totalRoomCharges = parseFloat(roomPricePerDay.toString()) * numberOfDays;
+    const mealPlanCost = room.occupantDetails?.mealPlan?.totalCost || 0;
+    const foodCharges = room.occupantDetails?.foodCharges || [];
+    const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
+    
+    const subtotal = totalRoomCharges + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
+
+    // Get active taxes
+    const activeTaxes = hotelTaxes.filter((tax: any) => tax.isActive);
+    
+    // Sort taxes to apply VAT first, then service tax, then luxury tax
+    const taxOrder = ['vat', 'service_tax', 'luxury_tax'];
+    const sortedTaxes = activeTaxes.sort((a: any, b: any) => {
+      const aIndex = taxOrder.indexOf(a.taxType);
+      const bIndex = taxOrder.indexOf(b.taxType);
+      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+    });
+
+    // Apply cascading taxes
+    let runningTotal = subtotal;
+    const taxBreakdown: any = {};
+    
+    sortedTaxes.forEach((tax: any) => {
+      const taxRate = parseFloat(tax.percent) / 100;
+      const taxAmount = Math.round((runningTotal * taxRate) * 100) / 100;
+      const displayName = tax.taxType === 'vat' ? 'VAT' : 
+                          tax.taxType === 'service_tax' ? 'Service Tax' : 
+                          tax.taxType === 'luxury_tax' ? 'Luxury Tax' : tax.taxType;
+      taxBreakdown[displayName] = {
+        rate: parseFloat(tax.percent),
+        amount: taxAmount
+      };
+      runningTotal = Math.round((runningTotal + taxAmount) * 100) / 100;
+    });
+
+    const totalTax = Object.values(taxBreakdown).reduce((sum: number, t: any) => sum + t.amount, 0);
+    let grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
+    
+    // Apply voucher discount
+    let discountAmount = 0;
+    if (validatedVoucher) {
+      if (validatedVoucher.discountType === 'percentage') {
+        discountAmount = Math.round((grandTotal * (parseFloat(validatedVoucher.discountAmount) / 100)) * 100) / 100;
+      } else if (validatedVoucher.discountType === 'fixed') {
+        discountAmount = Math.min(parseFloat(validatedVoucher.discountAmount), grandTotal);
+      }
+      grandTotal = Math.round((grandTotal - discountAmount) * 100) / 100;
+    }
+
+    return {
+      subtotal,
+      taxBreakdown,
+      totalTax,
+      discountAmount,
+      grandTotal,
+      numberOfDays,
+      totalRoomCharges,
+      mealPlanCost: parseFloat(mealPlanCost.toString()),
+      totalFoodCharges
+    };
   };
 
   const handleCheckIn = (room: any) => {
@@ -1296,33 +1376,8 @@ export default function FrontDeskDashboard() {
                   </div>
 
                   {(() => {
+                    const billCalc = calculateCheckoutBill(selectedRoom);
                     const roomPricePerDay = selectedRoom.occupantDetails?.roomPrice || 0;
-                    const checkInDate = selectedRoom.occupantDetails?.checkInDate ? new Date(selectedRoom.occupantDetails.checkInDate) : null;
-                    const checkOutDate = selectedRoom.occupantDetails?.checkOutDate ? new Date(selectedRoom.occupantDetails.checkOutDate) : new Date();
-                    
-                    // Calculate number of days
-                    let numberOfDays = 1;
-                    if (checkInDate && checkOutDate) {
-                      const timeDiff = checkOutDate.getTime() - checkInDate.getTime();
-                      numberOfDays = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
-                    }
-                    
-                    const totalRoomCharges = parseFloat(roomPricePerDay.toString()) * numberOfDays;
-                    const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
-                    const foodCharges = selectedRoom.occupantDetails?.foodCharges || [];
-                    const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
-                    const totalAmount = totalRoomCharges + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
-                    let discountAmount = 0;
-                    
-                    if (validatedVoucher) {
-                      if (validatedVoucher.discountType === 'percentage') {
-                        discountAmount = (totalAmount * parseFloat(validatedVoucher.discountAmount?.toString() || "0")) / 100;
-                      } else {
-                        discountAmount = parseFloat(validatedVoucher.discountAmount?.toString() || "0");
-                      }
-                    }
-                    
-                    const finalAmount = Math.max(0, totalAmount - discountAmount);
 
                     return (
                       <Card>
@@ -1331,34 +1386,49 @@ export default function FrontDeskDashboard() {
                         </CardHeader>
                         <CardContent className="space-y-2">
                           <div className="flex justify-between items-start gap-2">
-                            <span className="text-sm sm:text-base">Room Charges ({numberOfDays} {numberOfDays === 1 ? 'day' : 'days'} × NPR {parseFloat(roomPricePerDay.toString()).toFixed(2)})</span>
-                            <span className="font-medium text-sm sm:text-base shrink-0" data-testid="checkout-room-price">NPR {totalRoomCharges.toFixed(2)}</span>
+                            <span className="text-sm sm:text-base">Room Charges ({billCalc.numberOfDays} {billCalc.numberOfDays === 1 ? 'day' : 'days'} × NPR {parseFloat(roomPricePerDay.toString()).toFixed(2)})</span>
+                            <span className="font-medium text-sm sm:text-base shrink-0" data-testid="checkout-room-price">NPR {billCalc.totalRoomCharges.toFixed(2)}</span>
                           </div>
-                          {mealPlanCost > 0 && (
+                          {billCalc.mealPlanCost > 0 && (
                             <div className="flex justify-between">
                               <span>Meal Plan Charges</span>
-                              <span data-testid="checkout-meal-price">NPR {parseFloat(mealPlanCost.toString()).toFixed(2)}</span>
+                              <span data-testid="checkout-meal-price">NPR {billCalc.mealPlanCost.toFixed(2)}</span>
                             </div>
                           )}
-                          {totalFoodCharges > 0 && (
+                          {billCalc.totalFoodCharges > 0 && (
                             <div className="flex justify-between">
                               <span>Food & Beverage Charges</span>
-                              <span data-testid="checkout-food-price">NPR {totalFoodCharges.toFixed(2)}</span>
+                              <span data-testid="checkout-food-price">NPR {billCalc.totalFoodCharges.toFixed(2)}</span>
                             </div>
                           )}
                           <div className="flex justify-between pt-1 border-t">
                             <span>Subtotal</span>
-                            <span data-testid="checkout-subtotal">NPR {totalAmount.toFixed(2)}</span>
+                            <span data-testid="checkout-subtotal">NPR {billCalc.subtotal.toFixed(2)}</span>
                           </div>
-                          {discountAmount > 0 && (
+                          {Object.keys(billCalc.taxBreakdown).map((taxType) => {
+                            const details = billCalc.taxBreakdown[taxType];
+                            return (
+                              <div key={taxType} className="flex justify-between text-sm">
+                                <span>{taxType} ({details.rate}%):</span>
+                                <span data-testid={`checkout-tax-${taxType.toLowerCase().replace(/\s+/g, '-')}`}>NPR {details.amount.toFixed(2)}</span>
+                              </div>
+                            );
+                          })}
+                          {billCalc.totalTax > 0 && (
+                            <div className="flex justify-between pt-1 border-t font-medium">
+                              <span>Total Tax</span>
+                              <span data-testid="checkout-total-tax">NPR {billCalc.totalTax.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {billCalc.discountAmount > 0 && (
                             <div className="flex justify-between text-green-600">
                               <span>Discount {validatedVoucher ? `(${validatedVoucher.code})` : ''}</span>
-                              <span data-testid="checkout-discount">- NPR {discountAmount.toFixed(2)}</span>
+                              <span data-testid="checkout-discount">- NPR {billCalc.discountAmount.toFixed(2)}</span>
                             </div>
                           )}
                           <div className="flex justify-between font-bold text-lg pt-2 border-t">
                             <span>Total Amount</span>
-                            <span data-testid="checkout-total">NPR {finalAmount.toFixed(2)}</span>
+                            <span data-testid="checkout-total">NPR {billCalc.grandTotal.toFixed(2)}</span>
                           </div>
                         </CardContent>
                       </Card>
@@ -1406,39 +1476,13 @@ export default function FrontDeskDashboard() {
                       className="flex-1"
                       disabled={!selectedCheckoutPaymentMethod || checkOutGuestMutation.isPending}
                       onClick={() => {
-                        const roomPricePerDay = selectedRoom.occupantDetails?.roomPrice || 0;
-                        const checkInDate = selectedRoom.occupantDetails?.checkInDate ? new Date(selectedRoom.occupantDetails.checkInDate) : null;
-                        const checkOutDate = selectedRoom.occupantDetails?.checkOutDate ? new Date(selectedRoom.occupantDetails.checkOutDate) : new Date();
-                        
-                        // Calculate number of days
-                        let numberOfDays = 1;
-                        if (checkInDate && checkOutDate) {
-                          const timeDiff = checkOutDate.getTime() - checkInDate.getTime();
-                          numberOfDays = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
-                        }
-                        
-                        const totalRoomCharges = parseFloat(roomPricePerDay.toString()) * numberOfDays;
-                        const mealPlanCost = selectedRoom.occupantDetails?.mealPlan?.totalCost || 0;
-                        const foodCharges = selectedRoom.occupantDetails?.foodCharges || [];
-                        const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
-                        const totalAmount = totalRoomCharges + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
-                        let discountAmount = 0;
-                        
-                        if (validatedVoucher) {
-                          if (validatedVoucher.discountType === 'percentage') {
-                            discountAmount = (totalAmount * parseFloat(validatedVoucher.discountAmount?.toString() || "0")) / 100;
-                          } else {
-                            discountAmount = parseFloat(validatedVoucher.discountAmount?.toString() || "0");
-                          }
-                        }
-                        
-                        const finalAmount = Math.max(0, totalAmount - discountAmount);
+                        const billCalc = calculateCheckoutBill(selectedRoom);
 
                         checkOutGuestMutation.mutate({
                           roomId: selectedRoom.id,
-                          totalAmount,
-                          discountAmount,
-                          finalAmount,
+                          totalAmount: billCalc.subtotal + billCalc.totalTax,
+                          discountAmount: billCalc.discountAmount,
+                          finalAmount: billCalc.grandTotal,
                           voucherId: validatedVoucher?.id || undefined
                         });
                       }}
