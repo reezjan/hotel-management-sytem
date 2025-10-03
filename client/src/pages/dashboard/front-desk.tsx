@@ -179,6 +179,19 @@ export default function FrontDeskDashboard() {
       const room = rooms.find(r => r.id === data.roomId);
       const roomType = room?.roomType;
       
+      // Validate room type exists
+      if (!roomType) {
+        throw new Error('Room type information is missing. Please ensure the room is properly configured.');
+      }
+      
+      // Get the correct room price based on guest type
+      const price = data.guestType === "inhouse" ? roomType.priceInhouse : roomType.priceWalkin;
+      const roomPrice = price ? Number(price) : 0;
+      
+      if (roomPrice <= 0) {
+        throw new Error(`Room price is not configured for ${data.guestType} guests. Please configure room pricing first.`);
+      }
+      
       // Update room occupancy
       await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
         isOccupied: true,
@@ -194,7 +207,7 @@ export default function FrontDeskDashboard() {
           officeName: data.officeName || null,
           roomTypeId: roomType?.id || null,
           roomTypeName: roomType?.name || null,
-          roomPrice: roomType ? (data.guestType === "inhouse" ? roomType.priceInhouse : roomType.priceWalkin) : 0,
+          roomPrice: roomPrice,
           mealPlan: selectedMealPlan ? {
             planId: selectedMealPlan.id,
             planType: selectedMealPlan.planType,
@@ -228,6 +241,13 @@ export default function FrontDeskDashboard() {
       setSelectedPaymentMethod("");
       setGuestType("walkin");
       setOfficeName("");
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Check-in failed", 
+        description: error.message || "Failed to check in guest",
+        variant: "destructive" 
+      });
     }
   });
 
@@ -302,6 +322,11 @@ export default function FrontDeskDashboard() {
 
   const checkOutGuestMutation = useMutation({
     mutationFn: async (data: { roomId: string; totalAmount: number; discountAmount: number; finalAmount: number; voucherId?: string }) => {
+      // Validate payment method is selected
+      if (!selectedCheckoutPaymentMethod || !['cash', 'pos', 'fonepay'].includes(selectedCheckoutPaymentMethod)) {
+        throw new Error('Please select a payment method (Cash, POS, or Fonepay) before checking out');
+      }
+
       // Update room occupancy
       await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
         isOccupied: false,
@@ -329,6 +354,7 @@ export default function FrontDeskDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "vouchers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
       toast({ title: "Guest checked out successfully" });
       setIsCheckOutModalOpen(false);
       setSelectedRoom(null);
@@ -336,6 +362,13 @@ export default function FrontDeskDashboard() {
       setVoucherCode("");
       setValidatedVoucher(null);
       setSelectedCheckoutPaymentMethod("");
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Checkout failed", 
+        description: error.message || "Failed to check out guest",
+        variant: "destructive" 
+      });
     }
   });
 
@@ -405,7 +438,7 @@ export default function FrontDeskDashboard() {
 
   // Calculate checkout bill with taxes
   const calculateCheckoutBill = (room: any) => {
-    const roomPricePerDay = room.occupantDetails?.roomPrice || 0;
+    const roomPricePerDay = room.occupantDetails?.roomPrice ? Number(room.occupantDetails.roomPrice) : 0;
     const checkInDate = room.occupantDetails?.checkInDate ? new Date(room.occupantDetails.checkInDate) : null;
     const checkOutDate = room.occupantDetails?.checkOutDate ? new Date(room.occupantDetails.checkOutDate) : new Date();
     
@@ -416,7 +449,7 @@ export default function FrontDeskDashboard() {
       numberOfDays = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
     }
     
-    const totalRoomCharges = parseFloat(roomPricePerDay.toString()) * numberOfDays;
+    const totalRoomCharges = roomPricePerDay * numberOfDays;
     const mealPlanCostPerDay = room.occupantDetails?.mealPlan?.totalCost || 0;
     const totalMealPlanCharges = parseFloat(mealPlanCostPerDay.toString()) * numberOfDays;
     const foodCharges = room.occupantDetails?.foodCharges || [];

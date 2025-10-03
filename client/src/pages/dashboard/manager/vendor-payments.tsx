@@ -36,7 +36,7 @@ interface Transaction {
 
 export default function VendorPayments() {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [selectedVendor, setSelectedVendor] = useState("");
+  const [vendorName, setVendorName] = useState("");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -126,7 +126,7 @@ export default function VendorPayments() {
   });
 
   const resetForm = () => {
-    setSelectedVendor("");
+    setVendorName("");
     setAmount("");
     setPaymentMethod("");
     setPurpose("");
@@ -134,7 +134,7 @@ export default function VendorPayments() {
     setShowPaymentForm(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!currentUser?.hotelId || !currentUser?.id) {
@@ -142,7 +142,7 @@ export default function VendorPayments() {
       return;
     }
     
-    if (!selectedVendor || !amount || !paymentMethod || !purpose) {
+    if (!vendorName.trim() || !amount || !paymentMethod || !purpose) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -152,14 +152,46 @@ export default function VendorPayments() {
       return;
     }
 
-    createPayment.mutate({
-      vendorName: selectedVendor, // Send vendor name instead of ID
-      amount: Number(amount).toFixed(2),
-      currency: "NPR",
-      paymentMethod,
-      purpose,
-      reference: reference || undefined
-    });
+    try {
+      // Find or create vendor
+      let vendor = vendors.find(v => v.name.toLowerCase() === vendorName.trim().toLowerCase());
+      
+      if (!vendor) {
+        // Create new vendor
+        const createResponse = await fetch("/api/hotels/current/vendors", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            name: vendorName.trim(),
+            contact: {}
+          })
+        });
+        
+        if (!createResponse.ok) {
+          throw new Error("Failed to create vendor");
+        }
+        
+        vendor = await createResponse.json();
+        queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/vendors"] });
+      }
+
+      if (!vendor) {
+        throw new Error("Failed to get vendor information");
+      }
+
+      // Create payment with vendor ID
+      createPayment.mutate({
+        vendorId: vendor.id,
+        amount: Number(amount).toFixed(2),
+        currency: "NPR",
+        paymentMethod,
+        purpose,
+        reference: reference || undefined
+      });
+    } catch (error: any) {
+      toast.error(error.message || "Failed to process payment");
+    }
   };
 
   const getVendorName = (vendorId: string) => {
@@ -263,10 +295,11 @@ export default function VendorPayments() {
                   <Input
                     id="vendor"
                     placeholder="Enter vendor name"
-                    value={selectedVendor}
-                    onChange={(e) => setSelectedVendor(e.target.value)}
+                    value={vendorName}
+                    onChange={(e) => setVendorName(e.target.value)}
                     required
                   />
+                  <p className="text-xs text-muted-foreground">Type vendor name (will be created if doesn't exist)</p>
                 </div>
 
                 <div className="space-y-2">
