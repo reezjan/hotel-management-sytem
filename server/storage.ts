@@ -839,9 +839,20 @@ export class DatabaseStorage implements IStorage {
 
   async updateHotelTax(hotelId: string, taxType: string, isActive: boolean, percent?: number): Promise<HotelTax> {
     const [tax] = await db
-      .update(hotelTaxes)
-      .set({ isActive, percent: percent?.toString() })
-      .where(and(eq(hotelTaxes.hotelId, hotelId), eq(hotelTaxes.taxType, taxType)))
+      .insert(hotelTaxes)
+      .values({
+        hotelId,
+        taxType,
+        isActive,
+        percent: percent?.toString()
+      })
+      .onConflictDoUpdate({
+        target: [hotelTaxes.hotelId, hotelTaxes.taxType],
+        set: {
+          isActive,
+          percent: percent?.toString()
+        }
+      })
       .returning();
     return tax;
   }

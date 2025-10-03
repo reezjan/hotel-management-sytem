@@ -6,6 +6,20 @@ This is a comprehensive multi-role hotel management system designed to manage al
 
 ## Recent Changes (October 2025)
 
+### Critical Tax & Billing Fixes (October 3, 2025)
+- **Tax Configuration Save Fixed**: Owner role can now properly save tax configurations (VAT, Service Tax, Luxury Tax) to database:
+  - Added unique constraint on hotel_taxes table for (hotelId, taxType) combination
+  - Updated updateHotelTax function to use upsert pattern (insert on conflict update)
+  - Tax records are now created if they don't exist, or updated if they do
+- **Billing Tax Integration Fixed**: Front desk checkout now properly fetches and applies taxes from database:
+  - Added hotel taxes query to fetch configured tax rates
+  - Implemented calculateCheckoutBill function with cascading tax calculation (VAT → Service Tax → Luxury Tax)
+  - Payment summary now displays itemized tax breakdown with percentages and amounts
+  - Total tax line shows sum of all applicable taxes
+  - Final amount correctly includes room charges + meal plan + food charges + all taxes - discounts
+  - All tax calculations follow proper cascading pattern where each tax applies to running total
+- **Database Schema Enhancement**: Added `unique` import to schema and proper constraint definition for data integrity.
+
 ### Front Desk Enhancements - Complete Professional Overhaul (October 2, 2025)
 - **Room Type & Price Display Enhancement**: 
   - Updated check-in to save room type ID and name in occupantDetails for better tracking

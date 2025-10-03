@@ -11,7 +11,8 @@ import {
   numeric, 
   jsonb,
   inet,
-  index
+  index,
+  unique
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -373,7 +374,9 @@ export const hotelTaxes = pgTable("hotel_taxes", {
   percent: numeric("percent", { precision: 5, scale: 2 }),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
-});
+}, (table) => ({
+  uniqueHotelTax: unique().on(table.hotelId, table.taxType)
+}));
 
 // Discount Vouchers Table
 export const vouchers = pgTable("vouchers", {
