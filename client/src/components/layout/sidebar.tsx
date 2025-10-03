@@ -76,10 +76,12 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'finance': {
         'dashboard': '/finance',
-        'maintenance': '/maintenance-requests',
-        'cashout': '/cash-out-tracking',
-        'payments': '/vendor-payments',
-        'summary': '/financial-summary'
+        'transactions': '/finance/transactions',
+        'revenue': '/finance/revenue',
+        'expenses': '/finance/expenses',
+        'cashflow': '/finance/cashflow',
+        'reconciliation': '/finance/reconciliation',
+        'reports': '/finance/reports'
       },
       'waiter': {
         'dashboard': '/waiter',

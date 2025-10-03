@@ -229,10 +229,12 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.FINANCE]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
-    { icon: 'TrendingDown', label: 'Cash Out Tracking', id: 'cashout' },
-    { icon: 'CreditCard', label: 'Vendor Payments', id: 'payments' },
-    { icon: 'PieChart', label: 'Financial Summary', id: 'summary' }
+    { icon: 'Receipt', label: 'Transactions', id: 'transactions' },
+    { icon: 'TrendingUp', label: 'Revenue Reports', id: 'revenue' },
+    { icon: 'TrendingDown', label: 'Expense Tracking', id: 'expenses' },
+    { icon: 'DollarSign', label: 'Cash Flow', id: 'cashflow' },
+    { icon: 'CreditCard', label: 'Payment Reconciliation', id: 'reconciliation' },
+    { icon: 'FileText', label: 'Reports & Summary', id: 'reports' }
   ],
   [ROLES.STOREKEEPER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },

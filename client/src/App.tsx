@@ -55,6 +55,12 @@ import SurveillanceOfficerMyTasks from "@/pages/dashboard/surveillance-officer/m
 import SurveillanceOfficerVehicleLogs from "@/pages/dashboard/surveillance-officer/vehicle-logs";
 import SurveillanceOfficerMaintenanceReports from "@/pages/dashboard/surveillance-officer/maintenance-reports";
 import FinanceDashboard from "@/pages/dashboard/finance";
+import FinanceTransactions from "@/pages/dashboard/finance/transactions";
+import FinanceRevenue from "@/pages/dashboard/finance/revenue";
+import FinanceExpenses from "@/pages/dashboard/finance/expenses";
+import FinanceCashFlow from "@/pages/dashboard/finance/cashflow";
+import FinanceReconciliation from "@/pages/dashboard/finance/reconciliation";
+import FinanceReports from "@/pages/dashboard/finance/reports";
 import FrontDeskDashboard from "@/pages/dashboard/front-desk";
 import StorekeeperDashboard from "@/pages/dashboard/storekeeper";
 import StorekeeperDutyStatus from "@/pages/dashboard/storekeeper/duty-status";
@@ -117,7 +123,16 @@ function Router() {
       <ProtectedRoute path="/surveillance-officer/my-tasks" component={SurveillanceOfficerMyTasks} allowedRoles={["surveillance_officer"]} />
       <ProtectedRoute path="/surveillance-officer/vehicle-logs" component={SurveillanceOfficerVehicleLogs} allowedRoles={["surveillance_officer"]} />
       <ProtectedRoute path="/surveillance-officer/maintenance-reports" component={SurveillanceOfficerMaintenanceReports} allowedRoles={["surveillance_officer"]} />
+      
+      {/* Finance Routes - Specific routes MUST come before general /finance route */}
+      <ProtectedRoute path="/finance/transactions" component={FinanceTransactions} allowedRoles={["finance"]} />
+      <ProtectedRoute path="/finance/revenue" component={FinanceRevenue} allowedRoles={["finance"]} />
+      <ProtectedRoute path="/finance/expenses" component={FinanceExpenses} allowedRoles={["finance"]} />
+      <ProtectedRoute path="/finance/cashflow" component={FinanceCashFlow} allowedRoles={["finance"]} />
+      <ProtectedRoute path="/finance/reconciliation" component={FinanceReconciliation} allowedRoles={["finance"]} />
+      <ProtectedRoute path="/finance/reports" component={FinanceReports} allowedRoles={["finance"]} />
       <ProtectedRoute path="/finance" component={FinanceDashboard} allowedRoles={["finance"]} />
+      
       <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
       
       {/* Storekeeper Routes */}
