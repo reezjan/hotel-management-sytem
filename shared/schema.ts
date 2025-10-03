@@ -225,6 +225,7 @@ export const transactions = pgTable("transactions", {
   vendorId: uuid("vendor_id").references(() => vendors.id),
   purpose: text("purpose"),
   reference: text("reference"),
+  details: jsonb("details"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true })
