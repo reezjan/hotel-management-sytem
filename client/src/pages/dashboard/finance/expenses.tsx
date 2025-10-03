@@ -33,7 +33,7 @@ export default function FinanceExpensesPage() {
 
   const vendorPaymentForm = useForm({
     defaultValues: {
-      vendorId: "",
+      vendorName: "",
       amount: "",
       paymentMethod: "cash",
       reference: ""
@@ -56,7 +56,7 @@ export default function FinanceExpensesPage() {
         txnType: "vendor_payment",
         amount: parseFloat(data.amount),
         paymentMethod: data.paymentMethod,
-        purpose: `Vendor Payment - ${vendors.find(v => v.id === data.vendorId)?.name || 'Unknown'}`,
+        purpose: `Vendor Payment - ${data.vendorName}`,
         reference: data.reference,
         createdBy: user?.id
       });
@@ -248,24 +248,13 @@ export default function FinanceExpensesPage() {
               <form onSubmit={vendorPaymentForm.handleSubmit((data) => createVendorPaymentMutation.mutate(data))} className="space-y-4">
                 <FormField
                   control={vendorPaymentForm.control}
-                  name="vendorId"
+                  name="vendorName"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Vendor *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-vendor">
-                            <SelectValue placeholder="Select vendor" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {vendors.map((vendor: any) => (
-                            <SelectItem key={vendor.id} value={vendor.id}>
-                              {vendor.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <Input {...field} placeholder="Enter vendor name" data-testid="input-vendor-name" />
+                      </FormControl>
                     </FormItem>
                   )}
                 />

@@ -1,0 +1,723 @@
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { DashboardLayout } from "@/components/layout/dashboard-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Users, UserPlus, Search, Edit, Trash2, Phone, Mail, MapPin, CalendarIcon, IdCard } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { formatDate, cn } from "@/lib/utils";
+import { insertGuestSchema, type Guest } from "@shared/schema";
+import { z } from "zod";
+import { format } from "date-fns";
+
+const guestFormSchema = insertGuestSchema.extend({
+  dateOfBirth: z.string().optional().or(z.date().optional())
+});
+
+type GuestFormData = z.infer<typeof guestFormSchema>;
+
+export default function GuestsPage() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>();
+
+  const { data: guests = [], isLoading } = useQuery<Guest[]>({
+    queryKey: ["/api/hotels/current/guests"],
+    enabled: !!user?.hotelId
+  });
+
+  const guestForm = useForm<GuestFormData>({
+    resolver: zodResolver(guestFormSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      address: "",
+      city: "",
+      country: "",
+      idType: "",
+      idNumber: "",
+      nationality: "",
+      notes: ""
+    }
+  });
+
+  const createGuestMutation = useMutation({
+    mutationFn: async (data: GuestFormData) => {
+      const formattedData = {
+        ...data,
+        hotelId: user?.hotelId,
+        createdBy: user?.id,
+        dateOfBirth: dateOfBirth ? dateOfBirth.toISOString() : null
+      };
+      await apiRequest("POST", "/api/hotels/current/guests", formattedData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/guests"] });
+      toast({ title: "Guest added successfully" });
+      guestForm.reset();
+      setDateOfBirth(undefined);
+      setIsAddModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to add guest", 
+        description: error.message || "Please try again",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const updateGuestMutation = useMutation({
+    mutationFn: async (data: GuestFormData) => {
+      if (!selectedGuest) return;
+      const formattedData = {
+        ...data,
+        dateOfBirth: dateOfBirth ? dateOfBirth.toISOString() : null
+      };
+      await apiRequest("PUT", `/api/hotels/current/guests/${selectedGuest.id}`, formattedData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/guests"] });
+      toast({ title: "Guest updated successfully" });
+      guestForm.reset();
+      setDateOfBirth(undefined);
+      setSelectedGuest(null);
+      setIsEditModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to update guest", 
+        description: error.message || "Please try again",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const deleteGuestMutation = useMutation({
+    mutationFn: async (guestId: string) => {
+      await apiRequest("DELETE", `/api/hotels/current/guests/${guestId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/guests"] });
+      toast({ title: "Guest deleted successfully" });
+    },
+    onError: () => {
+      toast({ 
+        title: "Failed to delete guest",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleEditGuest = (guest: Guest) => {
+    setSelectedGuest(guest);
+    guestForm.reset({
+      firstName: guest.firstName,
+      lastName: guest.lastName,
+      email: guest.email || "",
+      phone: guest.phone,
+      address: guest.address || "",
+      city: guest.city || "",
+      country: guest.country || "",
+      idType: guest.idType || "",
+      idNumber: guest.idNumber || "",
+      nationality: guest.nationality || "",
+      notes: guest.notes || ""
+    });
+    if (guest.dateOfBirth) {
+      setDateOfBirth(new Date(guest.dateOfBirth));
+    }
+    setIsEditModalOpen(true);
+  };
+
+  const handleDeleteGuest = (guestId: string) => {
+    if (confirm("Are you sure you want to delete this guest?")) {
+      deleteGuestMutation.mutate(guestId);
+    }
+  };
+
+  const filteredGuests = guests.filter(guest => {
+    const search = searchQuery.toLowerCase();
+    return (
+      guest.firstName.toLowerCase().includes(search) ||
+      guest.lastName.toLowerCase().includes(search) ||
+      guest.phone.toLowerCase().includes(search) ||
+      (guest.email && guest.email.toLowerCase().includes(search))
+    );
+  });
+
+  return (
+    <DashboardLayout title="Guest Management">
+      <div className="space-y-6">
+        <Card className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm opacity-90">Total Guests</p>
+                <p className="text-4xl font-bold mt-2">{guests.length}</p>
+                <p className="text-sm opacity-90 mt-1">Registered in the system</p>
+              </div>
+              <Users className="h-16 w-16 opacity-50" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>All Guests</CardTitle>
+              <Button onClick={() => setIsAddModalOpen(true)} data-testid="button-add-guest">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add Guest
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search guests by name, phone, or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                  data-testid="input-search-guests"
+                />
+              </div>
+            </div>
+
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading guests...</div>
+            ) : filteredGuests.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {searchQuery ? "No guests found matching your search" : "No guests registered yet"}
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {filteredGuests.map((guest) => (
+                  <Card key={guest.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold" data-testid={`text-guest-name-${guest.id}`}>
+                            {guest.firstName} {guest.lastName}
+                          </h3>
+                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                            {guest.phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4" />
+                                <span>{guest.phone}</span>
+                              </div>
+                            )}
+                            {guest.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4" />
+                                <span>{guest.email}</span>
+                              </div>
+                            )}
+                            {guest.city && (
+                              <div className="flex items-center gap-2">
+                                <MapPin className="h-4 w-4" />
+                                <span>{guest.city}{guest.country && `, ${guest.country}`}</span>
+                              </div>
+                            )}
+                            {guest.idNumber && (
+                              <div className="flex items-center gap-2">
+                                <IdCard className="h-4 w-4" />
+                                <span>{guest.idType || "ID"}: {guest.idNumber}</span>
+                              </div>
+                            )}
+                          </div>
+                          {guest.notes && (
+                            <div className="mt-2 text-sm text-muted-foreground">
+                              <span className="font-medium">Notes:</span> {guest.notes}
+                            </div>
+                          )}
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            Added on {formatDate(guest.createdAt)}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 ml-4">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditGuest(guest)}
+                            data-testid={`button-edit-guest-${guest.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDeleteGuest(guest.id)}
+                            data-testid={`button-delete-guest-${guest.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add New Guest</DialogTitle>
+            </DialogHeader>
+            <Form {...guestForm}>
+              <form onSubmit={guestForm.handleSubmit((data) => createGuestMutation.mutate(data))} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>First Name *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="John" data-testid="input-first-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={guestForm.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Name *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Doe" data-testid="input-last-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="+977-9800000000" data-testid="input-phone" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={guestForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" placeholder="john@example.com" data-testid="input-email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={guestForm.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Street address" data-testid="input-address" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Kathmandu" data-testid="input-city" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={guestForm.control}
+                    name="country"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Country</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Nepal" data-testid="input-country" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="idType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID Type</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-id-type">
+                              <SelectValue placeholder="Select ID type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="passport">Passport</SelectItem>
+                            <SelectItem value="national_id">National ID</SelectItem>
+                            <SelectItem value="driving_license">Driving License</SelectItem>
+                            <SelectItem value="citizenship">Citizenship</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={guestForm.control}
+                    name="idNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="ID number" data-testid="input-id-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="nationality"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nationality</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Nepali" data-testid="input-nationality" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormItem>
+                    <FormLabel>Date of Birth</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !dateOfBirth && "text-muted-foreground"
+                            )}
+                            data-testid="button-select-dob"
+                          >
+                            {dateOfBirth ? format(dateOfBirth, "PPP") : <span>Pick a date</span>}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={dateOfBirth}
+                          onSelect={setDateOfBirth}
+                          disabled={(date) => date > new Date()}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </FormItem>
+                </div>
+
+                <FormField
+                  control={guestForm.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} placeholder="Additional notes about the guest" rows={3} data-testid="input-notes" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex gap-2">
+                  <Button type="submit" className="flex-1" disabled={createGuestMutation.isPending} data-testid="button-submit-guest">
+                    {createGuestMutation.isPending ? "Adding..." : "Add Guest"}
+                  </Button>
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setIsAddModalOpen(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Guest</DialogTitle>
+            </DialogHeader>
+            <Form {...guestForm}>
+              <form onSubmit={guestForm.handleSubmit((data) => updateGuestMutation.mutate(data))} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>First Name *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="John" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={guestForm.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Name *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Doe" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="+977-9800000000" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={guestForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="email" placeholder="john@example.com" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={guestForm.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Street address" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Kathmandu" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={guestForm.control}
+                    name="country"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Country</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Nepal" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="idType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID Type</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select ID type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="passport">Passport</SelectItem>
+                            <SelectItem value="national_id">National ID</SelectItem>
+                            <SelectItem value="driving_license">Driving License</SelectItem>
+                            <SelectItem value="citizenship">Citizenship</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={guestForm.control}
+                    name="idNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ID Number</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="ID number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={guestForm.control}
+                    name="nationality"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nationality</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Nepali" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormItem>
+                    <FormLabel>Date of Birth</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !dateOfBirth && "text-muted-foreground"
+                            )}
+                          >
+                            {dateOfBirth ? format(dateOfBirth, "PPP") : <span>Pick a date</span>}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={dateOfBirth}
+                          onSelect={setDateOfBirth}
+                          disabled={(date) => date > new Date()}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </FormItem>
+                </div>
+
+                <FormField
+                  control={guestForm.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} placeholder="Additional notes about the guest" rows={3} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex gap-2">
+                  <Button type="submit" className="flex-1" disabled={updateGuestMutation.isPending}>
+                    {updateGuestMutation.isPending ? "Updating..." : "Update Guest"}
+                  </Button>
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setIsEditModalOpen(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </DashboardLayout>
+  );
+}
