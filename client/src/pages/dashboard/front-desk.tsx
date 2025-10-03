@@ -417,11 +417,12 @@ export default function FrontDeskDashboard() {
     }
     
     const totalRoomCharges = parseFloat(roomPricePerDay.toString()) * numberOfDays;
-    const mealPlanCost = room.occupantDetails?.mealPlan?.totalCost || 0;
+    const mealPlanCostPerDay = room.occupantDetails?.mealPlan?.totalCost || 0;
+    const totalMealPlanCharges = parseFloat(mealPlanCostPerDay.toString()) * numberOfDays;
     const foodCharges = room.occupantDetails?.foodCharges || [];
     const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
     
-    const subtotal = totalRoomCharges + parseFloat(mealPlanCost.toString()) + totalFoodCharges;
+    const subtotal = totalRoomCharges + totalMealPlanCharges + totalFoodCharges;
 
     // Get active taxes
     const activeTaxes = hotelTaxes.filter((tax: any) => tax.isActive);
@@ -473,7 +474,8 @@ export default function FrontDeskDashboard() {
       grandTotal,
       numberOfDays,
       totalRoomCharges,
-      mealPlanCost: parseFloat(mealPlanCost.toString()),
+      mealPlanCostPerDay: parseFloat(mealPlanCostPerDay.toString()),
+      totalMealPlanCharges: parseFloat(totalMealPlanCharges.toString()),
       totalFoodCharges
     };
   };
@@ -619,7 +621,11 @@ export default function FrontDeskDashboard() {
     const hotelName = hotel?.name || 'HOTEL MANAGEMENT';
     const hotelAddress = hotel?.address || '';
     const hotelPhone = hotel?.phone || '';
+    const hotelZip = hotel?.zip || '';
     const hotelVatNo = hotel?.vatNo || '';
+    
+    // Calculate bill for checkout
+    const billCalc = type === 'checkout' ? calculateCheckoutBill(room) : null;
     
     let receiptHTML = `
       <!DOCTYPE html>
@@ -650,6 +656,7 @@ export default function FrontDeskDashboard() {
         <body>
           <div class="center bold" style="font-size: 16px;">${hotelName.toUpperCase()}</div>
           ${hotelAddress ? `<div class="center">${hotelAddress}</div>` : ''}
+          ${hotelZip ? `<div class="center">Zip: ${hotelZip}</div>` : ''}
           ${hotelPhone ? `<div class="center">Phone: ${hotelPhone}</div>` : ''}
           ${hotelVatNo ? `<div class="center">VAT No: ${hotelVatNo}</div>` : ''}
           <div class="center">================================</div>
@@ -681,31 +688,59 @@ export default function FrontDeskDashboard() {
               <div>${mealPlan.numberOfPersons} person(s) x ${formatCurrency(Number(mealPlan.pricePerPerson))}</div>
               <div class="bold">Total: ${formatCurrency(mealPlan.totalCost)}</div>
             ` : ''}
-          ` : type === 'checkout' ? `
+          ` : type === 'checkout' && billCalc ? `
             <div class="bold">CHECK-OUT INFORMATION</div>
             <div>Check-in: ${guest?.checkInDate ? new Date(guest.checkInDate).toLocaleDateString() : 'N/A'}</div>
             <div>Check-out: ${new Date().toLocaleDateString()}</div>
+            <div>Duration: ${billCalc.numberOfDays} night(s)</div>
             <div class="line"></div>
             <div class="bold">CHARGES SUMMARY</div>
-            ${guest?.roomPrice ? `
+            ${billCalc.totalRoomCharges > 0 ? `
               <div class="item-row">
-                <span>Room Charges:</span>
-                <span>${formatCurrency(Number(guest.roomPrice))}</span>
+                <span>Room (${billCalc.numberOfDays}x${formatCurrency(Number(guest?.roomPrice || 0))}):</span>
+                <span>${formatCurrency(billCalc.totalRoomCharges)}</span>
               </div>
             ` : ''}
-            ${mealPlan ? `
+            ${billCalc.totalMealPlanCharges > 0 ? `
               <div class="item-row">
-                <span>Meal Plan:</span>
-                <span>${formatCurrency(mealPlan.totalCost)}</span>
+                <span>Meal Plan (${billCalc.numberOfDays}x${formatCurrency(billCalc.mealPlanCostPerDay)}):</span>
+                <span>${formatCurrency(billCalc.totalMealPlanCharges)}</span>
               </div>
             ` : ''}
-            ${guest?.roomPrice || mealPlan ? `
-              <div class="line"></div>
-              <div class="item-row total">
-                <span>TOTAL:</span>
-                <span>${formatCurrency((Number(guest?.roomPrice || 0) + Number(mealPlan?.totalCost || 0)))}</span>
+            ${billCalc.totalFoodCharges > 0 ? `
+              <div class="item-row">
+                <span>Food & Beverage:</span>
+                <span>${formatCurrency(billCalc.totalFoodCharges)}</span>
               </div>
             ` : ''}
+            <div class="line"></div>
+            <div class="item-row">
+              <span>Subtotal:</span>
+              <span>${formatCurrency(billCalc.subtotal)}</span>
+            </div>
+            ${Object.entries(billCalc.taxBreakdown).map(([name, tax]: [string, any]) => `
+              <div class="item-row">
+                <span>${name} (${tax.rate}%):</span>
+                <span>${formatCurrency(tax.amount)}</span>
+              </div>
+            `).join('')}
+            ${billCalc.totalTax > 0 ? `
+              <div class="item-row">
+                <span>Total Tax:</span>
+                <span>${formatCurrency(billCalc.totalTax)}</span>
+              </div>
+            ` : ''}
+            ${billCalc.discountAmount > 0 ? `
+              <div class="item-row">
+                <span>Discount ${validatedVoucher ? `(${validatedVoucher.code})` : ''}:</span>
+                <span>-${formatCurrency(billCalc.discountAmount)}</span>
+              </div>
+            ` : ''}
+            <div class="double-line"></div>
+            <div class="item-row total">
+              <span>GRAND TOTAL:</span>
+              <span>${formatCurrency(billCalc.grandTotal)}</span>
+            </div>
           ` : ''}
           <div class="double-line"></div>
           <div class="center">Served by: ${user?.username}</div>
@@ -1389,10 +1424,10 @@ export default function FrontDeskDashboard() {
                             <span className="text-sm sm:text-base">Room Charges ({billCalc.numberOfDays} {billCalc.numberOfDays === 1 ? 'day' : 'days'} × NPR {parseFloat(roomPricePerDay.toString()).toFixed(2)})</span>
                             <span className="font-medium text-sm sm:text-base shrink-0" data-testid="checkout-room-price">NPR {billCalc.totalRoomCharges.toFixed(2)}</span>
                           </div>
-                          {billCalc.mealPlanCost > 0 && (
-                            <div className="flex justify-between">
-                              <span>Meal Plan Charges</span>
-                              <span data-testid="checkout-meal-price">NPR {billCalc.mealPlanCost.toFixed(2)}</span>
+                          {billCalc.totalMealPlanCharges > 0 && (
+                            <div className="flex justify-between items-start gap-2">
+                              <span className="text-sm sm:text-base">Meal Plan Charges ({billCalc.numberOfDays} {billCalc.numberOfDays === 1 ? 'day' : 'days'} × NPR {billCalc.mealPlanCostPerDay.toFixed(2)})</span>
+                              <span className="font-medium text-sm sm:text-base shrink-0" data-testid="checkout-meal-price">NPR {billCalc.totalMealPlanCharges.toFixed(2)}</span>
                             </div>
                           )}
                           {billCalc.totalFoodCharges > 0 && (
