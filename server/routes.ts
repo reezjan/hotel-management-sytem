@@ -14,6 +14,7 @@ import {
   insertTransactionSchema,
   insertMaintenanceRequestSchema,
   insertVoucherSchema,
+  insertVendorSchema,
   insertRoomTypeSchema,
   insertHallSchema,
   insertPoolSchema,
@@ -153,6 +154,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(vendors);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch vendors" });
+    }
+  });
+
+  app.post("/api/hotels/current/vendors", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const vendorData = insertVendorSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId
+      });
+      const vendor = await storage.createVendor(vendorData);
+      res.status(201).json(vendor);
+    } catch (error) {
+      console.error("Vendor creation error:", error);
+      res.status(400).json({ message: "Invalid vendor data", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.put("/api/hotels/current/vendors/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+      const vendorData = insertVendorSchema.partial().parse(req.body);
+      const vendor = await storage.updateVendor(id, vendorData);
+      res.json(vendor);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to update vendor" });
+    }
+  });
+
+  app.delete("/api/hotels/current/vendors/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+      await storage.deleteVendor(id);
+      res.json({ message: "Vendor deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete vendor" });
     }
   });
 

@@ -6,6 +6,9 @@ This comprehensive multi-role hotel management system streamlines all aspects of
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+- **October 3, 2025**: Added `zip` field to hotels table for thermal billing support. Fixed finance dashboard to fetch vendors from correct API route (`/api/hotels/current/vendors`). Fixed front desk to fetch hotel details from `/api/hotels/current` for proper thermal bill generation with all required information (hotel name, address, zip, phone, VAT no, and taxes).
+
 ## System Architecture
 
 ### UI/UX Decisions

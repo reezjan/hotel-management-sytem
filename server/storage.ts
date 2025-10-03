@@ -52,6 +52,7 @@ import {
   type InsertRoomType,
   type Payment,
   type Vendor,
+  type InsertVendor,
   type RestaurantTable,
   type MenuCategory,
   type HotelTax,
@@ -817,6 +818,24 @@ export class DatabaseStorage implements IStorage {
       .from(vendors)
       .where(eq(vendors.hotelId, hotelId))
       .orderBy(asc(vendors.name));
+  }
+
+  async createVendor(vendorData: InsertVendor): Promise<Vendor> {
+    const [vendor] = await db.insert(vendors).values(vendorData).returning();
+    return vendor;
+  }
+
+  async updateVendor(id: string, vendorData: Partial<InsertVendor>): Promise<Vendor> {
+    const [vendor] = await db
+      .update(vendors)
+      .set(vendorData)
+      .where(eq(vendors.id, id))
+      .returning();
+    return vendor;
+  }
+
+  async deleteVendor(id: string): Promise<void> {
+    await db.delete(vendors).where(eq(vendors.id, id));
   }
 
   // Restaurant operations

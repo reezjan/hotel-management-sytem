@@ -24,6 +24,7 @@ export const hotels = pgTable("hotels", {
   name: text("name").notNull(),
   address: text("address"),
   phone: text("phone"),
+  zip: text("zip"),
   vatNo: text("vat_no"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -643,6 +644,11 @@ export const insertMealPlanSchema = createInsertSchema(mealPlans).omit({
   pricePerPerson: z.union([z.string(), z.number()]).transform((val) => String(val))
 });
 
+export const insertVendorSchema = createInsertSchema(vendors).omit({
+  id: true,
+  createdAt: true
+});
+
 export const updateKotItemSchema = z.object({
   status: z.enum(['pending', 'approved', 'declined', 'ready']),
   declineReason: z.string().optional()
@@ -673,6 +679,7 @@ export type KotItem = typeof kotItems.$inferSelect;
 export type Role = typeof roles.$inferSelect;
 export type InventoryItem = typeof inventoryItems.$inferSelect;
 export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendor = z.infer<typeof insertVendorSchema>;
 export type RestaurantTable = typeof restaurantTables.$inferSelect;
 export type MenuCategory = typeof menuCategories.$inferSelect;
 export type HotelTax = typeof hotelTaxes.$inferSelect;
