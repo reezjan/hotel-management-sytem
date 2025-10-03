@@ -6,19 +6,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Smartphone, Building } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 import type { Transaction, MaintenanceRequest, Vendor } from "@shared/schema";
 
 export default function FinanceDashboard() {
-  const { data: transactions = [] } = useQuery<Transaction[]>({
-    queryKey: ["/api/hotels/current/transactions"]
+  const { user } = useAuth();
+
+  const { data: transactions = [], isLoading: transactionsLoading } = useQuery<Transaction[]>({
+    queryKey: ["/api/hotels/current/transactions"],
+    enabled: !!user?.hotelId
   });
 
-  const { data: maintenanceRequests = [] } = useQuery<MaintenanceRequest[]>({
-    queryKey: ["/api/hotels/current/maintenance-requests"]
+  const { data: maintenanceRequests = [], isLoading: maintenanceLoading } = useQuery<MaintenanceRequest[]>({
+    queryKey: ["/api/hotels/current/maintenance-requests"],
+    enabled: !!user?.hotelId
   });
 
-  const { data: vendors = [] } = useQuery<Vendor[]>({
-    queryKey: ["/api/hotels/current/vendors"]
+  const { data: vendors = [], isLoading: vendorsLoading } = useQuery<Vendor[]>({
+    queryKey: ["/api/hotels/current/vendors"],
+    enabled: !!user?.hotelId
   });
 
   // Calculate financial totals - separate revenue (income) from expenses
@@ -122,6 +128,21 @@ export default function FinanceDashboard() {
 
   // Filter expenses (cash_out transactions)
   const expenses = transactions.filter(t => t.txnType === 'cash_out' || t.txnType === 'vendor_payment');
+
+  const isLoading = transactionsLoading || maintenanceLoading || vendorsLoading;
+
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Finance Dashboard">
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Loading financial data...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout title="Finance Dashboard">

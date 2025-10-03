@@ -27,7 +27,7 @@ export default function FinanceExpensesPage() {
   });
 
   const { data: vendors = [] } = useQuery<any[]>({
-    queryKey: ["/api/vendors"],
+    queryKey: ["/api/hotels/current/vendors"],
     enabled: !!user?.hotelId
   });
 
