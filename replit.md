@@ -102,19 +102,16 @@ Note: For security, the password is not stored in this file. Run the seed comman
 - Storekeeper - Inventory management
 
 ## Recent Changes
-- 2025-10-03: Guest/Customer Management System implemented
-  - Added `guests` table to database schema with full contact and ID information
-  - Created storage interface methods (create, read, update, delete guests)
-  - Implemented API routes: GET/POST /api/hotels/current/guests and PUT/DELETE /api/hotels/current/guests/:id
-  - Built guest management UI page at `/guests` route
-  - Accessible by front_desk, manager, and owner roles
-  - Features: Add, edit, delete guests; search by name/phone/email; detailed guest profiles
-- 2025-10-03: Initial Replit setup completed
-  - Configured PostgreSQL database
-  - Pushed database schema with Drizzle
-  - Seeded initial data (roles and superadmin user)
-  - Set up development workflow on port 5000
-  - Configured deployment settings for autoscale
+- 2025-10-03: GitHub Project Import - Replit Setup Completed
+  - Created PostgreSQL database and configured environment variables
+  - Installed all npm dependencies
+  - Pushed database schema using Drizzle Kit
+  - Seeded database with 17 roles and superadmin user (username: `superadmin`, password visible in seed output)
+  - Configured "Start application" workflow on port 5000 with webview output
+  - Removed duplicate "Server" workflow
+  - Configured deployment for autoscale with build and start commands
+  - Verified application is running successfully with login page accessible
+  - Application properly configured with host `0.0.0.0` and `allowedHosts: true` for Replit proxy compatibility
 
 ## Development Notes
 - The application uses a unified server on port 5000 for both frontend and backend

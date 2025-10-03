@@ -271,11 +271,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
-      const guestData = insertGuestSchema.parse({
+      const bodyData = {
         ...req.body,
         hotelId: user.hotelId,
         createdBy: user.id
-      });
+      };
+      
+      // Convert dateOfBirth string to Date if provided
+      if (bodyData.dateOfBirth && typeof bodyData.dateOfBirth === 'string') {
+        bodyData.dateOfBirth = new Date(bodyData.dateOfBirth);
+      }
+      
+      const guestData = insertGuestSchema.parse(bodyData);
       const guest = await storage.createGuest(guestData);
       res.status(201).json(guest);
     } catch (error) {
@@ -294,7 +301,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       const { id } = req.params;
-      const guestData = insertGuestSchema.partial().parse(req.body);
+      const bodyData = { ...req.body };
+      
+      // Convert dateOfBirth string to Date if provided
+      if (bodyData.dateOfBirth && typeof bodyData.dateOfBirth === 'string') {
+        bodyData.dateOfBirth = new Date(bodyData.dateOfBirth);
+      }
+      
+      const guestData = insertGuestSchema.partial().parse(bodyData);
       const guest = await storage.updateGuest(id, guestData);
       res.json(guest);
     } catch (error) {
