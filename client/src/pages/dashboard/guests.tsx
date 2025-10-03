@@ -22,7 +22,7 @@ import { z } from "zod";
 import { format } from "date-fns";
 
 const guestFormSchema = insertGuestSchema.extend({
-  dateOfBirth: z.string().optional().or(z.date().optional())
+  dateOfBirth: z.date().optional().nullable()
 });
 
 type GuestFormData = z.infer<typeof guestFormSchema>;
@@ -54,7 +54,8 @@ export default function GuestsPage() {
       idType: "",
       idNumber: "",
       nationality: "",
-      notes: ""
+      notes: "",
+      dateOfBirth: null
     }
   });
 
@@ -64,7 +65,7 @@ export default function GuestsPage() {
         ...data,
         hotelId: user?.hotelId,
         createdBy: user?.id,
-        dateOfBirth: dateOfBirth ? dateOfBirth.toISOString() : null
+        dateOfBirth: dateOfBirth || null
       };
       await apiRequest("POST", "/api/hotels/current/guests", formattedData);
     },
@@ -89,7 +90,7 @@ export default function GuestsPage() {
       if (!selectedGuest) return;
       const formattedData = {
         ...data,
-        dateOfBirth: dateOfBirth ? dateOfBirth.toISOString() : null
+        dateOfBirth: dateOfBirth || null
       };
       await apiRequest("PUT", `/api/hotels/current/guests/${selectedGuest.id}`, formattedData);
     },
@@ -139,7 +140,8 @@ export default function GuestsPage() {
       idType: guest.idType || "",
       idNumber: guest.idNumber || "",
       nationality: guest.nationality || "",
-      notes: guest.notes || ""
+      notes: guest.notes || "",
+      dateOfBirth: guest.dateOfBirth ? new Date(guest.dateOfBirth) : null
     });
     if (guest.dateOfBirth) {
       setDateOfBirth(new Date(guest.dateOfBirth));
@@ -181,7 +183,7 @@ export default function GuestsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <CardTitle>All Guests</CardTitle>
               <Button onClick={() => setIsAddModalOpen(true)} data-testid="button-add-guest">
                 <UserPlus className="h-4 w-4 mr-2" />
@@ -214,34 +216,34 @@ export default function GuestsPage() {
                 {filteredGuests.map((guest) => (
                   <Card key={guest.id} className="hover:shadow-md transition-shadow">
                     <CardContent className="pt-6">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                      <div className="flex flex-col md:flex-row items-start justify-between gap-4">
+                        <div className="flex-1 w-full">
                           <h3 className="text-lg font-semibold" data-testid={`text-guest-name-${guest.id}`}>
                             {guest.firstName} {guest.lastName}
                           </h3>
-                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-muted-foreground">
                             {guest.phone && (
                               <div className="flex items-center gap-2">
-                                <Phone className="h-4 w-4" />
-                                <span>{guest.phone}</span>
+                                <Phone className="h-4 w-4 flex-shrink-0" />
+                                <span className="truncate">{guest.phone}</span>
                               </div>
                             )}
                             {guest.email && (
                               <div className="flex items-center gap-2">
-                                <Mail className="h-4 w-4" />
-                                <span>{guest.email}</span>
+                                <Mail className="h-4 w-4 flex-shrink-0" />
+                                <span className="truncate">{guest.email}</span>
                               </div>
                             )}
                             {guest.city && (
                               <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4" />
-                                <span>{guest.city}{guest.country && `, ${guest.country}`}</span>
+                                <MapPin className="h-4 w-4 flex-shrink-0" />
+                                <span className="truncate">{guest.city}{guest.country && `, ${guest.country}`}</span>
                               </div>
                             )}
                             {guest.idNumber && (
                               <div className="flex items-center gap-2">
-                                <IdCard className="h-4 w-4" />
-                                <span>{guest.idType || "ID"}: {guest.idNumber}</span>
+                                <IdCard className="h-4 w-4 flex-shrink-0" />
+                                <span className="truncate">{guest.idType || "ID"}: {guest.idNumber}</span>
                               </div>
                             )}
                           </div>
@@ -251,15 +253,16 @@ export default function GuestsPage() {
                             </div>
                           )}
                           <div className="mt-2 text-xs text-muted-foreground">
-                            Added on {formatDate(guest.createdAt)}
+                            Added on {guest.createdAt ? formatDate(guest.createdAt) : 'N/A'}
                           </div>
                         </div>
-                        <div className="flex gap-2 ml-4">
+                        <div className="flex gap-2 w-full md:w-auto">
                           <Button 
                             variant="outline" 
                             size="sm"
                             onClick={() => handleEditGuest(guest)}
                             data-testid={`button-edit-guest-${guest.id}`}
+                            className="flex-1 md:flex-initial"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -268,6 +271,7 @@ export default function GuestsPage() {
                             size="sm"
                             onClick={() => handleDeleteGuest(guest.id)}
                             data-testid={`button-delete-guest-${guest.id}`}
+                            className="flex-1 md:flex-initial"
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
@@ -288,7 +292,7 @@ export default function GuestsPage() {
             </DialogHeader>
             <Form {...guestForm}>
               <form onSubmit={guestForm.handleSubmit((data) => createGuestMutation.mutate(data))} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="firstName"
@@ -296,7 +300,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>First Name *</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="John" data-testid="input-first-name" />
+                          <Input {...field} value={field.value || ""} placeholder="John" data-testid="input-first-name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -309,7 +313,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Last Name *</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Doe" data-testid="input-last-name" />
+                          <Input {...field} value={field.value || ""} placeholder="Doe" data-testid="input-last-name" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -317,7 +321,7 @@ export default function GuestsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="phone"
@@ -325,7 +329,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Phone *</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="+977-9800000000" data-testid="input-phone" />
+                          <Input {...field} value={field.value || ""} placeholder="+977-9800000000" data-testid="input-phone" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -338,7 +342,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input {...field} type="email" placeholder="john@example.com" data-testid="input-email" />
+                          <Input {...field} value={field.value || ""} type="email" placeholder="john@example.com" data-testid="input-email" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -353,14 +357,14 @@ export default function GuestsPage() {
                     <FormItem>
                       <FormLabel>Address</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Street address" data-testid="input-address" />
+                        <Input {...field} value={field.value || ""} placeholder="Street address" data-testid="input-address" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="city"
@@ -368,7 +372,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>City</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Kathmandu" data-testid="input-city" />
+                          <Input {...field} value={field.value || ""} placeholder="Kathmandu" data-testid="input-city" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -381,7 +385,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Country</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Nepal" data-testid="input-country" />
+                          <Input {...field} value={field.value || ""} placeholder="Nepal" data-testid="input-country" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -389,14 +393,14 @@ export default function GuestsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="idType"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>ID Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value || undefined}>
                           <FormControl>
                             <SelectTrigger data-testid="select-id-type">
                               <SelectValue placeholder="Select ID type" />
@@ -420,7 +424,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>ID Number</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="ID number" data-testid="input-id-number" />
+                          <Input {...field} value={field.value || ""} placeholder="ID number" data-testid="input-id-number" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -428,7 +432,7 @@ export default function GuestsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="nationality"
@@ -436,7 +440,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Nationality</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Nepali" data-testid="input-nationality" />
+                          <Input {...field} value={field.value || ""} placeholder="Nepali" data-testid="input-nationality" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -467,6 +471,9 @@ export default function GuestsPage() {
                           onSelect={setDateOfBirth}
                           disabled={(date) => date > new Date()}
                           initialFocus
+                          captionLayout="dropdown-buttons"
+                          fromYear={1920}
+                          toYear={new Date().getFullYear()}
                         />
                       </PopoverContent>
                     </Popover>
@@ -480,14 +487,14 @@ export default function GuestsPage() {
                     <FormItem>
                       <FormLabel>Notes</FormLabel>
                       <FormControl>
-                        <Textarea {...field} placeholder="Additional notes about the guest" rows={3} data-testid="input-notes" />
+                        <Textarea {...field} value={field.value || ""} placeholder="Additional notes about the guest" rows={3} data-testid="input-notes" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Button type="submit" className="flex-1" disabled={createGuestMutation.isPending} data-testid="button-submit-guest">
                     {createGuestMutation.isPending ? "Adding..." : "Add Guest"}
                   </Button>
@@ -507,7 +514,7 @@ export default function GuestsPage() {
             </DialogHeader>
             <Form {...guestForm}>
               <form onSubmit={guestForm.handleSubmit((data) => updateGuestMutation.mutate(data))} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="firstName"
@@ -515,7 +522,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>First Name *</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="John" />
+                          <Input {...field} value={field.value || ""} placeholder="John" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -528,7 +535,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Last Name *</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Doe" />
+                          <Input {...field} value={field.value || ""} placeholder="Doe" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -536,7 +543,7 @@ export default function GuestsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="phone"
@@ -544,7 +551,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Phone *</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="+977-9800000000" />
+                          <Input {...field} value={field.value || ""} placeholder="+977-9800000000" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -557,7 +564,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input {...field} type="email" placeholder="john@example.com" />
+                          <Input {...field} value={field.value || ""} type="email" placeholder="john@example.com" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -572,14 +579,14 @@ export default function GuestsPage() {
                     <FormItem>
                       <FormLabel>Address</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Street address" />
+                        <Input {...field} value={field.value || ""} placeholder="Street address" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="city"
@@ -587,7 +594,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>City</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Kathmandu" />
+                          <Input {...field} value={field.value || ""} placeholder="Kathmandu" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -600,7 +607,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Country</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Nepal" />
+                          <Input {...field} value={field.value || ""} placeholder="Nepal" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -608,14 +615,14 @@ export default function GuestsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="idType"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>ID Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value || undefined}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select ID type" />
@@ -639,7 +646,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>ID Number</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="ID number" />
+                          <Input {...field} value={field.value || ""} placeholder="ID number" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -647,7 +654,7 @@ export default function GuestsPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={guestForm.control}
                     name="nationality"
@@ -655,7 +662,7 @@ export default function GuestsPage() {
                       <FormItem>
                         <FormLabel>Nationality</FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="Nepali" />
+                          <Input {...field} value={field.value || ""} placeholder="Nepali" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -685,6 +692,9 @@ export default function GuestsPage() {
                           onSelect={setDateOfBirth}
                           disabled={(date) => date > new Date()}
                           initialFocus
+                          captionLayout="dropdown-buttons"
+                          fromYear={1920}
+                          toYear={new Date().getFullYear()}
                         />
                       </PopoverContent>
                     </Popover>
@@ -698,14 +708,14 @@ export default function GuestsPage() {
                     <FormItem>
                       <FormLabel>Notes</FormLabel>
                       <FormControl>
-                        <Textarea {...field} placeholder="Additional notes about the guest" rows={3} />
+                        <Textarea {...field} value={field.value || ""} placeholder="Additional notes about the guest" rows={3} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Button type="submit" className="flex-1" disabled={updateGuestMutation.isPending}>
                     {updateGuestMutation.isPending ? "Updating..." : "Update Guest"}
                   </Button>
