@@ -1,79 +1,115 @@
 # Hotel Management System
 
 ## Overview
-This comprehensive multi-role hotel management system streamlines all aspects of hotel operations, supporting 15 distinct user roles from Super Admin to front-line staff. It centralizes management of room reservations, restaurant operations, housekeeping, security, finance, and administration. Key capabilities include role-based authentication, real-time duty status tracking, thermal printer integration, a KOT (Kitchen Order Ticket) system with inventory management, comprehensive audit logging, and support for multiple payment methods (cash, POS, Fonepay) with detailed financial tracking. The system also features a complete meal plan system (EP, BB, AP, MAP) with configurable pricing, and an overhauled storekeeper inventory management system with dual unit tracking, transaction history, and maintenance requests. The project aims to provide a robust, scalable, and intuitive solution for modern hotel management, enhancing operational efficiency and guest satisfaction.
+A comprehensive hotel management system built with React, TypeScript, Express, and PostgreSQL. This application provides role-based dashboards for various hotel staff including super admin, owner, manager, front desk, housekeeping, restaurant/bar management, security, finance, and more.
 
-## User Preferences
-Preferred communication style: Simple, everyday language.
+## Tech Stack
+- **Frontend**: React 18, TypeScript, Vite, Wouter (routing), TailwindCSS, shadcn/ui
+- **Backend**: Express.js, Node.js
+- **Database**: PostgreSQL with Drizzle ORM
+- **Authentication**: Passport.js with local strategy
+- **UI Components**: Radix UI primitives, Lucide icons
+- **State Management**: TanStack Query
+
+## Project Structure
+```
+├── client/               # Frontend React application
+│   ├── src/
+│   │   ├── components/  # Reusable UI components
+│   │   ├── pages/       # Page components and dashboards
+│   │   ├── lib/         # Utility functions
+│   │   └── hooks/       # Custom React hooks
+├── server/              # Backend Express application
+│   ├── index.ts        # Server entry point
+│   ├── routes.ts       # API routes
+│   ├── storage.ts      # Database access layer
+│   ├── auth.ts         # Authentication setup
+│   └── db.ts           # Database connection
+├── shared/             # Shared types and schemas
+│   └── schema.ts       # Drizzle schema definitions
+└── attached_assets/    # Static assets
+```
+
+## Development Setup
+
+### Environment Variables
+The following environment variables are automatically configured:
+- `DATABASE_URL` - PostgreSQL connection string
+- `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` - Individual PostgreSQL credentials
+
+### Running the Application
+1. Install dependencies: `npm install`
+2. Push database schema: `npm run db:push`
+3. Seed the database: `npm run db:seed`
+4. Start development server: `npm run dev`
+
+The application will be available at http://localhost:5000
+
+### Building for Production
+1. Build: `npm run build`
+2. Start: `npm run start`
+
+## Database Management
+
+### Schema Changes
+- Modify schema in `shared/schema.ts`
+- Push changes: `npm run db:push` (or `npm run db:push --force` if warned about data loss)
+- Never manually write SQL migrations - use Drizzle Kit
+
+### Seeding
+Run `npm run db:seed` to populate the database with:
+- All role definitions (17 roles)
+- Role creation permissions
+- A superadmin user for initial login
+
+## Default Credentials
+**Superadmin Account:**
+- Username: `superadmin`
+- Password: `aef009750905865270b03eb27ceba80e`
+
+## Features
+- Multi-role authentication system
+- Hotel setup and management
+- Room and hall management
+- Restaurant and bar operations (KOT, billing, menu management)
+- Inventory tracking and consumption
+- Staff management and attendance
+- Task assignment and tracking
+- Maintenance request handling
+- Financial management (transactions, payments, expenses)
+- Vendor management
+- Leave request system
+- Vehicle logging
+- Security and surveillance features
+
+## Roles and Dashboards
+- Super Admin - Full system access across hotels
+- Owner - Hotel owner dashboard with financial overview
+- Manager - Hotel operations management
+- Front Desk - Guest check-in/out and reservations
+- Housekeeping (Supervisor & Staff) - Room cleaning and maintenance
+- Restaurant/Bar Manager - F&B operations
+- Waiter - Order taking and billing
+- Kitchen Staff - KOT management
+- Bartender/Barista - Beverage service
+- Security (Head & Guard) - Access control
+- Surveillance Officer - Monitoring and vehicle logs
+- Finance - Financial operations and reporting
+- Cashier - Payment processing
+- Storekeeper - Inventory management
 
 ## Recent Changes
-- **October 3, 2025**: Added `zip` field to hotels table for thermal billing support. Fixed finance dashboard to fetch vendors from correct API route (`/api/hotels/current/vendors`). Fixed front desk to fetch hotel details from `/api/hotels/current` for proper thermal bill generation with all required information (hotel name, address, zip, phone, VAT no, and taxes).
+- 2025-10-03: Initial Replit setup completed
+  - Configured PostgreSQL database
+  - Pushed database schema with Drizzle
+  - Seeded initial data (roles and superadmin user)
+  - Set up development workflow on port 5000
+  - Configured deployment settings for autoscale
 
-## System Architecture
-
-### UI/UX Decisions
-- **Framework**: React 18 with TypeScript.
-- **UI Components**: Shadcn/ui built on Radix UI primitives for accessibility.
-- **Styling**: Tailwind CSS with custom design tokens.
-- **Routing**: Wouter for lightweight client-side routing with role-based protected routes.
-- **Design Philosophy**: Professional, modern, and intuitive interfaces focused on role-specific workflows.
-
-### Technical Implementations
-- **Backend**: Node.js with Express.js for REST API endpoints.
-- **Language**: TypeScript for both frontend and backend.
-- **State Management**: React Query (TanStack Query) for server state management.
-- **Authentication**: Passport.js with local strategy, session-based authentication using Express sessions and a PostgreSQL session store. Password hashing via Node.js crypto module (scrypt).
-- **Database**: PostgreSQL (Neon serverless hosting) with Drizzle ORM.
-- **Real-time Features**: Duty status toggles, live task assignment, and attendance tracking.
-- **Form Management**: React Hook Form with Zod for validation.
-- **Date Handling**: `date-fns` for date and time manipulations.
-- **Printing**: Browser-based HTML print formatting for thermal printer compatibility (ESC/POS).
-
-### Feature Specifications
-- **Multi-Role System**: 15 distinct, hierarchical user roles with granular permission control.
-- **Meal Plan System**: Supports EP, BB, AP, MAP with configurable pricing and integration into guest check-in.
-- **Inventory Management**: Automatic stock deduction, dual unit tracking, transaction history, low stock alerts, and maintenance requests.
-- **Financial Tracking**: Comprehensive transaction recording, cascading tax calculation, voucher system, and multi-payment method support.
-- **Audit Logging**: Soft-delete functionality and detailed audit trails.
-- **Maintenance & Tasks**: Integrated task and maintenance request management with photo upload.
-- **Billing System**: Dynamic billing with order quantity editing, voucher discounts, and multi-payment options, including accurate multi-day room and meal plan calculations and cascading tax integration.
-- **Staff Management**: Attendance tracking, duty status toggles, task assignment, and leave request management.
-- **Vehicle Management**: Vehicle check-in/check-out logging.
-
-### System Design Choices
-- **Scalability**: Serverless PostgreSQL hosting.
-- **Security**: Secure session management (HTTP-only cookies, CSRF protection), role-based access control, and custom password reset.
-- **Data Integrity**: Foreign key constraints and role-based data isolation.
-- **Development**: Vite for fast development and optimized builds.
-- **Route Organization**: Specific routes (e.g., `/api/hotels/current/*`) must be defined BEFORE parameterized routes (e.g., `/api/hotels/:hotelId/*`) to prevent conflicts.
-
-## External Dependencies
-
-### Database & Infrastructure
-- **@neondatabase/serverless**: Serverless PostgreSQL hosting.
-- **drizzle-orm**: Type-safe ORM for PostgreSQL.
-- **connect-pg-simple**: PostgreSQL session store for Express.
-
-### Authentication & Security
-- **passport**: Authentication middleware.
-- **express-session**: Session management middleware.
-
-### UI & Styling
-- **@radix-ui/react-***: Accessible UI primitives.
-- **tailwindcss**: Utility-first CSS framework.
-- **lucide-react**: Icon library.
-
-### Development & Build Tools
-- **vite**: Fast build tool.
-- **typescript**: Static type checking.
-
-### Form Management & Validation
-- **react-hook-form**: Performant form handling.
-- **zod**: Runtime type validation.
-
-### Date & Time Handling
-- **date-fns**: Date utility library.
-
-### External Service Integrations
-- **Thermal Printer Support**: Browser-based printing APIs for ESC/POS command compatibility.
-- **Payment Processing**: Integration for cash, POS, and Fonepay payment methods.
+## Development Notes
+- The application uses a unified server on port 5000 for both frontend and backend
+- Vite dev server is integrated with Express in development mode
+- Hot module replacement (HMR) is enabled for frontend development
+- All API routes are prefixed with `/api`
+- The application uses PostgreSQL with Drizzle ORM for type-safe database operations
+- Timezone is set to Asia/Kathmandu for the application
