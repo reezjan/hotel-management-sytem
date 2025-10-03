@@ -62,6 +62,7 @@ import FinanceCashFlow from "@/pages/dashboard/finance/cashflow";
 import FinanceReconciliation from "@/pages/dashboard/finance/reconciliation";
 import FinanceReports from "@/pages/dashboard/finance/reports";
 import FrontDeskDashboard from "@/pages/dashboard/front-desk";
+import GuestsPage from "@/pages/dashboard/guests";
 import StorekeeperDashboard from "@/pages/dashboard/storekeeper";
 import StorekeeperDutyStatus from "@/pages/dashboard/storekeeper/duty-status";
 import StorekeeperInventoryTracking from "@/pages/dashboard/storekeeper/inventory-tracking";
@@ -134,6 +135,7 @@ function Router() {
       <ProtectedRoute path="/finance" component={FinanceDashboard} allowedRoles={["finance"]} />
       
       <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
+      <ProtectedRoute path="/guests" component={GuestsPage} allowedRoles={["front_desk", "manager", "owner"]} />
       
       {/* Storekeeper Routes */}
       <ProtectedRoute path="/storekeeper" component={StorekeeperDashboard} allowedRoles={["storekeeper"]} />
