@@ -29,6 +29,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'owner': {
         'dashboard': '/owner',
+        'guests': '/guests',
         'financial': '/owner/financial',
         'inventory': '/owner/inventory',
         'occupancy': '/owner/occupancy',
@@ -38,6 +39,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'manager': {
         'dashboard': '/manager',
+        'guests': '/guests',
         'staff': '/manager/staff',
         'payments': '/manager/vendor-payments',
         'vouchers': '/manager/discount-vouchers',
@@ -103,6 +105,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'front_desk': {
         'dashboard': '/front-desk',
+        'guests': '/guests',
         'duty': '/duty-status',
         'tasks': '/task-management',
         'checkin': '/check-in-out',

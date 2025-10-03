@@ -128,6 +128,7 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.OWNER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
+    { icon: 'Users', label: 'Guest Management', id: 'guests' },
     { icon: 'PieChart', label: 'Financial Overview', id: 'financial' },
     { icon: 'Package', label: 'Inventory Tracking', id: 'inventory' },
     { icon: 'Bed', label: 'Room Occupancy', id: 'occupancy' },
@@ -137,6 +138,7 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.MANAGER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
+    { icon: 'Users', label: 'Guest Management', id: 'guests' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
     { icon: 'CreditCard', label: 'Vendor Payments', id: 'payments' },
     { icon: 'Tag', label: 'Discount Vouchers', id: 'vouchers' },
@@ -150,7 +152,8 @@ export const NAVIGATION_ITEMS = {
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' }
   ],
   [ROLES.FRONT_DESK]: [
-    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' }
+    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
+    { icon: 'Users', label: 'Guest Management', id: 'guests' }
   ],
   [ROLES.HOUSEKEEPING_SUPERVISOR]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
