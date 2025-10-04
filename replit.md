@@ -102,15 +102,33 @@ Note: For security, the password is not stored in this file. Run the seed comman
 - Storekeeper - Inventory management
 
 ## Recent Changes
-- 2025-10-03: GitHub Project Import - Replit Setup Completed
+- 2025-10-04: Removed Automatic Inventory Deduction
+  - Removed unused `processInventoryDeduction` function from server/storage.ts
+  - Cleaned up all commented-out inventory deduction code in KOT operations
+  - KOT (Kitchen Order Ticket) operations now work without automatic inventory deduction
+  - Housekeeping staff operations have no automatic inventory deduction (feature never existed)
+  - Manual inventory management is still available through the inventory management pages
+
+- 2025-10-04: GitHub Project Import - Fresh Clone Setup Completed
+  - Verified PostgreSQL database connection (existing from previous setup)
+  - All npm dependencies already installed and verified
+  - Database schema pushed using Drizzle Kit - no changes detected
+  - Database re-seeded with fresh data:
+    - 17 roles created (super_admin, owner, manager, housekeeping, restaurant/bar staff, security, finance, etc.)
+    - Role creation permissions configured
+    - Superadmin user created (username: `superadmin`, password: `aef009750905865270b03eb27ceba80e`)
+  - Configured "Start application" workflow on port 5000 with webview output
+  - Removed old "Server" workflow to avoid duplication
+  - Configured deployment for autoscale (build: `npm run build`, run: `npm run start`)
+  - Application verified running successfully - login page accessible at port 5000
+  - Existing configuration confirmed working: host `0.0.0.0`, `allowedHosts: true` for Replit proxy
+
+- 2025-10-03: GitHub Project Import - Initial Replit Setup
   - Created PostgreSQL database and configured environment variables
   - Installed all npm dependencies
   - Pushed database schema using Drizzle Kit
-  - Seeded database with 17 roles and superadmin user (username: `superadmin`, password visible in seed output)
+  - Seeded database with 17 roles and superadmin user
   - Configured "Start application" workflow on port 5000 with webview output
-  - Removed duplicate "Server" workflow
-  - Configured deployment for autoscale with build and start commands
-  - Verified application is running successfully with login page accessible
   - Application properly configured with host `0.0.0.0` and `allowedHosts: true` for Replit proxy compatibility
 
 ## Development Notes
