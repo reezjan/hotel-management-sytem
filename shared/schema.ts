@@ -184,6 +184,7 @@ export const inventoryItems = pgTable("inventory_items", {
   reorderLevel: numeric("reorder_level", { precision: 12, scale: 3 }).default('0'),
   storageLocation: text("storage_location"),
   costPerUnit: numeric("cost_per_unit", { precision: 12, scale: 2 }).default('0'),
+  departments: text("departments").array().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true })

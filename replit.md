@@ -102,7 +102,58 @@ Note: For security, the password is not stored in this file. Run the seed comman
 - Storekeeper - Inventory management
 
 ## Recent Changes
-- 2025-10-04: Fixed Inventory Endpoint Errors Across Multiple Dashboards (Latest)
+- 2025-10-04: Fixed Owner Inventory Showing Out of Stock When Stock Exists (Latest)
+  - Fixed critical bug where owner saw "Out of Stock" for items that storekeeper showed as in stock
+  - Root cause: Owner dashboard was reading `stockQty` (deprecated/unused field always at 0), while storekeeper reads `baseStockQty` (actual stock)
+  - The database schema uses two active stock fields:
+    - `baseStockQty` - Stock in base units (kg, liters, pieces, etc.)
+    - `packageStockQty` - Stock in package units (sacks, boxes, etc.)
+    - `stockQty` - Legacy field that's no longer used
+  - Changed all owner inventory displays to use `baseStockQty` instead of `stockQty`
+  - Updated stock display to show both base and package units: "2200.00 kg (55.00 Sack)"
+  - Updated all inventory metrics (low stock, out of stock, items in stock) to use correct field
+  - Affected files:
+    - `client/src/pages/dashboard/owner/inventory-tracking.tsx`
+    - `client/src/pages/dashboard/owner.tsx`
+  - Owner now sees accurate stock levels matching what the storekeeper sees
+
+- 2025-10-04: Fixed Owner Inventory Display - Missing Details and Incorrect Field
+  - Fixed inventory value calculation using wrong field name (`price` → `costPerUnit`)
+  - Root cause: Frontend was accessing non-existent `item.price` field, should be `item.costPerUnit`
+  - Added missing inventory columns to owner's inventory tracking page:
+    - Description - Item description for better identification
+    - Cost per Unit - Shows NPR cost formatted to 2 decimal places
+    - Storage Location - Shows where items are stored
+  - Total inventory value now calculates correctly using costPerUnit
+  - Affected file: `client/src/pages/dashboard/owner/inventory-tracking.tsx`
+  - Owner can now see complete inventory details including costs and storage locations
+
+- 2025-10-04: Fresh GitHub Import - Replit Environment Setup Completed
+  - **Database Setup:**
+    - Created PostgreSQL database using Replit's database tool
+    - Environment variables configured automatically: DATABASE_URL, PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
+    - Pushed database schema successfully using `npm run db:push`
+    - Database seeded with initial data using `npm run db:seed`
+  - **Initial Data Created:**
+    - 17 role definitions (super_admin, owner, manager, front_desk, housekeeping_supervisor, housekeeping_staff, restaurant_bar_manager, waiter, kitchen_staff, bartender, barista, security_head, security_guard, surveillance_officer, finance, cashier, storekeeper)
+    - Role creation permissions configured
+    - Superadmin user created with username: `superadmin`, password: `aef009750905865270b03eb27ceba80e`
+  - **Workflow Configuration:**
+    - Removed old "Server" workflow to prevent conflicts
+    - Configured "Start application" workflow on port 5000 with webview output type
+    - Workflow command: `npm run dev` (runs Express server with integrated Vite dev server)
+  - **Deployment Configuration:**
+    - Deployment target: autoscale (for stateless web applications)
+    - Build command: `npm run build`
+    - Run command: `npm run start`
+  - **Verification:**
+    - Application running successfully on port 5000
+    - Login page accessible and rendering correctly
+    - Vite HMR connected and working
+    - All existing configuration verified: host `0.0.0.0`, `allowedHosts: true` for Replit proxy support
+  - **Notes:** All npm dependencies were already installed. The application was ready to run after database setup and workflow configuration.
+
+- 2025-10-04: Fixed Inventory Endpoint Errors Across Multiple Dashboards
   - Fixed 500 errors when fetching inventory items in owner, kitchen, bar, and restaurant manager dashboards
   - Root cause: Multiple pages were calling non-existent `/api/hotels/current/inventory` endpoint
   - Solution: Updated all pages to use correct `/api/hotels/current/inventory-items` endpoint
