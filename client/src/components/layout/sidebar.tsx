@@ -51,11 +51,11 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'housekeeping_supervisor': {
         'dashboard': '/housekeeping-supervisor',
-        'staff': '/staff-management',
-        'duty': '/duty-tracking',
-        'tasks': '/task-assignment',
-        'maintenance': '/maintenance-requests',
-        'tracking': '/staff-tracking'
+        'staff': '/housekeeping-supervisor/staff-management',
+        'duty': '/housekeeping-supervisor/duty-tracking',
+        'tasks': '/housekeeping-supervisor/task-assignment',
+        'maintenance': '/housekeeping-supervisor/maintenance-requests',
+        'tracking': '/housekeeping-supervisor/staff-tracking'
       },
       'restaurant_bar_manager': {
         'dashboard': '/restaurant-bar-manager',
@@ -123,9 +123,9 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'housekeeping_staff': {
         'dashboard': '/housekeeping-staff',
-        'duty': '/duty-status',
-        'tasks': '/my-tasks',
-        'maintenance': '/maintenance-reports'
+        'duty': '/housekeeping-staff/duty-status',
+        'tasks': '/housekeeping-staff/my-tasks',
+        'maintenance': '/housekeeping-staff/maintenance-reports'
       },
       'kitchen_staff': {
         'dashboard': '/kitchen-staff',

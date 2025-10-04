@@ -26,7 +26,15 @@ import ManagerTransactions from "@/pages/dashboard/manager/transactions";
 import ManagerLeaveApprovals from "@/pages/dashboard/manager/leave-approvals";
 import ManagerMealPlans from "@/pages/dashboard/manager/meal-plans";
 import HousekeepingSupervisorDashboard from "@/pages/dashboard/housekeeping-supervisor";
+import HousekeepingSupervisorStaffManagement from "@/pages/dashboard/housekeeping-supervisor/staff-management";
+import HousekeepingSupervisorDutyTracking from "@/pages/dashboard/housekeeping-supervisor/duty-tracking";
+import HousekeepingSupervisorTaskAssignment from "@/pages/dashboard/housekeeping-supervisor/task-assignment";
+import HousekeepingSupervisorMaintenanceRequests from "@/pages/dashboard/housekeeping-supervisor/maintenance-requests";
+import HousekeepingSupervisorStaffTracking from "@/pages/dashboard/housekeeping-supervisor/staff-tracking";
 import HousekeepingStaffDashboard from "@/pages/dashboard/housekeeping-staff";
+import HousekeepingStaffDutyStatus from "@/pages/dashboard/housekeeping-staff/duty-status";
+import HousekeepingStaffMyTasks from "@/pages/dashboard/housekeeping-staff/my-tasks";
+import HousekeepingStaffMaintenanceReports from "@/pages/dashboard/housekeeping-staff/maintenance-reports";
 import RestaurantBarManagerDashboard from "@/pages/dashboard/restaurant-bar-manager";
 import RestaurantStaffManagement from "@/pages/dashboard/restaurant-bar-manager/staff-management";
 import RestaurantTaskAssignment from "@/pages/dashboard/restaurant-bar-manager/task-assignment";
@@ -96,7 +104,15 @@ function Router() {
       <ProtectedRoute path="/manager/transactions" component={ManagerTransactions} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/housekeeping-supervisor" component={HousekeepingSupervisorDashboard} allowedRoles={["housekeeping_supervisor"]} />
+      <ProtectedRoute path="/housekeeping-supervisor/staff-management" component={HousekeepingSupervisorStaffManagement} allowedRoles={["housekeeping_supervisor"]} />
+      <ProtectedRoute path="/housekeeping-supervisor/duty-tracking" component={HousekeepingSupervisorDutyTracking} allowedRoles={["housekeeping_supervisor"]} />
+      <ProtectedRoute path="/housekeeping-supervisor/task-assignment" component={HousekeepingSupervisorTaskAssignment} allowedRoles={["housekeeping_supervisor"]} />
+      <ProtectedRoute path="/housekeeping-supervisor/maintenance-requests" component={HousekeepingSupervisorMaintenanceRequests} allowedRoles={["housekeeping_supervisor"]} />
+      <ProtectedRoute path="/housekeeping-supervisor/staff-tracking" component={HousekeepingSupervisorStaffTracking} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-staff" component={HousekeepingStaffDashboard} allowedRoles={["housekeeping_staff"]} />
+      <ProtectedRoute path="/housekeeping-staff/duty-status" component={HousekeepingStaffDutyStatus} allowedRoles={["housekeeping_staff"]} />
+      <ProtectedRoute path="/housekeeping-staff/my-tasks" component={HousekeepingStaffMyTasks} allowedRoles={["housekeeping_staff"]} />
+      <ProtectedRoute path="/housekeeping-staff/maintenance-reports" component={HousekeepingStaffMaintenanceReports} allowedRoles={["housekeeping_staff"]} />
       <ProtectedRoute path="/restaurant-bar-manager" component={RestaurantBarManagerDashboard} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/staff-management" component={RestaurantStaffManagement} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/task-assignment" component={RestaurantTaskAssignment} allowedRoles={["restaurant_bar_manager"]} />
