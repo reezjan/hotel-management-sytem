@@ -1208,46 +1208,6 @@ export class DatabaseStorage implements IStorage {
     return transaction;
   }
 
-  // Recipe-based inventory deduction for KOT operations
-  async processInventoryDeduction(menuItemId: string, quantity: number, kotId: string, operation: 'add' | 'subtract' = 'subtract'): Promise<void> {
-    // Get the menu item with its recipe
-    const menuItem = await this.getMenuItem(menuItemId);
-    if (!menuItem || !menuItem.recipe) {
-      return; // No recipe defined, nothing to deduct
-    }
-
-    const recipe = menuItem.recipe as any[];
-    const multiplier = operation === 'subtract' ? -quantity : quantity;
-
-    // Process each ingredient in the recipe
-    for (const ingredient of recipe) {
-      const { inventory_id, quantity: recipeQty } = ingredient;
-      const totalQtyToDeduct = parseFloat(recipeQty) * multiplier;
-
-      // Update inventory stock
-      await db
-        .update(inventoryItems)
-        .set({ 
-          stockQty: sql`stock_qty + ${totalQtyToDeduct}`,
-          updatedAt: new Date()
-        })
-        .where(eq(inventoryItems.id, inventory_id));
-
-      // Record the consumption in inventory_consumptions table
-      await db
-        .insert(inventoryConsumptions)
-        .values({
-          hotelId: menuItem.hotelId,
-          itemId: inventory_id,
-          qty: totalQtyToDeduct.toString(),
-          reason: operation === 'subtract' ? 'KOT Order Consumption' : 'KOT Order Cancellation',
-          referenceEntity: `kot_order:${kotId}`,
-          createdBy: null // System operation
-        });
-    }
-  }
-
-  // Enhanced KOT operations with inventory deduction
   async createKotOrderWithItems(kotData: any, items: any[]): Promise<KotOrder> {
     // Create the KOT order first
     const [kot] = await db
@@ -1255,80 +1215,28 @@ export class DatabaseStorage implements IStorage {
       .values(kotData)
       .returning();
 
-    // Process each KOT item and handle inventory deduction
+    // Insert each KOT item
     for (const item of items) {
-      // Insert the KOT item
       await db
         .insert(kotItems)
         .values({
           ...item,
           kotId: kot.id
         });
-
-      // NOTE: Automatic inventory deduction removed as per user request
-      // Process inventory deduction if menu item has a recipe
-      // if (item.menuItemId) {
-      //   await this.processInventoryDeduction(
-      //     item.menuItemId, 
-      //     item.qty || 1, 
-      //     kot.id, 
-      //     'subtract'
-      //   );
-      // }
     }
 
     return kot;
   }
 
   async updateKotItemQuantity(kotItemId: string, oldQty: number, newQty: number): Promise<void> {
-    // Get the KOT item to find the menu item
-    const [kotItem] = await db
-      .select()
-      .from(kotItems)
-      .where(eq(kotItems.id, kotItemId));
-
-    if (!kotItem || !kotItem.menuItemId) {
-      return;
-    }
-
-    // Calculate the difference in quantity
-    const qtyDifference = newQty - oldQty;
-
     // Update the KOT item quantity
     await db
       .update(kotItems)
       .set({ qty: newQty })
       .where(eq(kotItems.id, kotItemId));
-
-    // NOTE: Automatic inventory deduction removed as per user request
-    // Adjust inventory based on quantity difference
-    // if (qtyDifference !== 0 && kotItem.menuItemId && kotItem.kotId) {
-    //   await this.processInventoryDeduction(
-    //     kotItem.menuItemId,
-    //     Math.abs(qtyDifference),
-    //     kotItem.kotId,
-    //     qtyDifference > 0 ? 'subtract' : 'add'
-    //   );
-    // }
   }
 
   async deleteKotOrderWithInventoryRestore(kotId: string): Promise<void> {
-    // Get all KOT items for this order
-    const kotItemsList = await this.getKotItems(kotId);
-
-    // NOTE: Automatic inventory deduction removed as per user request
-    // Restore inventory for each item
-    // for (const item of kotItemsList) {
-    //   if (item.menuItemId) {
-    //     await this.processInventoryDeduction(
-    //       item.menuItemId,
-    //       item.qty || 1,
-    //       kotId,
-    //       'add' // Restore inventory
-    //     );
-    //   }
-    // }
-
     // Delete the KOT items
     await db
       .delete(kotItems)
