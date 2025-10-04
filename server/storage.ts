@@ -1265,15 +1265,16 @@ export class DatabaseStorage implements IStorage {
           kotId: kot.id
         });
 
+      // NOTE: Automatic inventory deduction removed as per user request
       // Process inventory deduction if menu item has a recipe
-      if (item.menuItemId) {
-        await this.processInventoryDeduction(
-          item.menuItemId, 
-          item.qty || 1, 
-          kot.id, 
-          'subtract'
-        );
-      }
+      // if (item.menuItemId) {
+      //   await this.processInventoryDeduction(
+      //     item.menuItemId, 
+      //     item.qty || 1, 
+      //     kot.id, 
+      //     'subtract'
+      //   );
+      // }
     }
 
     return kot;
@@ -1299,32 +1300,34 @@ export class DatabaseStorage implements IStorage {
       .set({ qty: newQty })
       .where(eq(kotItems.id, kotItemId));
 
+    // NOTE: Automatic inventory deduction removed as per user request
     // Adjust inventory based on quantity difference
-    if (qtyDifference !== 0 && kotItem.menuItemId && kotItem.kotId) {
-      await this.processInventoryDeduction(
-        kotItem.menuItemId,
-        Math.abs(qtyDifference),
-        kotItem.kotId,
-        qtyDifference > 0 ? 'subtract' : 'add'
-      );
-    }
+    // if (qtyDifference !== 0 && kotItem.menuItemId && kotItem.kotId) {
+    //   await this.processInventoryDeduction(
+    //     kotItem.menuItemId,
+    //     Math.abs(qtyDifference),
+    //     kotItem.kotId,
+    //     qtyDifference > 0 ? 'subtract' : 'add'
+    //   );
+    // }
   }
 
   async deleteKotOrderWithInventoryRestore(kotId: string): Promise<void> {
     // Get all KOT items for this order
     const kotItemsList = await this.getKotItems(kotId);
 
+    // NOTE: Automatic inventory deduction removed as per user request
     // Restore inventory for each item
-    for (const item of kotItemsList) {
-      if (item.menuItemId) {
-        await this.processInventoryDeduction(
-          item.menuItemId,
-          item.qty || 1,
-          kotId,
-          'add' // Restore inventory
-        );
-      }
-    }
+    // for (const item of kotItemsList) {
+    //   if (item.menuItemId) {
+    //     await this.processInventoryDeduction(
+    //       item.menuItemId,
+    //       item.qty || 1,
+    //       kotId,
+    //       'add' // Restore inventory
+    //     );
+    //   }
+    // }
 
     // Delete the KOT items
     await db
