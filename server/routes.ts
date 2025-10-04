@@ -349,13 +349,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/hotels/current/inventory-items", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
-      const items = await storage.getInventoryItemsByHotel(user.hotelId);
+      let items = await storage.getInventoryItemsByHotel(user.hotelId);
+      
+      // Filter items by department for restaurant_bar_manager
+      const userRole = user.role?.name || '';
+      if (userRole === 'restaurant_bar_manager') {
+        // Restaurant bar manager can see items for kitchen, bar, and barista departments
+        const allowedDepartments = ['kitchen', 'bar', 'barista'];
+        items = items.filter((item: any) => {
+          if (!item.departments || item.departments.length === 0) return true; // Show items with no department restriction
+          return item.departments.some((dept: string) => allowedDepartments.includes(dept.toLowerCase()));
+        });
+      }
+      
       res.json(items);
     } catch (error) {
+      console.error("Error fetching inventory items:", error);
       res.status(500).json({ message: "Failed to fetch inventory items" });
     }
   });

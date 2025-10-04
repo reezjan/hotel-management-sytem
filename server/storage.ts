@@ -1267,13 +1267,64 @@ export class DatabaseStorage implements IStorage {
       .values(kotData)
       .returning();
 
-    // Insert each KOT item
+    // Insert each KOT item and handle inventory deduction for items with recipes
     for (const item of items) {
+      let inventoryUsage = null;
+
+      // If the item has a menuItemId, check if it has a recipe with ingredients
+      if (item.menuItemId) {
+        const menuItem = await db.query.menuItems.findFirst({
+          where: (menuItemsTable, { eq }) => eq(menuItemsTable.id, item.menuItemId)
+        });
+
+        if (menuItem?.recipe?.ingredients && Array.isArray(menuItem.recipe.ingredients)) {
+          const ingredients = menuItem.recipe.ingredients;
+          const usageRecords = [];
+
+          // Deduct inventory for each ingredient
+          for (const ingredient of ingredients) {
+            if (ingredient.inventoryItemId && ingredient.quantity) {
+              const quantityToDeduct = ingredient.quantity * (item.qty || 1);
+              
+              // Update inventory quantity
+              const inventoryItem = await db.query.inventoryItems.findFirst({
+                where: (inventoryItemsTable, { eq }) => eq(inventoryItemsTable.id, ingredient.inventoryItemId)
+              });
+
+              if (inventoryItem) {
+                const newQuantity = (inventoryItem.quantity || 0) - quantityToDeduct;
+                
+                await db
+                  .update(inventoryItems)
+                  .set({ 
+                    quantity: newQuantity,
+                    updatedAt: new Date()
+                  })
+                  .where(eq(inventoryItems.id, ingredient.inventoryItemId));
+
+                usageRecords.push({
+                  inventoryItemId: ingredient.inventoryItemId,
+                  inventoryItemName: inventoryItem.name,
+                  quantityUsed: quantityToDeduct,
+                  unit: inventoryItem.baseUnit
+                });
+              }
+            }
+          }
+
+          if (usageRecords.length > 0) {
+            inventoryUsage = { usedIngredients: usageRecords };
+          }
+        }
+      }
+
+      // Insert the KOT item with inventory usage record
       await db
         .insert(kotItems)
         .values({
           ...item,
-          kotId: kot.id
+          kotId: kot.id,
+          inventoryUsage
         });
     }
 
