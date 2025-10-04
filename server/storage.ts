@@ -108,6 +108,7 @@ export interface IStorage {
   // Role operations
   getAllRoles(): Promise<Role[]>;
   getRoleByName(name: string): Promise<Role | undefined>;
+  getRole(id: number): Promise<Role | undefined>;
   
   // Room operations
   getRoomsByHotel(hotelId: string): Promise<Room[]>;
@@ -451,6 +452,14 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(roles)
       .where(eq(roles.name, name));
+    return role || undefined;
+  }
+
+  async getRole(id: number): Promise<Role | undefined> {
+    const [role] = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.id, id));
     return role || undefined;
   }
 

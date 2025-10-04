@@ -711,7 +711,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const task = await storage.createTask(taskData);
       res.status(201).json(task);
     } catch (error) {
-      res.status(400).json({ message: "Invalid task data" });
+      console.error("Task creation error:", error);
+      if (error && typeof error === 'object' && 'errors' in error) {
+        // Zod validation errors
+        res.status(400).json({ 
+          message: "Invalid task data", 
+          errors: (error.errors as any[]).map((e: any) => `${e.path.join('.')}: ${e.message}`)
+        });
+      } else {
+        res.status(400).json({ message: (error as any)?.message || "Invalid task data" });
+      }
     }
   });
 
@@ -1508,16 +1517,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle role conversion and password hashing
       const { role, password, confirmPassword, firstName, lastName, ...userData } = req.body;
       
-      // Get role ID from role name
+      // Get role ID from role name, or role name from role ID
       let roleId = userData.roleId;
       let targetRoleName = role;
+      
       if (role && !roleId) {
+        // Case 1: role name provided, get role ID
         const roleRecord = await storage.getRoleByName(role);
         if (roleRecord) {
           roleId = roleRecord.id;
           targetRoleName = roleRecord.name;
         } else {
           return res.status(400).json({ message: `Role '${role}' not found` });
+        }
+      } else if (roleId && !role) {
+        // Case 2: role ID provided, get role name
+        const roleRecord = await storage.getRole(roleId);
+        if (roleRecord) {
+          targetRoleName = roleRecord.name;
+        } else {
+          return res.status(400).json({ message: `Role with ID '${roleId}' not found` });
         }
       }
 
