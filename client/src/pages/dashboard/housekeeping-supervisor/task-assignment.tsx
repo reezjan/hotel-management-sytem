@@ -107,11 +107,12 @@ export default function HousekeepingSupervisorTaskAssignment() {
       return;
     }
 
+    const { dueDateTime, ...taskData } = data;
     createTaskMutation.mutate({
-      ...data,
+      ...taskData,
       hotelId: user?.hotelId,
       createdBy: user?.id,
-      dueDate: data.dueDateTime || null
+      dueDate: dueDateTime || null
     });
   };
 

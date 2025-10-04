@@ -5,10 +5,11 @@ import { StatsCard } from "@/components/dashboard/stats-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { CheckSquare, Clock, Wrench, AlertTriangle } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CheckSquare, Clock, Wrench, Send } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,14 +21,14 @@ export default function HousekeepingStaffDashboard() {
   const queryClient = useQueryClient();
   const [selectedTask, setSelectedTask] = useState<any>(null);
 
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [location, setLocation] = useState("");
+  const [photo, setPhoto] = useState<string>("");
+
   const { data: tasks = [] } = useQuery<any[]>({
     queryKey: ["/api/users", user?.id, "tasks"]
-  });
-
-  const form = useForm({
-    defaultValues: {
-      description: ""
-    }
   });
 
   const updateTaskMutation = useMutation({
@@ -42,18 +43,24 @@ export default function HousekeepingStaffDashboard() {
   });
 
   const createMaintenanceRequestMutation = useMutation({
-    mutationFn: async (data: any) => {
-      await apiRequest("POST", "/api/maintenance-requests", {
-        hotelId: user?.hotelId,
-        raisedBy: user?.id,
-        department: "housekeeping",
-        description: data.description,
-        status: "open"
-      });
+    mutationFn: async (requestData: any) => {
+      await apiRequest("POST", "/api/hotels/current/maintenance-requests", requestData);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/maintenance-requests"] });
       toast({ title: "Maintenance request submitted successfully" });
-      form.reset();
+      setTitle("");
+      setDescription("");
+      setPriority("medium");
+      setLocation("");
+      setPhoto("");
+    },
+    onError: () => {
+      toast({ 
+        title: "Failed to submit request", 
+        description: "Please try again later",
+        variant: "destructive" 
+      });
     }
   });
 
@@ -69,8 +76,39 @@ export default function HousekeepingStaffDashboard() {
     updateTaskMutation.mutate({ taskId: task.id, status: newStatus });
   };
 
-  const onSubmitMaintenanceRequest = (data: any) => {
-    createMaintenanceRequestMutation.mutate(data);
+  const handleMaintenanceSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!title || !description || !location || !photo) {
+      toast({ 
+        title: "Missing information", 
+        description: "Please fill in all required fields including photo",
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    createMaintenanceRequestMutation.mutate({
+      title,
+      description,
+      priority,
+      location,
+      photo,
+      status: 'pending'
+    });
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'medium':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low':
+        return 'bg-green-100 text-green-800 border-green-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
   };
 
   return (
@@ -129,6 +167,9 @@ export default function HousekeepingStaffDashboard() {
                         <h4 className="font-medium text-foreground">{task.title}</h4>
                         <p className="text-sm text-muted-foreground">{task.description}</p>
                         <div className="flex items-center space-x-2 mt-2">
+                          <Badge className={getPriorityColor(task.priority)} variant="outline">
+                            {task.priority?.toUpperCase() || 'MEDIUM'}
+                          </Badge>
                           <Badge className={getStatusColor(task.status)} variant="secondary">
                             {task.status}
                           </Badge>
@@ -169,105 +210,110 @@ export default function HousekeepingStaffDashboard() {
           {/* Maintenance Request */}
           <Card>
             <CardHeader>
-              <CardTitle>Report Maintenance Issue</CardTitle>
+              <CardTitle className="flex items-center">
+                <Send className="h-5 w-5 mr-2" />
+                Submit Maintenance Request
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmitMaintenanceRequest)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Issue Description</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            placeholder="Describe the maintenance issue..."
-                            rows={4}
-                            data-testid="textarea-maintenance-description"
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
+              <form onSubmit={handleMaintenanceSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Issue Title *</Label>
+                  <Input
+                    id="title"
+                    placeholder="e.g., Broken AC in Room 201"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    required
+                    data-testid="input-maintenance-title"
                   />
-                  <Button
-                    type="submit"
-                    disabled={createMaintenanceRequestMutation.isPending}
-                    data-testid="button-submit-maintenance"
-                  >
-                    <Wrench className="h-4 w-4 mr-2" />
-                    {createMaintenanceRequestMutation.isPending ? "Submitting..." : "Submit Request"}
-                  </Button>
-                </form>
-              </Form>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="location">Location *</Label>
+                  <Input
+                    id="location"
+                    placeholder="e.g., Room 201, Hallway 2nd Floor"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    required
+                    data-testid="input-maintenance-location"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="priority">Priority *</Label>
+                  <Select value={priority} onValueChange={setPriority}>
+                    <SelectTrigger id="priority" className="h-11" data-testid="select-maintenance-priority">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low - Can wait</SelectItem>
+                      <SelectItem value="medium">Medium - Soon</SelectItem>
+                      <SelectItem value="high">High - Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description *</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Provide detailed information about the issue..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    required
+                    data-testid="textarea-maintenance-description"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="photo">Photo *</Label>
+                  <Input
+                    id="photo"
+                    type="file"
+                    accept="image/*"
+                    required
+                    data-testid="input-maintenance-photo"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setPhoto(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  {photo && (
+                    <div className="mt-2">
+                      <img src={photo} alt="Preview" className="max-w-full h-32 object-cover rounded border" />
+                    </div>
+                  )}
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full h-11 min-h-11"
+                  disabled={createMaintenanceRequestMutation.isPending}
+                  data-testid="button-submit-maintenance"
+                >
+                  {createMaintenanceRequestMutation.isPending ? (
+                    "Submitting..."
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Submit Request
+                    </>
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </div>
 
-        {/* Today's Schedule */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Today's Schedule</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg" data-testid="schedule-morning">
-                  <h4 className="font-medium text-blue-900 mb-2">Morning Shift (6 AM - 2 PM)</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Room cleaning (101-120)</li>
-                    <li>• Linen replacement</li>
-                    <li>• Bathroom sanitization</li>
-                  </ul>
-                </div>
-                <div className="p-4 bg-green-50 rounded-lg" data-testid="schedule-afternoon">
-                  <h4 className="font-medium text-green-900 mb-2">Afternoon Tasks</h4>
-                  <ul className="text-sm text-green-700 space-y-1">
-                    <li>• Public area cleaning</li>
-                    <li>• Inventory check</li>
-                    <li>• Special requests</li>
-                  </ul>
-                </div>
-                <div className="p-4 bg-orange-50 rounded-lg" data-testid="schedule-priority">
-                  <h4 className="font-medium text-orange-900 mb-2">Priority Items</h4>
-                  <ul className="text-sm text-orange-700 space-y-1">
-                    <li>• VIP room preparation</li>
-                    <li>• Maintenance follow-up</li>
-                    <li>• Quality check</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Performance Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-green-50 rounded-lg" data-testid="performance-completion-rate">
-                <div className="text-2xl font-bold text-green-600">95%</div>
-                <div className="text-sm text-green-700">Completion Rate</div>
-              </div>
-              <div className="text-center p-4 bg-blue-50 rounded-lg" data-testid="performance-rooms-cleaned">
-                <div className="text-2xl font-bold text-blue-600">142</div>
-                <div className="text-sm text-blue-700">Rooms This Week</div>
-              </div>
-              <div className="text-center p-4 bg-purple-50 rounded-lg" data-testid="performance-avg-time">
-                <div className="text-2xl font-bold text-purple-600">28m</div>
-                <div className="text-sm text-purple-700">Avg. Time/Room</div>
-              </div>
-              <div className="text-center p-4 bg-yellow-50 rounded-lg" data-testid="performance-quality-score">
-                <div className="text-2xl font-bold text-yellow-600">4.8</div>
-                <div className="text-sm text-yellow-700">Quality Score</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </DashboardLayout>
   );

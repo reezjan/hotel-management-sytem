@@ -107,7 +107,11 @@ export default function TaskAssignment() {
       return;
     }
 
-    createTaskMutation.mutate(newTask);
+    const { dueDateTime, ...taskData } = newTask;
+    createTaskMutation.mutate({
+      ...taskData,
+      dueDate: dueDateTime || null
+    });
   };
 
   const handleStatusChange = (task: any, status: string) => {
