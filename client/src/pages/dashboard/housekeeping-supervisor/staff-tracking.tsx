@@ -11,7 +11,9 @@ export default function HousekeepingSupervisorStaffTracking() {
       const response = await fetch("/api/hotels/current/users", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch staff");
       return response.json();
-    }
+    },
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
+    refetchIntervalInBackground: true
   });
 
   const { data: tasks = [] } = useQuery<any[]>({
@@ -20,7 +22,9 @@ export default function HousekeepingSupervisorStaffTracking() {
       const response = await fetch("/api/hotels/current/tasks", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch tasks");
       return response.json();
-    }
+    },
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
+    refetchIntervalInBackground: true
   });
 
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');
