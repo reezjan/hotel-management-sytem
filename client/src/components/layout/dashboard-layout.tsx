@@ -21,14 +21,14 @@ export function DashboardLayout({ children, title, currentHotel }: DashboardLayo
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Fetch current hotel data if not provided
-  const { data: hotel } = useQuery({
+  const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
     enabled: !!user?.hotelId && !currentHotel // Only fetch if user has hotelId and currentHotel not provided
   });
   
   const displayHotelName = currentHotel || hotel?.name || "Hotel Management System";
   const userRole = user?.role?.name;
-  const showDutyToggle = userRole && DUTY_ROLES.includes(userRole);
+  const showDutyToggle = userRole && DUTY_ROLES.includes(userRole as any);
 
   const handleLogout = () => {
     logoutMutation.mutate();
