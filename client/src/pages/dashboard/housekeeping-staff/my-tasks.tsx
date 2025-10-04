@@ -15,7 +15,7 @@ export default function HousekeepingStaffMyTasks() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: tasks = [], isLoading } = useQuery({
+  const { data: tasks = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/users", user?.id, "tasks"],
     enabled: !!user?.id
   });
@@ -33,9 +33,9 @@ export default function HousekeepingStaffMyTasks() {
     }
   });
 
-  const pendingTasks = tasks.filter(t => t.status === 'pending');
-  const performingTasks = tasks.filter(t => t.status === 'performing');
-  const completedTasks = tasks.filter(t => t.status === 'completed');
+  const pendingTasks = tasks.filter((t: any) => t.status === 'pending');
+  const performingTasks = tasks.filter((t: any) => t.status === 'performing');
+  const completedTasks = tasks.filter((t: any) => t.status === 'completed');
 
   const handleTaskStatusUpdate = (task: any, newStatus: string) => {
     updateTaskMutation.mutate({ taskId: task.id, status: newStatus });

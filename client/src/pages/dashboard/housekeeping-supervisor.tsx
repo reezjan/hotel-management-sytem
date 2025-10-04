@@ -8,15 +8,15 @@ import { Users, Clock, CheckSquare, Wrench, UserPlus, ClipboardList } from "luci
 
 export default function HousekeepingSupervisorDashboard() {
   const { data: staff = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/hotel-id/users"]
+    queryKey: ["/api/hotels/current/users"]
   });
 
   const { data: tasks = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/hotel-id/tasks"]
+    queryKey: ["/api/hotels/current/tasks"]
   });
 
   const { data: maintenanceRequests = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/hotel-id/maintenance-requests"]
+    queryKey: ["/api/hotels/current/maintenance-requests"]
   });
 
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');

@@ -18,19 +18,19 @@ export default function Reports() {
   
   const [reportType, setReportType] = useState('financial');
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions", dateRange]
   });
 
-  const { data: rooms = [] } = useQuery({
+  const { data: rooms = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/rooms"]
   });
 
-  const { data: staff = [] } = useQuery({
+  const { data: staff = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"]
   });
 
-  const { data: inventory = [] } = useQuery({
+  const { data: inventory = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory"]
   });
 

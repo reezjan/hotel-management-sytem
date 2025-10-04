@@ -160,11 +160,7 @@ export default function MaintenanceRequests() {
   const resolvedRequests = maintenanceRequests.filter(r => r.status === 'resolved');
 
   return (
-    <DashboardLayout
-      title="Maintenance Requests"
-      description="View and manage maintenance requests from restaurant staff"
-      icon={Wrench}
-    >
+    <DashboardLayout title="Maintenance Requests">
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <Card>
@@ -206,7 +202,6 @@ export default function MaintenanceRequests() {
         data={maintenanceRequests} 
         columns={columns} 
         title="Staff Maintenance Requests"
-        description="Requests from waiters, kitchen staff, bartenders, baristas, and cashiers"
         isLoading={isLoading}
       />
     </DashboardLayout>

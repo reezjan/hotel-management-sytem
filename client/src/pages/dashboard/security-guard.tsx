@@ -59,7 +59,7 @@ export default function SurveillanceOfficerDashboard() {
     mutationFn: async (isOnline: boolean) => {
       return await apiRequest("PATCH", "/api/users/me/duty", { isOnline });
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       setIsDutyOn(data.isOnline);
       toast({ 
         title: data.isOnline ? "Duty started" : "Duty ended",

@@ -6,15 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bed, Users, DoorOpen, Calendar } from "lucide-react";
 
 export default function RoomOccupancy() {
-  const { data: rooms = [] } = useQuery({
+  const { data: rooms = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/rooms"]
   });
 
-  const { data: roomTypes = [] } = useQuery({
+  const { data: roomTypes = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/room-types"]
   });
 
-  const { data: reservations = [] } = useQuery({
+  const { data: reservations = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/reservations"]
   });
 

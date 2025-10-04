@@ -21,7 +21,7 @@ export default function WaiterOrders() {
     select: (data) => data.filter((order: any) => order.createdBy === user?.id),
   });
 
-  const { data: tables = [] } = useQuery({
+  const { data: tables = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/restaurant-tables"],
   });
 

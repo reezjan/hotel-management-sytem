@@ -20,11 +20,11 @@ export default function TaxConfiguration() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: hotelTaxes = [] } = useQuery({
+  const { data: hotelTaxes = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/taxes"]
   });
 
-  const { data: hotel } = useQuery({
+  const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"]
   });
 
@@ -100,7 +100,7 @@ export default function TaxConfiguration() {
 
   const calculateTaxExample = (amount: number) => {
     let total = amount;
-    let breakdown = { subtotal: amount };
+    let breakdown: any = { subtotal: amount };
 
     Object.entries(taxSettings).forEach(([key, tax]) => {
       if (tax.isActive) {

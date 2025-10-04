@@ -24,15 +24,15 @@ export default function WaiterDashboard() {
   const [isViewOrdersModalOpen, setIsViewOrdersModalOpen] = useState(false);
   const [selectedTableOrders, setSelectedTableOrders] = useState<any[]>([]);
 
-  const { data: tables = [] } = useQuery({
+  const { data: tables = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/restaurant-tables"]
   });
 
-  const { data: menuItems = [] } = useQuery({
+  const { data: menuItems = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/menu-items"]
   });
 
-  const { data: kotOrders = [] } = useQuery({
+  const { data: kotOrders = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/kot-orders"]
   });
 

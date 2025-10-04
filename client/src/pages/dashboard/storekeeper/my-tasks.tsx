@@ -12,7 +12,7 @@ export default function StorekeeperMyTasks() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: tasks = [], isLoading } = useQuery({
+  const { data: tasks = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/tasks/my-tasks"]
   });
 
@@ -141,7 +141,7 @@ export default function StorekeeperMyTasks() {
                           <h3 className="font-semibold" data-testid={`task-title-${task.id}`}>
                             {task.title}
                           </h3>
-                          <Badge variant={getStatusColor(task.status)} data-testid={`task-status-${task.id}`}>
+                          <Badge variant={getStatusColor(task.status) as any} data-testid={`task-status-${task.id}`}>
                             {task.status}
                           </Badge>
                         </div>

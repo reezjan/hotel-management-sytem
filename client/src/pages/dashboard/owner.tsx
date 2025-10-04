@@ -6,23 +6,23 @@ import { DollarSign, Bed, Users, TrendingUp, Package, AlertTriangle } from "luci
 import { formatCurrency } from "@/lib/utils";
 
 export default function OwnerDashboard() {
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions"]
   });
 
-  const { data: rooms = [] } = useQuery({
+  const { data: rooms = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/rooms"]
   });
 
-  const { data: users = [] } = useQuery({
+  const { data: users = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"]
   });
 
-  const { data: inventory = [] } = useQuery({
+  const { data: inventory = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory"]
   });
 
-  const { data: hotel } = useQuery({
+  const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"]
   });
 

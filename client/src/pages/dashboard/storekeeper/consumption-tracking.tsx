@@ -9,11 +9,11 @@ import { useState } from "react";
 export default function StorekeeperConsumptionTracking() {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: consumptions = [], isLoading: loadingConsumptions } = useQuery({
+  const { data: consumptions = [], isLoading: loadingConsumptions } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory-consumptions"]
   });
 
-  const { data: inventoryItems = [] } = useQuery({
+  const { data: inventoryItems = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory-items"]
   });
 

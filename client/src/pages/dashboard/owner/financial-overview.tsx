@@ -6,11 +6,11 @@ import { DollarSign, TrendingUp, CreditCard, Receipt } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
 export default function FinancialOverview() {
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions"]
   });
 
-  const { data: payments = [] } = useQuery({
+  const { data: payments = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/payments"]
   });
 

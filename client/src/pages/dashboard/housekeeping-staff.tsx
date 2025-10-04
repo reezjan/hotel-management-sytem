@@ -20,7 +20,7 @@ export default function HousekeepingStaffDashboard() {
   const queryClient = useQueryClient();
   const [selectedTask, setSelectedTask] = useState<any>(null);
 
-  const { data: tasks = [] } = useQuery({
+  const { data: tasks = [] } = useQuery<any[]>({
     queryKey: ["/api/users", user?.id, "tasks"]
   });
 

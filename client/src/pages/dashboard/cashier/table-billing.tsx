@@ -24,7 +24,7 @@ export default function CashierTableBilling() {
     queryKey: ["/api/hotels/current"]
   });
 
-  const { data: tables = [] } = useQuery({
+  const { data: tables = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/restaurant-tables"],
   });
 

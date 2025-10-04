@@ -10,19 +10,19 @@ import { Users, CreditCard, Tag, DoorOpen, Receipt, TrendingUp, BarChart3 } from
 export default function ManagerDashboard() {
   const [, setLocation] = useLocation();
   
-  const { data: staff = [] } = useQuery({
+  const { data: staff = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"]
   });
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions"]
   });
 
-  const { data: vouchers = [] } = useQuery({
+  const { data: vouchers = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/vouchers"]
   });
 
-  const { data: rooms = [] } = useQuery({
+  const { data: rooms = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/rooms"]
   });
 

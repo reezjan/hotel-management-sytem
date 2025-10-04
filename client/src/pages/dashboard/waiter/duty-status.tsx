@@ -8,7 +8,7 @@ import { Clock, CheckCircle2 } from "lucide-react";
 export default function WaiterDutyStatus() {
   const { user } = useAuth();
 
-  const { data: currentUser } = useQuery({
+  const { data: currentUser } = useQuery<any>({
     queryKey: ["/api/user"],
   });
 

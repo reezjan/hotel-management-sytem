@@ -44,7 +44,7 @@ export default function HousekeepingSupervisorStaffManagement() {
     }
   });
 
-  const { data: roles = [] } = useQuery<any[]>({
+  const { data: roles = [], isLoading: rolesLoading } = useQuery<any[]>({
     queryKey: ["/api/roles"],
     queryFn: async () => {
       const response = await fetch("/api/roles", { credentials: "include" });
@@ -219,8 +219,12 @@ export default function HousekeepingSupervisorStaffManagement() {
                 <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} data-testid="button-cancel">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createStaffMutation.isPending} data-testid="button-submit">
-                  {createStaffMutation.isPending ? "Creating..." : "Create Staff"}
+                <Button 
+                  type="submit" 
+                  disabled={createStaffMutation.isPending || rolesLoading || !housekeepingStaffRole} 
+                  data-testid="button-submit"
+                >
+                  {createStaffMutation.isPending ? "Creating..." : rolesLoading ? "Loading..." : !housekeepingStaffRole ? "Role Not Found" : "Create Staff"}
                 </Button>
               </div>
             </form>

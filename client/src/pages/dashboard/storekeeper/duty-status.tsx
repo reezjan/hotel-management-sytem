@@ -13,7 +13,7 @@ export default function StorekeeperDutyStatus() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const dutyStatus = user?.dutyStatus || 'off';
+  const dutyStatus = (user as any)?.dutyStatus || 'off';
 
   const updateDutyStatusMutation = useMutation({
     mutationFn: async (newStatus: string) => {

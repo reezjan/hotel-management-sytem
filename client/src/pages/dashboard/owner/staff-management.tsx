@@ -48,11 +48,11 @@ export default function StaffManagement() {
   const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  const { data: staff = [] } = useQuery({
+  const { data: staff = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"]
   });
 
-  const { data: roles = [] } = useQuery({
+  const { data: roles = [] } = useQuery<any[]>({
     queryKey: ["/api/roles"]
   });
 
@@ -235,21 +235,24 @@ export default function StaffManagement() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Object.entries(staffByRole).map(([roleName, members]) => (
-                <div key={roleName} className="p-4 border rounded-lg">
-                  <h3 className="font-medium text-lg capitalize">
-                    {roleName.replace(/_/g, ' ')}
-                  </h3>
-                  <div className="mt-2 space-y-1">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {members.length}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {members.filter(m => m.isOnline).length} online
+              {Object.entries(staffByRole).map(([roleName, members]) => {
+                const membersList = members as any[];
+                return (
+                  <div key={roleName} className="p-4 border rounded-lg">
+                    <h3 className="font-medium text-lg capitalize">
+                      {roleName.replace(/_/g, ' ')}
+                    </h3>
+                    <div className="mt-2 space-y-1">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {membersList.length}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {membersList.filter((m: any) => m.isOnline).length} online
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
