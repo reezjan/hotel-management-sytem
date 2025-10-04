@@ -15,6 +15,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function StorekeeperInventoryManagement() {
   const { user } = useAuth();
@@ -49,7 +50,8 @@ export default function StorekeeperInventoryManagement() {
       baseUnitsPerPackage: 0,
       reorderLevel: 0,
       storageLocation: "",
-      costPerUnit: 0
+      costPerUnit: 0,
+      departments: [] as string[]
     }
   });
 
@@ -87,7 +89,8 @@ export default function StorekeeperInventoryManagement() {
         baseStockQty: '0',
         reorderLevel: data.reorderLevel.toString(),
         storageLocation: data.storageLocation,
-        costPerUnit: data.costPerUnit.toString()
+        costPerUnit: data.costPerUnit.toString(),
+        departments: data.departments || []
       });
     },
     onSuccess: () => {
@@ -536,6 +539,69 @@ export default function StorekeeperInventoryManagement() {
                     <FormControl>
                       <Textarea {...field} placeholder="Item details..." data-testid="input-item-description" />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={addItemForm.control}
+                name="departments"
+                render={() => (
+                  <FormItem>
+                    <FormLabel>Visible to Departments *</FormLabel>
+                    <FormDescription className="text-xs">
+                      Select which departments can view and use this inventory item
+                    </FormDescription>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
+                      {[
+                        { value: 'restaurant', label: 'Restaurant' },
+                        { value: 'bar', label: 'Bar' },
+                        { value: 'kitchen', label: 'Kitchen' },
+                        { value: 'housekeeping', label: 'Housekeeping' },
+                        { value: 'laundry', label: 'Laundry' },
+                        { value: 'maintenance', label: 'Maintenance' },
+                        { value: 'front_desk', label: 'Front Desk' },
+                        { value: 'security', label: 'Security' },
+                        { value: 'all', label: 'All Departments' }
+                      ].map((dept) => (
+                        <FormField
+                          key={dept.value}
+                          control={addItemForm.control}
+                          name="departments"
+                          render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value?.includes(dept.value)}
+                                  onCheckedChange={(checked) => {
+                                    const currentValue = field.value || [];
+                                    if (dept.value === 'all') {
+                                      if (checked) {
+                                        field.onChange(['all']);
+                                      } else {
+                                        field.onChange([]);
+                                      }
+                                    } else {
+                                      if (checked) {
+                                        const newValue = currentValue.filter((v: string) => v !== 'all');
+                                        field.onChange([...newValue, dept.value]);
+                                      } else {
+                                        field.onChange(currentValue.filter((v: string) => v !== dept.value));
+                                      }
+                                    }
+                                  }}
+                                  data-testid={`checkbox-dept-${dept.value}`}
+                                />
+                              </FormControl>
+                              <FormLabel className="text-sm font-normal cursor-pointer">
+                                {dept.label}
+                              </FormLabel>
+                            </FormItem>
+                          )}
+                        />
+                      ))}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

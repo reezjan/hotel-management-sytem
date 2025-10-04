@@ -34,7 +34,7 @@ export default function OwnerDashboard() {
   const occupiedRooms = rooms.filter(r => r.isOccupied).length;
   const occupancyRate = rooms.length > 0 ? (occupiedRooms / rooms.length) * 100 : 0;
   const lowStockItems = inventory.filter(item => 
-    Number(item.stockQty) <= Number(item.reorderLevel)
+    Number(item.baseStockQty) <= Number(item.reorderLevel)
   ).length;
 
 
@@ -183,7 +183,7 @@ export default function OwnerDashboard() {
             <CardContent>
               <div className="space-y-2">
                 {inventory
-                  .filter(item => Number(item.stockQty) <= Number(item.reorderLevel))
+                  .filter(item => Number(item.baseStockQty) <= Number(item.reorderLevel))
                   .slice(0, 5)
                   .map((item, index) => (
                     <div key={item.id || index} className="flex justify-between items-center p-2 border-b">
@@ -192,7 +192,8 @@ export default function OwnerDashboard() {
                         <div className="text-xs text-orange-600">Low Stock</div>
                       </div>
                       <div className="text-sm">
-                        {item.stockQty} {item.unit}
+                        {Number(item.baseStockQty).toFixed(2)} {item.baseUnit}
+                        {item.packageUnit && ` (${Number(item.packageStockQty).toFixed(2)} ${item.packageUnit})`}
                       </div>
                     </div>
                   ))}

@@ -17,26 +17,43 @@ export default function InventoryTracking() {
   // Calculate inventory metrics
   const totalItems = inventory.length;
   const lowStockItems = inventory.filter(item => 
-    Number(item.stockQty) <= Number(item.reorderLevel)
+    Number(item.baseStockQty) <= Number(item.reorderLevel)
   ).length;
   const outOfStockItems = inventory.filter(item => 
-    Number(item.stockQty) === 0
+    Number(item.baseStockQty) === 0
   ).length;
   const totalValue = inventory.reduce((sum, item) => 
-    sum + (Number(item.stockQty) * (Number(item.price) || 0)), 0
+    sum + (Number(item.baseStockQty) * (Number(item.costPerUnit) || 0)), 0
   );
 
   const inventoryColumns = [
     { key: "name", label: "Item Name", sortable: true },
     { key: "sku", label: "SKU", sortable: true },
-    { key: "stockQty", label: "Current Stock", sortable: true },
+    { key: "description", label: "Description", sortable: true },
+    { 
+      key: "baseStockQty", 
+      label: "Current Stock", 
+      sortable: true,
+      render: (value: any, row: any) => {
+        const baseStock = Number(value || 0).toFixed(2);
+        const packageStock = Number(row.packageStockQty || 0).toFixed(2);
+        return `${baseStock} ${row.baseUnit}${row.packageUnit ? ` (${packageStock} ${row.packageUnit})` : ''}`;
+      }
+    },
     { key: "reorderLevel", label: "Reorder Level", sortable: true },
-    { key: "unit", label: "Unit", sortable: true },
+    { key: "baseUnit", label: "Unit", sortable: true },
+    { 
+      key: "costPerUnit", 
+      label: "Cost/Unit", 
+      sortable: true,
+      render: (value: any) => `NPR ${Number(value || 0).toFixed(2)}`
+    },
+    { key: "storageLocation", label: "Storage", sortable: true },
     { 
       key: "status", 
       label: "Status", 
       render: (value: any, row: any) => {
-        const stock = Number(row.stockQty);
+        const stock = Number(row.baseStockQty);
         const reorder = Number(row.reorderLevel);
         if (stock === 0) {
           return <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">Out of Stock</span>;
@@ -103,7 +120,7 @@ export default function InventoryTracking() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="text-center p-6 bg-green-50 rounded-lg">
                 <div className="text-3xl font-bold text-green-600">
-                  {inventory.filter(item => Number(item.stockQty) > Number(item.reorderLevel)).length}
+                  {inventory.filter(item => Number(item.baseStockQty) > Number(item.reorderLevel)).length}
                 </div>
                 <div className="text-sm text-green-700 mt-2">Items in Stock</div>
               </div>
