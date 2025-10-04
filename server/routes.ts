@@ -812,6 +812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userRole = user.role?.name || '';
       const rolesAssignedToSecurityHead = ['waiter', 'kitchen_staff', 'bartender', 'barista', 'security_guard', 'surveillance_officer'];
       const rolesAssignedToManager = ['front_desk'];
+      const rolesAssignedToHousekeepingSupervisor = ['housekeeping_staff'];
       
       if (rolesAssignedToSecurityHead.includes(userRole)) {
         // Find security head for this hotel
@@ -831,6 +832,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const manager = users.find((u: any) => u.roleId === managerRole.id && u.isActive);
           if (manager) {
             assignedTo = manager.id;
+          }
+        }
+      } else if (rolesAssignedToHousekeepingSupervisor.includes(userRole)) {
+        // Find housekeeping supervisor for this hotel
+        const housekeepingSupervisorRole = await storage.getRoleByName('housekeeping_supervisor');
+        if (housekeepingSupervisorRole) {
+          const users = await storage.getUsersByHotel(user.hotelId);
+          const housekeepingSupervisor = users.find((u: any) => u.roleId === housekeepingSupervisorRole.id && u.isActive);
+          if (housekeepingSupervisor) {
+            assignedTo = housekeepingSupervisor.id;
           }
         }
       }

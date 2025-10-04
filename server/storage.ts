@@ -665,11 +665,54 @@ export class DatabaseStorage implements IStorage {
 
   // Maintenance operations
   async getMaintenanceRequestsByHotel(hotelId: string): Promise<any[]> {
-    return await db
-      .select()
+    const results = await db
+      .select({
+        id: maintenanceRequests.id,
+        hotelId: maintenanceRequests.hotelId,
+        title: maintenanceRequests.title,
+        location: maintenanceRequests.location,
+        description: maintenanceRequests.description,
+        photo: maintenanceRequests.photo,
+        priority: maintenanceRequests.priority,
+        status: maintenanceRequests.status,
+        assignedTo: maintenanceRequests.assignedTo,
+        resolvedAt: maintenanceRequests.resolvedAt,
+        createdAt: maintenanceRequests.createdAt,
+        updatedAt: maintenanceRequests.updatedAt,
+        reportedById: users.id,
+        reportedByUsername: users.username,
+        reportedByRoleId: roles.id,
+        reportedByRoleName: roles.name
+      })
       .from(maintenanceRequests)
+      .leftJoin(users, eq(maintenanceRequests.reportedBy, users.id))
+      .leftJoin(roles, eq(users.roleId, roles.id))
       .where(eq(maintenanceRequests.hotelId, hotelId))
       .orderBy(desc(maintenanceRequests.createdAt));
+    
+    // Transform the flat results into the expected structure
+    return results.map(result => ({
+      id: result.id,
+      hotelId: result.hotelId,
+      title: result.title,
+      location: result.location,
+      description: result.description,
+      photo: result.photo,
+      priority: result.priority,
+      status: result.status,
+      assignedTo: result.assignedTo,
+      resolvedAt: result.resolvedAt,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      reportedBy: result.reportedById ? {
+        id: result.reportedById,
+        username: result.reportedByUsername,
+        role: result.reportedByRoleId ? {
+          id: result.reportedByRoleId,
+          name: result.reportedByRoleName
+        } : null
+      } : null
+    }));
   }
 
   async createMaintenanceRequest(requestData: InsertMaintenanceRequest): Promise<MaintenanceRequest> {

@@ -595,6 +595,14 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
   id: true,
   createdAt: true,
   updatedAt: true
+}).extend({
+  dueDate: z.union([z.string(), z.date(), z.null(), z.undefined()])
+    .transform((val) => {
+      if (!val) return null;
+      if (val instanceof Date) return val;
+      return new Date(val);
+    })
+    .optional()
 });
 
 export const insertTransactionSchema = createInsertSchema(transactions).omit({

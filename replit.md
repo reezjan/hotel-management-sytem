@@ -102,6 +102,13 @@ Note: For security, the password is not stored in this file. Run the seed comman
 - Storekeeper - Inventory management
 
 ## Recent Changes
+- 2025-10-04: Fixed Task Assignment "Invalid Task Data" Error
+  - Fixed issue where housekeeping supervisors and restaurant/bar managers couldn't assign tasks to staff
+  - Root cause: Form was sending `dueDateTime` field which isn't in the database schema, causing validation to fail
+  - Solution: Properly destructure form data to remove `dueDateTime` and map it to `dueDate` before API submission
+  - Affected files: `housekeeping-supervisor/task-assignment.tsx` and `restaurant-bar-manager/task-assignment.tsx`
+  - Task assignment now works correctly for both supervisors and managers
+
 - 2025-10-04: Added Auto-Refresh for Real-Time-Like Updates
   - Added automatic polling (every 5 seconds) to housekeeping supervisor's staff tracking page
   - Added automatic polling to task assignment page for online staff status
