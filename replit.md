@@ -102,6 +102,30 @@ Note: For security, the password is not stored in this file. Run the seed comman
 - Storekeeper - Inventory management
 
 ## Recent Changes
+- 2025-10-04: Fixed Inventory Endpoint Errors Across Multiple Dashboards (Latest)
+  - Fixed 500 errors when fetching inventory items in owner, kitchen, bar, and restaurant manager dashboards
+  - Root cause: Multiple pages were calling non-existent `/api/hotels/current/inventory` endpoint
+  - Solution: Updated all pages to use correct `/api/hotels/current/inventory-items` endpoint
+  - Affected files:
+    - `client/src/pages/dashboard/kitchen-staff.tsx`
+    - `client/src/pages/dashboard/bartender.tsx`
+    - `client/src/pages/dashboard/barista.tsx`
+    - `client/src/pages/dashboard/restaurant-bar-manager.tsx`
+    - `client/src/pages/dashboard/restaurant-bar-manager/inventory-tracking.tsx`
+    - `client/src/pages/dashboard/owner/reports.tsx`
+    - `client/src/pages/dashboard/owner.tsx`
+    - `client/src/pages/dashboard/owner/inventory-tracking.tsx`
+  - Also updated `/api/hotels/current/inventory/consumptions` to `/api/hotels/current/inventory-consumptions`
+  - Inventory data now loads correctly without 500 errors across all dashboards
+
+- 2025-10-04: Fixed Maintenance Request "Mark Resolved" Error
+  - Fixed issue where housekeeping supervisors couldn't mark maintenance requests as resolved
+  - Root cause: Frontend was calling `/api/hotels/current/maintenance-requests/:id` PUT endpoint which didn't exist
+  - Solution: Added missing PUT route `/api/hotels/current/maintenance-requests/:id` in server/routes.ts
+  - The route includes proper authentication, hotel context verification, and follows same pattern as other hotel-scoped endpoints
+  - Affected file: `server/routes.ts` (added lines 865-886)
+  - Mark resolved functionality now works correctly for housekeeping supervisors
+
 - 2025-10-04: Fixed Task Assignment "Invalid Task Data" Error
   - Fixed issue where housekeeping supervisors and restaurant/bar managers couldn't assign tasks to staff
   - Root cause: Form was sending `dueDateTime` field which isn't in the database schema, causing validation to fail
@@ -128,19 +152,30 @@ Note: For security, the password is not stored in this file. Run the seed comman
   - Added new `getRole(id: number)` method to storage interface for role lookup by ID
   - Staff creation now works correctly for all role hierarchies
 
-- 2025-10-04: GitHub Project Import - Replit Environment Setup Completed
-  - Created fresh PostgreSQL database and configured environment variables (DATABASE_URL, PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE)
-  - All npm dependencies already present and verified working
-  - Pushed database schema using Drizzle Kit (`npm run db:push`)
-  - Seeded database with fresh data (`npm run db:seed`):
-    - 17 roles created (super_admin, owner, manager, housekeeping, restaurant/bar staff, security, finance, etc.)
+- 2025-10-04: GitHub Project Import - Replit Environment Setup Completed (Latest)
+  - **Database Setup:**
+    - Created fresh PostgreSQL database using Replit's database tool
+    - Environment variables configured automatically: DATABASE_URL, PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
+    - Pushed database schema successfully using `npm run db:push`
+    - Database seeded with initial data using `npm run db:seed`
+  - **Initial Data Created:**
+    - 17 role definitions (super_admin, owner, manager, front_desk, housekeeping_supervisor, housekeeping_staff, restaurant_bar_manager, waiter, kitchen_staff, bartender, barista, security_head, security_guard, surveillance_officer, finance, cashier, storekeeper)
     - Role creation permissions configured
-    - Superadmin user created (username: `superadmin`, password: `aef009750905865270b03eb27ceba80e`)
-  - Configured "Start application" workflow on port 5000 with webview output
-  - Removed old "Server" workflow to avoid conflicts
-  - Configured deployment for autoscale (build: `npm run build`, run: `npm run start`)
-  - Application verified running successfully - login page accessible at port 5000
-  - Existing configuration confirmed working: host `0.0.0.0`, `allowedHosts: true` for Replit proxy
+    - Superadmin user created with username: `superadmin`, password: `aef009750905865270b03eb27ceba80e`
+  - **Workflow Configuration:**
+    - Removed old "Server" workflow to prevent conflicts
+    - Configured "Start application" workflow on port 5000 with webview output type
+    - Workflow command: `npm run dev` (runs Express server with integrated Vite dev server)
+  - **Deployment Configuration:**
+    - Deployment target: autoscale (for stateless web applications)
+    - Build command: `npm run build`
+    - Run command: `npm run start`
+  - **Verification:**
+    - Application running successfully on port 5000
+    - Login page accessible and rendering correctly
+    - Vite HMR connected and working
+    - All existing configuration verified: host `0.0.0.0`, `allowedHosts: true` for Replit proxy support
+  - **Notes:** All npm dependencies were already installed. The application was ready to run after database setup and workflow configuration.
 
 ## Development Notes
 - The application uses a unified server on port 5000 for both frontend and backend

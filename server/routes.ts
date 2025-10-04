@@ -859,6 +859,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/hotels/current/maintenance-requests/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+      const requestData = insertMaintenanceRequestSchema.partial().parse(req.body);
+      // Verify the maintenance request belongs to current hotel
+      const existingRequest = await storage.getMaintenanceRequest(id);
+      if (!existingRequest || existingRequest.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Maintenance request not found" });
+      }
+      const request = await storage.updateMaintenanceRequest(id, requestData);
+      res.json(request);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to update maintenance request" });
+    }
+  });
+
   // Hotel-scoped user management endpoints
   app.post("/api/hotels/current/users", async (req, res) => {
     try {
