@@ -10,12 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Utensils, Plus, Coffee, Wine, Cake } from "lucide-react";
+import { Utensils, Plus, Coffee, Wine, Cake, X, Beaker } from "lucide-react";
 import { toast } from "sonner";
 
 export default function MenuManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [isIngredientsDialogOpen, setIsIngredientsDialogOpen] = useState(false);
+  const [selectedMenuItem, setSelectedMenuItem] = useState<any>(null);
+  const [ingredients, setIngredients] = useState<Array<{inventoryItemId: string; quantity: number}>>([]);
   const [newMenuItem, setNewMenuItem] = useState({
     name: "",
     description: "",
@@ -43,6 +46,16 @@ export default function MenuManagement() {
     queryFn: async () => {
       const response = await fetch("/api/hotels/current/menu-categories", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch categories");
+      return response.json();
+    }
+  });
+
+  // Fetch inventory items for ingredients
+  const { data: inventoryItems = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/inventory-items"],
+    queryFn: async () => {
+      const response = await fetch("/api/hotels/current/inventory-items", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch inventory");
       return response.json();
     }
   });
@@ -188,6 +201,61 @@ export default function MenuManagement() {
     }
   };
 
+  const handleManageIngredients = (item: any) => {
+    setSelectedMenuItem(item);
+    // Load existing ingredients from recipe if available
+    const existingIngredients = item.recipe?.ingredients || [];
+    setIngredients(existingIngredients);
+    setIsIngredientsDialogOpen(true);
+  };
+
+  const addIngredient = () => {
+    setIngredients([...ingredients, { inventoryItemId: "", quantity: 0 }]);
+  };
+
+  const removeIngredient = (index: number) => {
+    setIngredients(ingredients.filter((_, i) => i !== index));
+  };
+
+  const updateIngredient = (index: number, field: string, value: any) => {
+    const updated = [...ingredients];
+    updated[index] = { ...updated[index], [field]: value };
+    setIngredients(updated);
+  };
+
+  const saveIngredientsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/hotels/current/menu-items/${selectedMenuItem.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          recipe: {
+            ingredients: ingredients.filter(ing => ing.inventoryItemId && ing.quantity > 0)
+          }
+        })
+      });
+      if (!response.ok) throw new Error("Failed to save ingredients");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/menu-items"] });
+      setIsIngredientsDialogOpen(false);
+      toast.success("Ingredients saved successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    }
+  });
+
+  const isBeverageItem = (item: any) => {
+    const categoryName = item.category?.name?.toLowerCase() || '';
+    return categoryName.includes('coffee') || 
+           categoryName.includes('beverage') || 
+           categoryName.includes('drink') ||
+           categoryName.includes('bar');
+  };
+
   const getCategoryIcon = (categoryName: string) => {
     const name = categoryName?.toLowerCase() || '';
     if (name.includes('coffee') || name.includes('beverage')) return <Coffee className="h-4 w-4" />;
@@ -235,11 +303,24 @@ export default function MenuManagement() {
     }
   ];
 
+  const handleManageIngredientsClick = (item: any) => {
+    if (!isBeverageItem(item)) {
+      toast.error("Ingredients can only be managed for beverage items (coffee, drinks, bar)");
+      return;
+    }
+    handleManageIngredients(item);
+  };
+
   const actions = [
-    { 
-      label: "Delete", 
-      action: handleDeleteMenuItem, 
-      variant: "destructive" as const 
+    {
+      label: "Manage Ingredients",
+      action: handleManageIngredientsClick,
+      variant: "default" as const
+    },
+    {
+      label: "Delete",
+      action: handleDeleteMenuItem,
+      variant: "destructive" as const
     }
   ];
 
@@ -469,6 +550,92 @@ export default function MenuManagement() {
                   disabled={createCategoryMutation.isPending}
                 >
                   {createCategoryMutation.isPending ? "Creating..." : "Create Category"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Manage Ingredients Dialog */}
+        <Dialog open={isIngredientsDialogOpen} onOpenChange={setIsIngredientsDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Beaker className="h-5 w-5" />
+                Manage Ingredients - {selectedMenuItem?.name}
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Set ingredients for automatic inventory deduction when this item is ordered
+              </p>
+            </DialogHeader>
+            <div className="space-y-4">
+              {ingredients.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  No ingredients added yet. Click "Add Ingredient" to start.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {ingredients.map((ingredient, index) => (
+                    <div key={index} className="flex items-end gap-3 p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <Label>Inventory Item *</Label>
+                        <Select
+                          value={ingredient.inventoryItemId}
+                          onValueChange={(value) => updateIngredient(index, 'inventoryItemId', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select item" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {inventoryItems.map((item) => (
+                              <SelectItem key={item.id} value={item.id}>
+                                {item.name} ({item.baseUnit})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-32">
+                        <Label>Quantity *</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={ingredient.quantity || ""}
+                          onChange={(e) => updateIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeIngredient(index)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <Button
+                variant="outline"
+                onClick={addIngredient}
+                className="w-full"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Ingredient
+              </Button>
+              
+              <div className="flex justify-end space-x-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setIsIngredientsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => saveIngredientsMutation.mutate()}
+                  disabled={saveIngredientsMutation.isPending}
+                >
+                  {saveIngredientsMutation.isPending ? "Saving..." : "Save Ingredients"}
                 </Button>
               </div>
             </div>

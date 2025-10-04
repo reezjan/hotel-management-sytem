@@ -1,13 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Package, AlertTriangle, TrendingUp, ShoppingCart } from "lucide-react";
-import { toast } from "sonner";
 
 export default function InventoryTracking() {
-  const queryClient = useQueryClient();
 
   // Fetch inventory items
   const { data: inventory = [], isLoading } = useQuery<any[]>({
@@ -19,46 +16,7 @@ export default function InventoryTracking() {
     }
   });
 
-  // Update stock mutation
-  const updateStockMutation = useMutation({
-    mutationFn: async ({ itemId, baseStockQty }: { itemId: string; baseStockQty: number }) => {
-      const response = await fetch(`/api/hotels/current/inventory-items/${itemId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ baseStockQty: baseStockQty.toFixed(3) })
-      });
-      if (!response.ok) throw new Error("Failed to update stock");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-items"] });
-      toast.success("Stock updated successfully");
-    },
-    onError: (error: any) => {
-      toast.error(error.message);
-    }
-  });
-
-  const handleStockUpdate = (item: any, newStock: number) => {
-    updateStockMutation.mutate({ itemId: item.id, baseStockQty: newStock });
-  };
-
-  const handleDeleteItem = async (item: any) => {
-    if (confirm(`Are you sure you want to delete "${item.name}"?`)) {
-      try {
-        const response = await fetch(`/api/hotels/current/inventory-items/${item.id}`, {
-          method: "DELETE",
-          credentials: "include"
-        });
-        if (!response.ok) throw new Error("Failed to delete item");
-        queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-items"] });
-        toast.success("Item deleted successfully");
-      } catch (error: any) {
-        toast.error(error.message);
-      }
-    }
-  };
+  // Restaurant bar managers have read-only access to inventory
 
   const getStockStatus = (baseStockQty: number, reorderLevel: number) => {
     if (baseStockQty <= reorderLevel) {
@@ -79,7 +37,6 @@ export default function InventoryTracking() {
 
   const columns = [
     { key: "name", label: "Item Name", sortable: true },
-    { key: "category", label: "Category", sortable: true },
     { 
       key: "baseStockQty", 
       label: "Current Stock", 
@@ -88,24 +45,10 @@ export default function InventoryTracking() {
         const baseStock = Number(value || 0).toFixed(2);
         const packageStock = Number(row.packageStockQty || 0).toFixed(2);
         return (
-          <div className="flex items-center space-x-2">
-            <span>
-              {baseStock} {row.baseUnit}
-              {row.packageUnit && ` (${packageStock} ${row.packageUnit})`}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const newStock = prompt(`Update stock for ${row.name} (in ${row.baseUnit}):`, baseStock);
-                if (newStock !== null && !isNaN(Number(newStock))) {
-                  handleStockUpdate(row, Number(newStock));
-                }
-              }}
-            >
-              Edit
-            </Button>
-          </div>
+          <span>
+            {baseStock} {row.baseUnit}
+            {row.packageUnit && ` (${packageStock} ${row.packageUnit})`}
+          </span>
         );
       }
     },
@@ -123,6 +66,11 @@ export default function InventoryTracking() {
       }
     },
     { 
+      key: "storageLocation",
+      label: "Storage Location",
+      render: (value: string) => value || 'N/A'
+    },
+    { 
       key: "status", 
       label: "Status", 
       render: (value: any, row: any) => {
@@ -133,14 +81,6 @@ export default function InventoryTracking() {
           </span>
         );
       }
-    }
-  ];
-
-  const actions = [
-    { 
-      label: "Delete", 
-      action: handleDeleteItem, 
-      variant: "destructive" as const 
     }
   ];
 
@@ -224,7 +164,6 @@ export default function InventoryTracking() {
           title="Restaurant Inventory"
           data={inventory}
           columns={columns}
-          actions={actions}
           isLoading={isLoading}
           searchPlaceholder="Search inventory items..."
         />
