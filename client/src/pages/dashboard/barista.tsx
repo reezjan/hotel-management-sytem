@@ -85,7 +85,7 @@ export default function BaristaDashboard() {
   });
 
   const { data: inventoryItems = [] } = useQuery({
-    queryKey: ["/api/hotels/current/inventory"]
+    queryKey: ["/api/hotels/current/inventory-items"]
   });
 
   const { data: maintenanceRequests = [] } = useQuery({

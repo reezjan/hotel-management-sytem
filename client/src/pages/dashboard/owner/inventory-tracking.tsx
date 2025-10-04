@@ -7,11 +7,11 @@ import { Package, AlertTriangle, TrendingDown, BarChart } from "lucide-react";
 
 export default function InventoryTracking() {
   const { data: inventory = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/inventory"]
+    queryKey: ["/api/hotels/current/inventory-items"]
   });
 
   const { data: consumptions = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/inventory/consumptions"]
+    queryKey: ["/api/hotels/current/inventory-consumptions"]
   });
 
   // Calculate inventory metrics

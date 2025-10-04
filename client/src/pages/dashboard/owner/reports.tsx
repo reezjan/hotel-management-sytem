@@ -31,7 +31,7 @@ export default function Reports() {
   });
 
   const { data: inventory = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/inventory"]
+    queryKey: ["/api/hotels/current/inventory-items"]
   });
 
   // Calculate report metrics

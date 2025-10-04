@@ -19,7 +19,7 @@ export default function OwnerDashboard() {
   });
 
   const { data: inventory = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/inventory"]
+    queryKey: ["/api/hotels/current/inventory-items"]
   });
 
   const { data: hotel } = useQuery<any>({

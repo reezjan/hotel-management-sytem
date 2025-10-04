@@ -26,9 +26,9 @@ export default function InventoryTracking() {
 
   // Fetch inventory items
   const { data: inventory = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/inventory"],
+    queryKey: ["/api/hotels/current/inventory-items"],
     queryFn: async () => {
-      const response = await fetch("/api/hotels/current/inventory", { credentials: "include" });
+      const response = await fetch("/api/hotels/current/inventory-items", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch inventory");
       return response.json();
     }
@@ -55,7 +55,7 @@ export default function InventoryTracking() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-items"] });
       setIsAddDialogOpen(false);
       setNewItem({ name: "", category: "", stockQty: "", unit: "", reorderLevel: "", costPerUnit: "" });
       toast.success("Inventory item created successfully");
@@ -78,7 +78,7 @@ export default function InventoryTracking() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-items"] });
       toast.success("Stock updated successfully");
     },
     onError: (error: any) => {
@@ -107,7 +107,7 @@ export default function InventoryTracking() {
           credentials: "include"
         });
         if (!response.ok) throw new Error("Failed to delete item");
-        queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-items"] });
         toast.success("Item deleted successfully");
       } catch (error: any) {
         toast.error(error.message);

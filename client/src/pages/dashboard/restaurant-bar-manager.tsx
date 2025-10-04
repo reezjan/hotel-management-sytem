@@ -35,9 +35,9 @@ export default function RestaurantBarManagerDashboard() {
   });
 
   const { data: inventory = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/inventory"],
+    queryKey: ["/api/hotels/current/inventory-items"],
     queryFn: async () => {
-      const response = await fetch("/api/hotels/current/inventory", { credentials: "include" });
+      const response = await fetch("/api/hotels/current/inventory-items", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch inventory");
       return response.json();
     }
