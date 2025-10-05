@@ -256,17 +256,6 @@ export default function WaiterDashboard() {
                       </p>
                     </div>
                     <div className="flex space-x-2">
-                      {order.status === 'open' && (
-                        <Button
-                          className="h-11 min-h-11"
-                          variant="outline"
-                          onClick={() => handleOrderStatusUpdate(order, 'preparing')}
-                          disabled={updateOrderMutation.isPending}
-                          data-testid={`button-send-kitchen-${index}`}
-                        >
-                          Send to Kitchen
-                        </Button>
-                      )}
                       {order.status === 'ready' && (
                         <Button
                           className="h-11 min-h-11"
