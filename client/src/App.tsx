@@ -40,7 +40,6 @@ import RestaurantStaffManagement from "@/pages/dashboard/restaurant-bar-manager/
 import RestaurantTaskAssignment from "@/pages/dashboard/restaurant-bar-manager/task-assignment";
 import RestaurantMenuManagement from "@/pages/dashboard/restaurant-bar-manager/menu-management";
 import RestaurantTableSetup from "@/pages/dashboard/restaurant-bar-manager/table-setup";
-import RestaurantInventoryTracking from "@/pages/dashboard/restaurant-bar-manager/inventory-tracking";
 import RestaurantDutyTracking from "@/pages/dashboard/restaurant-bar-manager/duty-tracking";
 import RestaurantLeaveRequests from "@/pages/dashboard/restaurant-bar-manager/leave-requests";
 import RestaurantMaintenanceRequests from "@/pages/dashboard/restaurant-bar-manager/maintenance-requests";
@@ -78,6 +77,9 @@ import StorekeeperInventoryManagement from "@/pages/dashboard/storekeeper/invent
 import StorekeeperMaintenanceRequests from "@/pages/dashboard/storekeeper/maintenance-requests";
 import StorekeeperMyTasks from "@/pages/dashboard/storekeeper/my-tasks";
 import StorekeeperConsumptionTracking from "@/pages/dashboard/storekeeper/consumption-tracking";
+import RequestStock from "@/pages/dashboard/stock-requests/request-stock";
+import StorekeeperStockRequests from "@/pages/dashboard/storekeeper/stock-requests";
+import DepartmentStockRequests from "@/pages/dashboard/department-stock-requests";
 
 function Router() {
   return (
@@ -118,7 +120,7 @@ function Router() {
       <ProtectedRoute path="/restaurant-bar-manager/task-assignment" component={RestaurantTaskAssignment} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/menu-management" component={RestaurantMenuManagement} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/table-setup" component={RestaurantTableSetup} allowedRoles={["restaurant_bar_manager"]} />
-      <ProtectedRoute path="/restaurant-bar-manager/inventory-tracking" component={RestaurantInventoryTracking} allowedRoles={["restaurant_bar_manager"]} />
+      <ProtectedRoute path="/restaurant-bar-manager/stock-requests" component={DepartmentStockRequests} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/duty-tracking" component={RestaurantDutyTracking} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/leave-requests" component={RestaurantLeaveRequests} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/maintenance-requests" component={RestaurantMaintenanceRequests} allowedRoles={["restaurant_bar_manager"]} />
@@ -130,8 +132,11 @@ function Router() {
       <ProtectedRoute path="/waiter/billing" component={WaiterBilling} allowedRoles={["waiter"]} />
       <ProtectedRoute path="/waiter/food-search" component={WaiterFoodSearch} allowedRoles={["waiter"]} />
       <ProtectedRoute path="/kitchen-staff" component={KitchenStaffDashboard} allowedRoles={["kitchen_staff"]} />
+      <ProtectedRoute path="/kitchen-staff/request-stock" component={RequestStock} allowedRoles={["kitchen_staff"]} />
       <ProtectedRoute path="/bartender" component={BartenderDashboard} allowedRoles={["bartender"]} />
+      <ProtectedRoute path="/bartender/request-stock" component={RequestStock} allowedRoles={["bartender"]} />
       <ProtectedRoute path="/barista" component={BaristaDashboard} allowedRoles={["barista"]} />
+      <ProtectedRoute path="/barista/request-stock" component={RequestStock} allowedRoles={["barista"]} />
       <ProtectedRoute path="/cashier" component={CashierDashboard} allowedRoles={["cashier"]} />
       <ProtectedRoute path="/security-head" component={SecurityHeadDashboard} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-guard" component={SecurityGuardDashboard} allowedRoles={["security_guard"]} />
@@ -158,6 +163,7 @@ function Router() {
       <ProtectedRoute path="/storekeeper/duty-status" component={StorekeeperDutyStatus} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/inventory-tracking" component={StorekeeperInventoryTracking} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/inventory-management" component={StorekeeperInventoryManagement} allowedRoles={["storekeeper"]} />
+      <ProtectedRoute path="/storekeeper/stock-requests" component={StorekeeperStockRequests} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/maintenance-requests" component={StorekeeperMaintenanceRequests} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/my-tasks" component={StorekeeperMyTasks} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/consumption-tracking" component={StorekeeperConsumptionTracking} allowedRoles={["storekeeper"]} />
