@@ -18,7 +18,7 @@ export default function MenuManagement() {
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [isIngredientsDialogOpen, setIsIngredientsDialogOpen] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<any>(null);
-  const [ingredients, setIngredients] = useState<Array<{inventoryItemId: string; quantity: number}>>([]);
+  const [ingredients, setIngredients] = useState<Array<{inventoryItemId: string; quantity: number; unit?: string}>>([]);
   const [newMenuItem, setNewMenuItem] = useState({
     name: "",
     description: "",
@@ -210,7 +210,7 @@ export default function MenuManagement() {
   };
 
   const addIngredient = () => {
-    setIngredients([...ingredients, { inventoryItemId: "", quantity: 0 }]);
+    setIngredients([...ingredients, { inventoryItemId: "", quantity: 0, unit: "" }]);
   };
 
   const removeIngredient = (index: number) => {
@@ -223,6 +223,47 @@ export default function MenuManagement() {
     setIngredients(updated);
   };
 
+  const getUnitsForItem = (inventoryItemId: string) => {
+    const item = inventoryItems.find(i => i.id === inventoryItemId);
+    if (!item) return [];
+    
+    const category = item.measurementCategory || 'weight';
+    const baseUnit = item.baseUnit || 'kg';
+    
+    const weightUnits = ['mg', 'g', 'kg', 'oz', 'lb'];
+    const volumeUnits = ['ml', 'L', 'tsp', 'tbsp', 'cup', 'fl_oz'];
+    const countUnits = ['piece', 'dozen', 'pack'];
+    
+    let units: string[] = [];
+    if (category === 'weight') {
+      units = weightUnits;
+    } else if (category === 'volume') {
+      units = volumeUnits;
+    } else if (category === 'count') {
+      units = countUnits;
+    } else {
+      units = [baseUnit];
+    }
+    
+    if (item.conversionProfile && typeof item.conversionProfile === 'object') {
+      const customUnits = Object.keys(item.conversionProfile).filter(
+        k => k !== 'baseUnit' && k !== 'baseToKg' && k !== 'baseToL'
+      );
+      units = Array.from(new Set([...units, ...customUnits]));
+    }
+    
+    return units;
+  };
+
+  const getUnitLabel = (unit: string) => {
+    const labels: Record<string, string> = {
+      mg: "mg", g: "g", kg: "kg", oz: "oz", lb: "lb",
+      ml: "ml", L: "L", tsp: "tsp", tbsp: "tbsp", cup: "cup", fl_oz: "fl oz",
+      piece: "piece", dozen: "dozen", pack: "pack"
+    };
+    return labels[unit] || unit;
+  };
+
   const saveIngredientsMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch(`/api/hotels/current/menu-items/${selectedMenuItem.id}`, {
@@ -231,7 +272,7 @@ export default function MenuManagement() {
         credentials: "include",
         body: JSON.stringify({
           recipe: {
-            ingredients: ingredients.filter(ing => ing.inventoryItemId && ing.quantity > 0)
+            ingredients: ingredients.filter(ing => ing.inventoryItemId && ing.quantity > 0 && ing.unit)
           }
         })
       });
@@ -241,7 +282,7 @@ export default function MenuManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/menu-items"] });
       setIsIngredientsDialogOpen(false);
-      toast.success("Ingredients saved successfully");
+      toast.success("Ingredients saved successfully with unit conversions");
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -575,46 +616,76 @@ export default function MenuManagement() {
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {ingredients.map((ingredient, index) => (
-                    <div key={index} className="flex items-end gap-3 p-3 border rounded-lg">
-                      <div className="flex-1">
-                        <Label>Inventory Item *</Label>
-                        <Select
-                          value={ingredient.inventoryItemId}
-                          onValueChange={(value) => updateIngredient(index, 'inventoryItemId', value)}
+                  {ingredients.map((ingredient, index) => {
+                    const availableUnits = ingredient.inventoryItemId ? getUnitsForItem(ingredient.inventoryItemId) : [];
+                    const selectedItem = inventoryItems.find(i => i.id === ingredient.inventoryItemId);
+                    
+                    return (
+                      <div key={index} className="flex items-end gap-3 p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <Label>Inventory Item *</Label>
+                          <Select
+                            value={ingredient.inventoryItemId}
+                            onValueChange={(value) => {
+                              updateIngredient(index, 'inventoryItemId', value);
+                              const item = inventoryItems.find(i => i.id === value);
+                              if (item && !ingredient.unit) {
+                                updateIngredient(index, 'unit', item.baseUnit || 'kg');
+                              }
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select item" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {inventoryItems.map((item) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                  {item.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="w-28">
+                          <Label>Quantity *</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={ingredient.quantity || ""}
+                            onChange={(e) => updateIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div className="w-28">
+                          <Label>Unit *</Label>
+                          <Select
+                            value={ingredient.unit || selectedItem?.baseUnit || ''}
+                            onValueChange={(value) => updateIngredient(index, 'unit', value)}
+                            disabled={!ingredient.inventoryItemId}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Unit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableUnits.map((unit) => (
+                                <SelectItem key={unit} value={unit}>
+                                  {getUnitLabel(unit)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeIngredient(index)}
+                          className="text-destructive hover:text-destructive"
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select item" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {inventoryItems.map((item) => (
-                              <SelectItem key={item.id} value={item.id}>
-                                {item.name} ({item.baseUnit})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <div className="w-32">
-                        <Label>Quantity *</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={ingredient.quantity || ""}
-                          onChange={(e) => updateIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeIngredient(index)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               
