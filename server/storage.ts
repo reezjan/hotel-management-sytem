@@ -973,7 +973,8 @@ export class DatabaseStorage implements IStorage {
       .from(inventoryItems)
       .where(and(
         eq(inventoryItems.hotelId, hotelId),
-        isNull(inventoryItems.deletedAt)
+        isNull(inventoryItems.deletedAt),
+        sql`CAST(${inventoryItems.baseStockQty} AS DECIMAL) < CAST(${inventoryItems.reorderLevel} AS DECIMAL)`
       ))
       .orderBy(asc(inventoryItems.name));
   }
