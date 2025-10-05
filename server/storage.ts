@@ -29,6 +29,7 @@ import {
   wastages,
   mealPlans,
   guests,
+  stockRequests,
   type User,
   type UserWithRole,
   type InsertUser,
@@ -75,7 +76,9 @@ import {
   type MealPlan,
   type InsertMealPlan,
   type Guest,
-  type InsertGuest
+  type InsertGuest,
+  type StockRequest,
+  type InsertStockRequest
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, desc, asc, sql } from "drizzle-orm";
@@ -248,6 +251,17 @@ export interface IStorage {
   updateGuest(id: string, guest: Partial<InsertGuest>): Promise<Guest>;
   deleteGuest(id: string): Promise<void>;
   searchGuests(hotelId: string, searchTerm: string): Promise<Guest[]>;
+  
+  // Stock request operations
+  getStockRequestsByHotel(hotelId: string): Promise<StockRequest[]>;
+  getStockRequestsByUser(userId: string): Promise<StockRequest[]>;
+  getPendingStockRequestsForStorekeeper(hotelId: string): Promise<StockRequest[]>;
+  getStockRequestsByDepartment(hotelId: string, department: string): Promise<StockRequest[]>;
+  getStockRequest(id: string): Promise<StockRequest | undefined>;
+  createStockRequest(request: InsertStockRequest): Promise<StockRequest>;
+  updateStockRequest(id: string, request: Partial<StockRequest>): Promise<StockRequest>;
+  approveStockRequest(id: string, approvedBy: string): Promise<StockRequest>;
+  deliverStockRequest(id: string): Promise<StockRequest>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1562,6 +1576,143 @@ export class DatabaseStorage implements IStorage {
         sql`(LOWER(${guests.firstName}) LIKE ${search} OR LOWER(${guests.lastName}) LIKE ${search} OR LOWER(${guests.phone}) LIKE ${search} OR LOWER(${guests.email}) LIKE ${search})`
       ))
       .orderBy(desc(guests.createdAt));
+  }
+
+  // Stock request operations
+  async getStockRequestsByHotel(hotelId: string): Promise<StockRequest[]> {
+    return await db
+      .select()
+      .from(stockRequests)
+      .where(eq(stockRequests.hotelId, hotelId))
+      .orderBy(desc(stockRequests.createdAt));
+  }
+
+  async getStockRequestsByUser(userId: string): Promise<StockRequest[]> {
+    return await db
+      .select()
+      .from(stockRequests)
+      .where(eq(stockRequests.requestedBy, userId))
+      .orderBy(desc(stockRequests.createdAt));
+  }
+
+  async getPendingStockRequestsForStorekeeper(hotelId: string): Promise<StockRequest[]> {
+    return await db
+      .select()
+      .from(stockRequests)
+      .where(and(
+        eq(stockRequests.hotelId, hotelId),
+        sql`${stockRequests.status} IN ('pending', 'approved')`
+      ))
+      .orderBy(asc(stockRequests.createdAt));
+  }
+
+  async getStockRequestsByDepartment(hotelId: string, department: string): Promise<StockRequest[]> {
+    return await db
+      .select()
+      .from(stockRequests)
+      .where(and(
+        eq(stockRequests.hotelId, hotelId),
+        eq(stockRequests.department, department)
+      ))
+      .orderBy(desc(stockRequests.createdAt));
+  }
+
+  async getStockRequest(id: string): Promise<StockRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(stockRequests)
+      .where(eq(stockRequests.id, id));
+    return request || undefined;
+  }
+
+  async createStockRequest(requestData: InsertStockRequest): Promise<StockRequest> {
+    const [request] = await db
+      .insert(stockRequests)
+      .values(requestData)
+      .returning();
+    return request;
+  }
+
+  async updateStockRequest(id: string, requestData: Partial<StockRequest>): Promise<StockRequest> {
+    const [request] = await db
+      .update(stockRequests)
+      .set({ ...requestData, updatedAt: new Date() })
+      .where(eq(stockRequests.id, id))
+      .returning();
+    return request;
+  }
+
+  async approveStockRequest(id: string, approvedBy: string): Promise<StockRequest> {
+    const [request] = await db
+      .update(stockRequests)
+      .set({ 
+        status: 'approved',
+        approvedBy,
+        approvedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(stockRequests.id, id))
+      .returning();
+    return request;
+  }
+
+  async deliverStockRequest(id: string): Promise<StockRequest> {
+    const request = await this.getStockRequest(id);
+    if (!request) {
+      throw new Error('Stock request not found');
+    }
+
+    const inventoryItem = await db.query.inventoryItems.findFirst({
+      where: (inventoryItemsTable, { eq }) => eq(inventoryItemsTable.id, request.itemId)
+    });
+
+    if (!inventoryItem) {
+      throw new Error('Inventory item not found');
+    }
+
+    let quantityInBaseUnit = Number(request.quantity);
+    
+    if (request.unit && request.unit !== inventoryItem.baseUnit) {
+      const { convertToBase } = await import('@shared/measurements');
+      const category = (inventoryItem.measurementCategory || 'weight') as any;
+      const conversionProfile = inventoryItem.conversionProfile as any;
+      
+      try {
+        quantityInBaseUnit = convertToBase(
+          Number(request.quantity),
+          request.unit as any,
+          (inventoryItem.baseUnit || 'kg') as any,
+          category,
+          conversionProfile
+        );
+      } catch (error) {
+        console.error(`Unit conversion error for ${inventoryItem.name}:`, error);
+      }
+    }
+
+    const currentStock = Number(inventoryItem.baseStockQty || inventoryItem.stockQty || 0);
+    const newQuantity = currentStock - quantityInBaseUnit;
+
+    await db
+      .update(inventoryItems)
+      .set({ 
+        baseStockQty: String(newQuantity),
+        stockQty: String(newQuantity),
+        updatedAt: new Date()
+      })
+      .where(eq(inventoryItems.id, request.itemId));
+
+    const [updatedRequest] = await db
+      .update(stockRequests)
+      .set({ 
+        status: 'delivered',
+        deliveredAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(stockRequests.id, id))
+      .returning();
+
+    return updatedRequest;
   }
 }
 

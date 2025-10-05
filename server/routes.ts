@@ -25,6 +25,7 @@ import {
   updateKotItemSchema,
   insertMealPlanSchema,
   insertGuestSchema,
+  insertStockRequestSchema,
   vouchers
 } from "@shared/schema";
 
@@ -2713,6 +2714,187 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Leave request update error:", error);
       res.status(400).json({ message: "Failed to update leave request" });
+    }
+  });
+
+  // Stock request routes
+  app.get("/api/hotels/current/stock-requests/my-requests", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const userRole = user.role?.name || '';
+      const canRequestStock = ['bartender', 'kitchen_staff', 'barista'].includes(userRole);
+      
+      if (!canRequestStock) {
+        return res.status(403).json({ message: "Only bartender, kitchen staff, and barista can view their stock requests" });
+      }
+      
+      const requests = await storage.getStockRequestsByUser(user.id);
+      res.json(requests);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch stock requests" });
+    }
+  });
+
+  app.get("/api/hotels/current/stock-requests/pending", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const userRole = user.role?.name || '';
+      if (userRole !== 'storekeeper') {
+        return res.status(403).json({ message: "Only storekeeper can view pending stock requests" });
+      }
+      
+      const requests = await storage.getPendingStockRequestsForStorekeeper(user.hotelId);
+      res.json(requests);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch pending stock requests" });
+    }
+  });
+
+  app.get("/api/hotels/current/stock-requests/department", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const userRole = user.role?.name || '';
+      let department = req.query.department as string;
+      
+      if (userRole === 'restaurant_bar_manager') {
+        department = 'restaurant_bar';
+      } else if (userRole === 'housekeeping_supervisor') {
+        department = 'housekeeping';
+      } else if (userRole === 'security_head') {
+        department = 'security';
+      } else if (!['manager', 'owner', 'super_admin'].includes(userRole)) {
+        return res.status(403).json({ message: "Not authorized to view department stock requests" });
+      }
+      
+      if (!department) {
+        return res.status(400).json({ message: "Department could not be determined" });
+      }
+      
+      const requests = await storage.getStockRequestsByDepartment(user.hotelId, department);
+      res.json(requests);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch department stock requests" });
+    }
+  });
+
+  app.post("/api/hotels/current/stock-requests", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const userRole = user.role?.name || '';
+      const canRequestStock = ['bartender', 'kitchen_staff', 'barista'].includes(userRole);
+      
+      if (!canRequestStock) {
+        return res.status(403).json({ message: "Only bartender, kitchen staff, and barista can request stock" });
+      }
+      
+      let department = '';
+      if (userRole === 'bartender' || userRole === 'kitchen_staff' || userRole === 'barista') {
+        department = 'restaurant_bar';
+      }
+      
+      const requestData = insertStockRequestSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId,
+        requestedBy: user.id,
+        department,
+        status: 'pending'
+      });
+      
+      const request = await storage.createStockRequest(requestData);
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Stock request creation error:", error);
+      res.status(400).json({ message: "Invalid stock request data" });
+    }
+  });
+
+  app.patch("/api/hotels/current/stock-requests/:id/approve", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const userRole = user.role?.name || '';
+      if (userRole !== 'storekeeper') {
+        return res.status(403).json({ message: "Only storekeeper can approve stock requests" });
+      }
+      
+      const { id } = req.params;
+      const existingRequest = await storage.getStockRequest(id);
+      if (!existingRequest || existingRequest.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Stock request not found" });
+      }
+      
+      const request = await storage.approveStockRequest(id, user.id);
+      res.json(request);
+    } catch (error) {
+      console.error("Stock request approval error:", error);
+      res.status(400).json({ message: "Failed to approve stock request" });
+    }
+  });
+
+  app.patch("/api/hotels/current/stock-requests/:id/deliver", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const userRole = user.role?.name || '';
+      if (userRole !== 'storekeeper') {
+        return res.status(403).json({ message: "Only storekeeper can deliver stock requests" });
+      }
+      
+      const { id } = req.params;
+      const existingRequest = await storage.getStockRequest(id);
+      if (!existingRequest || existingRequest.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Stock request not found" });
+      }
+      
+      if (existingRequest.status !== 'approved') {
+        return res.status(400).json({ message: "Can only deliver approved stock requests" });
+      }
+      
+      const request = await storage.deliverStockRequest(id);
+      res.json(request);
+    } catch (error) {
+      console.error("Stock request delivery error:", error);
+      res.status(400).json({ message: "Failed to deliver stock request" });
     }
   });
 

@@ -457,6 +457,24 @@ export const mealPlans = pgTable("meal_plans", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
+// Stock Requests Table
+export const stockRequests = pgTable("stock_requests", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  requestedBy: uuid("requested_by").references(() => users.id).notNull(),
+  itemId: uuid("item_id").references(() => inventoryItems.id).notNull(),
+  quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+  unit: text("unit").notNull(),
+  status: text("status").default('pending').notNull(),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  department: text("department"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+});
+
 // Relations
 export const hotelRelations = relations(hotels, ({ many }) => ({
   users: many(users),
@@ -479,7 +497,8 @@ export const hotelRelations = relations(hotels, ({ many }) => ({
   vouchers: many(vouchers),
   vehicleLogs: many(vehicleLogs),
   roomServiceOrders: many(roomServiceOrders),
-  mealPlans: many(mealPlans)
+  mealPlans: many(mealPlans),
+  stockRequests: many(stockRequests)
 }));
 
 export const userRelations = relations(users, ({ one, many }) => ({
@@ -706,6 +725,16 @@ export const insertGuestSchema = createInsertSchema(guests).omit({
   deletedAt: true
 });
 
+export const insertStockRequestSchema = createInsertSchema(stockRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  approvedAt: true,
+  deliveredAt: true
+}).extend({
+  quantity: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
 export const updateKotItemSchema = z.object({
   status: z.enum(['pending', 'approved', 'declined', 'ready']),
   declineReason: z.string().optional()
@@ -763,3 +792,5 @@ export type MealPlan = typeof mealPlans.$inferSelect;
 export type InsertMealPlan = z.infer<typeof insertMealPlanSchema>;
 export type Guest = typeof guests.$inferSelect;
 export type InsertGuest = z.infer<typeof insertGuestSchema>;
+export type StockRequest = typeof stockRequests.$inferSelect;
+export type InsertStockRequest = z.infer<typeof insertStockRequestSchema>;
