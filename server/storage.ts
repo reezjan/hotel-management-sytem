@@ -1277,27 +1277,48 @@ export class DatabaseStorage implements IStorage {
           where: (menuItemsTable, { eq }) => eq(menuItemsTable.id, item.menuItemId)
         });
 
-        if (menuItem?.recipe?.ingredients && Array.isArray(menuItem.recipe.ingredients)) {
-          const ingredients = menuItem.recipe.ingredients;
+        const recipe = menuItem?.recipe as any;
+        if (recipe?.ingredients && Array.isArray(recipe.ingredients)) {
+          const ingredients = recipe.ingredients;
           const usageRecords = [];
 
           // Deduct inventory for each ingredient
           for (const ingredient of ingredients) {
             if (ingredient.inventoryItemId && ingredient.quantity) {
-              const quantityToDeduct = ingredient.quantity * (item.qty || 1);
-              
-              // Update inventory quantity
               const inventoryItem = await db.query.inventoryItems.findFirst({
                 where: (inventoryItemsTable, { eq }) => eq(inventoryItemsTable.id, ingredient.inventoryItemId)
               });
 
               if (inventoryItem) {
-                const newQuantity = (inventoryItem.quantity || 0) - quantityToDeduct;
+                let quantityInBaseUnit = ingredient.quantity;
+                
+                if (ingredient.unit && ingredient.unit !== inventoryItem.baseUnit) {
+                  const { convertToBase, MeasurementCategory } = await import('@shared/measurements');
+                  const category = (inventoryItem.measurementCategory || 'weight') as any;
+                  const conversionProfile = inventoryItem.conversionProfile as any;
+                  
+                  try {
+                    quantityInBaseUnit = convertToBase(
+                      ingredient.quantity,
+                      ingredient.unit as any,
+                      (inventoryItem.baseUnit || 'kg') as any,
+                      category,
+                      conversionProfile
+                    );
+                  } catch (error) {
+                    console.error(`Unit conversion error for ${inventoryItem.name}:`, error);
+                  }
+                }
+                
+                const totalQuantityToDeduct = quantityInBaseUnit * (item.qty || 1);
+                const currentStock = Number(inventoryItem.baseStockQty || inventoryItem.stockQty || 0);
+                const newQuantity = currentStock - totalQuantityToDeduct;
                 
                 await db
                   .update(inventoryItems)
                   .set({ 
-                    quantity: newQuantity,
+                    baseStockQty: String(newQuantity),
+                    stockQty: String(newQuantity),
                     updatedAt: new Date()
                   })
                   .where(eq(inventoryItems.id, ingredient.inventoryItemId));
@@ -1305,7 +1326,9 @@ export class DatabaseStorage implements IStorage {
                 usageRecords.push({
                   inventoryItemId: ingredient.inventoryItemId,
                   inventoryItemName: inventoryItem.name,
-                  quantityUsed: quantityToDeduct,
+                  quantityUsed: totalQuantityToDeduct,
+                  originalQuantity: ingredient.quantity,
+                  originalUnit: ingredient.unit || inventoryItem.baseUnit,
                   unit: inventoryItem.baseUnit
                 });
               }
