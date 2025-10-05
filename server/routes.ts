@@ -2133,6 +2133,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
+      // If status is being changed to "approved", deduct inventory
+      if (validatedData.status === 'approved' && kotItem.status !== 'approved') {
+        await storage.deductInventoryForKotItem(id);
+      }
+
       // Update the KOT item
       const updatedItem = await storage.updateKotItem(id, validatedData);
       res.json(updatedItem);

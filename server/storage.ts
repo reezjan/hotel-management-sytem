@@ -837,6 +837,96 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
+  async deductInventoryForKotItem(kotItemId: string): Promise<void> {
+    // Get the KOT item
+    const kotItem = await this.getKotItemById(kotItemId);
+    if (!kotItem || !kotItem.menuItemId) {
+      return;
+    }
+
+    // Check if inventory was already deducted
+    if (kotItem.inventoryUsage) {
+      console.log('Inventory already deducted for this KOT item');
+      return;
+    }
+
+    // Get the menu item with its recipe
+    const menuItem = await db.query.menuItems.findFirst({
+      where: (menuItemsTable, { eq }) => eq(menuItemsTable.id, kotItem.menuItemId!)
+    });
+
+    const recipe = menuItem?.recipe as any;
+    if (!recipe?.ingredients || !Array.isArray(recipe.ingredients)) {
+      return;
+    }
+
+    const ingredients = recipe.ingredients;
+    const usageRecords = [];
+
+    // Deduct inventory for each ingredient
+    for (const ingredient of ingredients) {
+      if (ingredient.inventoryItemId && ingredient.quantity) {
+        const inventoryItem = await db.query.inventoryItems.findFirst({
+          where: (inventoryItemsTable, { eq }) => eq(inventoryItemsTable.id, ingredient.inventoryItemId)
+        });
+
+        if (inventoryItem) {
+          let quantityInBaseUnit = ingredient.quantity;
+          
+          if (ingredient.unit && ingredient.unit !== inventoryItem.baseUnit) {
+            const { convertToBase, MeasurementCategory } = await import('@shared/measurements');
+            const category = (inventoryItem.measurementCategory || 'weight') as any;
+            const conversionProfile = inventoryItem.conversionProfile as any;
+            
+            try {
+              quantityInBaseUnit = convertToBase(
+                ingredient.quantity,
+                ingredient.unit as any,
+                (inventoryItem.baseUnit || 'kg') as any,
+                category,
+                conversionProfile
+              );
+            } catch (error) {
+              console.error(`Unit conversion error for ${inventoryItem.name}:`, error);
+            }
+          }
+          
+          const totalQuantityToDeduct = quantityInBaseUnit * (kotItem.qty || 1);
+          const currentStock = Number(inventoryItem.baseStockQty || inventoryItem.stockQty || 0);
+          const newQuantity = currentStock - totalQuantityToDeduct;
+          
+          await db
+            .update(inventoryItems)
+            .set({ 
+              baseStockQty: String(newQuantity),
+              stockQty: String(newQuantity),
+              updatedAt: new Date()
+            })
+            .where(eq(inventoryItems.id, ingredient.inventoryItemId));
+
+          usageRecords.push({
+            inventoryItemId: ingredient.inventoryItemId,
+            inventoryItemName: inventoryItem.name,
+            quantityUsed: totalQuantityToDeduct,
+            originalQuantity: ingredient.quantity,
+            originalUnit: ingredient.unit || inventoryItem.baseUnit,
+            unit: inventoryItem.baseUnit
+          });
+        }
+      }
+    }
+
+    // Update the KOT item with inventory usage record
+    if (usageRecords.length > 0) {
+      await db
+        .update(kotItems)
+        .set({ 
+          inventoryUsage: { usedIngredients: usageRecords }
+        })
+        .where(eq(kotItems.id, kotItemId));
+    }
+  }
+
   // Wastage operations
   async createWastage(wastageData: any): Promise<any> {
     const [wastage] = await db
@@ -1267,87 +1357,15 @@ export class DatabaseStorage implements IStorage {
       .values(kotData)
       .returning();
 
-    // Insert each KOT item and handle inventory deduction for items with recipes
+    // Insert each KOT item without inventory deduction
+    // Inventory will be deducted when kitchen staff/bartender/barista approves the item
     for (const item of items) {
-      let inventoryUsage = null;
-
-      // If the item has a menuItemId, check if it has a recipe with ingredients
-      if (item.menuItemId) {
-        const menuItem = await db.query.menuItems.findFirst({
-          where: (menuItemsTable, { eq }) => eq(menuItemsTable.id, item.menuItemId)
-        });
-
-        const recipe = menuItem?.recipe as any;
-        if (recipe?.ingredients && Array.isArray(recipe.ingredients)) {
-          const ingredients = recipe.ingredients;
-          const usageRecords = [];
-
-          // Deduct inventory for each ingredient
-          for (const ingredient of ingredients) {
-            if (ingredient.inventoryItemId && ingredient.quantity) {
-              const inventoryItem = await db.query.inventoryItems.findFirst({
-                where: (inventoryItemsTable, { eq }) => eq(inventoryItemsTable.id, ingredient.inventoryItemId)
-              });
-
-              if (inventoryItem) {
-                let quantityInBaseUnit = ingredient.quantity;
-                
-                if (ingredient.unit && ingredient.unit !== inventoryItem.baseUnit) {
-                  const { convertToBase, MeasurementCategory } = await import('@shared/measurements');
-                  const category = (inventoryItem.measurementCategory || 'weight') as any;
-                  const conversionProfile = inventoryItem.conversionProfile as any;
-                  
-                  try {
-                    quantityInBaseUnit = convertToBase(
-                      ingredient.quantity,
-                      ingredient.unit as any,
-                      (inventoryItem.baseUnit || 'kg') as any,
-                      category,
-                      conversionProfile
-                    );
-                  } catch (error) {
-                    console.error(`Unit conversion error for ${inventoryItem.name}:`, error);
-                  }
-                }
-                
-                const totalQuantityToDeduct = quantityInBaseUnit * (item.qty || 1);
-                const currentStock = Number(inventoryItem.baseStockQty || inventoryItem.stockQty || 0);
-                const newQuantity = currentStock - totalQuantityToDeduct;
-                
-                await db
-                  .update(inventoryItems)
-                  .set({ 
-                    baseStockQty: String(newQuantity),
-                    stockQty: String(newQuantity),
-                    updatedAt: new Date()
-                  })
-                  .where(eq(inventoryItems.id, ingredient.inventoryItemId));
-
-                usageRecords.push({
-                  inventoryItemId: ingredient.inventoryItemId,
-                  inventoryItemName: inventoryItem.name,
-                  quantityUsed: totalQuantityToDeduct,
-                  originalQuantity: ingredient.quantity,
-                  originalUnit: ingredient.unit || inventoryItem.baseUnit,
-                  unit: inventoryItem.baseUnit
-                });
-              }
-            }
-          }
-
-          if (usageRecords.length > 0) {
-            inventoryUsage = { usedIngredients: usageRecords };
-          }
-        }
-      }
-
-      // Insert the KOT item with inventory usage record
       await db
         .insert(kotItems)
         .values({
           ...item,
           kotId: kot.id,
-          inventoryUsage
+          inventoryUsage: null
         });
     }
 
