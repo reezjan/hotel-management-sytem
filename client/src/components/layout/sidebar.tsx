@@ -132,6 +132,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'duty': '/duty-status',
         'tasks': '/my-tasks',
         'kot': '/kot-orders',
+        'request-stock': '/kitchen-staff/request-stock',
         'maintenance': '/maintenance-reports'
       },
       'bartender': {
@@ -139,6 +140,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'duty': '/duty-status',
         'tasks': '/my-tasks',
         'kot': '/kot-orders',
+        'request-stock': '/bartender/request-stock',
         'maintenance': '/maintenance-reports'
       },
       'barista': {
@@ -146,6 +148,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'duty': '/duty-status',
         'tasks': '/my-tasks',
         'kot': '/kot-orders',
+        'request-stock': '/barista/request-stock',
         'maintenance': '/maintenance-reports'
       },
       'security_guard': {
