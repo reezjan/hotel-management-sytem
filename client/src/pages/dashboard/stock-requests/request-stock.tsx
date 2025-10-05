@@ -60,7 +60,7 @@ export default function RequestStock() {
 
   const requestMutation = useMutation({
     mutationFn: async (data: RequestStockForm) => {
-      return await apiRequest("/api/hotels/current/stock-requests", "POST", {
+      return await apiRequest("POST", "/api/hotels/current/stock-requests", {
         ...data,
         quantity: parseFloat(data.quantity)
       });
@@ -131,13 +131,13 @@ export default function RequestStock() {
 
   return (
     <DashboardLayout title="Request Stock">
-      <div className="container mx-auto p-6 space-y-6">
-        <div className="flex justify-between items-center">
+      <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Request Stock</h1>
-            <p className="text-muted-foreground mt-1">Request inventory items from the storekeeper</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">Request Stock</h1>
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">Request inventory items from the storekeeper</p>
           </div>
-          <Button onClick={() => setIsRequestModalOpen(true)} data-testid="button-request-stock">
+          <Button onClick={() => setIsRequestModalOpen(true)} data-testid="button-request-stock" className="w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" />
             New Request
           </Button>
@@ -159,7 +159,7 @@ export default function RequestStock() {
                 {myRequests.map((request: any) => {
                   const item = inventoryItems.find((i: any) => i.id === request.itemId);
                   return (
-                    <div key={request.id} className="border rounded-lg p-4 flex justify-between items-center" data-testid={`request-${request.id}`}>
+                    <div key={request.id} className="border rounded-lg p-3 sm:p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3" data-testid={`request-${request.id}`}>
                       <div className="flex-1">
                         <div className="font-semibold" data-testid={`text-item-${request.id}`}>{item?.name || 'Unknown Item'}</div>
                         <div className="text-sm text-muted-foreground">
@@ -174,7 +174,7 @@ export default function RequestStock() {
                           Requested: {new Date(request.createdAt).toLocaleString()}
                         </div>
                       </div>
-                      <div data-testid={`status-${request.id}`}>{getStatusBadge(request.status)}</div>
+                      <div data-testid={`status-${request.id}`} className="self-start sm:self-center">{getStatusBadge(request.status)}</div>
                     </div>
                   );
                 })}

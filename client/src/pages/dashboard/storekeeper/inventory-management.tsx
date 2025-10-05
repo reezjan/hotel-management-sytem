@@ -45,7 +45,7 @@ export default function StorekeeperInventoryManagement() {
       name: "",
       description: "",
       sku: "",
-      baseUnit: "pieces",
+      baseUnit: "piece",
       packageUnit: "",
       baseUnitsPerPackage: 0,
       reorderLevel: 0,
@@ -263,19 +263,20 @@ export default function StorekeeperInventoryManagement() {
 
   return (
     <DashboardLayout title="Inventory Management">
-      <Tabs defaultValue="items" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 lg:w-[500px]">
-          <TabsTrigger value="items">Inventory Items</TabsTrigger>
-          <TabsTrigger value="transactions">Transaction History</TabsTrigger>
-          <TabsTrigger value="low-stock">Low Stock Alert</TabsTrigger>
+      <Tabs defaultValue="items" className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+        <TabsList className="grid w-full grid-cols-3 max-w-full sm:max-w-[500px]">
+          <TabsTrigger value="items" className="text-xs sm:text-sm">Inventory Items</TabsTrigger>
+          <TabsTrigger value="transactions" className="text-xs sm:text-sm">Transactions</TabsTrigger>
+          <TabsTrigger value="low-stock" className="text-xs sm:text-sm">Low Stock</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="items" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Manage Inventory Items</h2>
+        <TabsContent value="items" className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <h2 className="text-xl sm:text-2xl font-bold">Manage Inventory Items</h2>
             <Button 
               onClick={() => setIsAddItemModalOpen(true)}
               data-testid="button-add-item"
+              className="w-full sm:w-auto"
             >
               <Plus className="w-4 h-4 mr-2" />
               Add New Item
@@ -302,15 +303,15 @@ export default function StorekeeperInventoryManagement() {
                     return (
                       <div
                         key={item.id}
-                        className={`p-4 border rounded-lg hover:bg-accent transition-colors ${isLowStock ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : ''}`}
+                        className={`p-3 sm:p-4 border rounded-lg hover:bg-accent transition-colors ${isLowStock ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : ''}`}
                         data-testid={`manage-item-${item.id}`}
                       >
-                        <div className="flex items-start justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                           <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold">{item.name}</h3>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                              <h3 className="font-semibold text-base">{item.name}</h3>
                               {isLowStock && (
-                                <Badge variant="destructive" className="text-xs">
+                                <Badge variant="destructive" className="text-xs w-fit">
                                   <AlertTriangle className="w-3 h-3 mr-1" />
                                   Low Stock
                                 </Badge>
@@ -319,7 +320,7 @@ export default function StorekeeperInventoryManagement() {
                             {item.description && (
                               <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
                             )}
-                            <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                            <div className="mt-2 flex flex-wrap gap-2 sm:gap-3 text-xs sm:text-sm">
                               <span className="font-medium">
                                 Stock: {baseStock.toFixed(2)} {item.baseUnit}
                                 {item.packageUnit && ` (${packageStock.toFixed(2)} ${item.packageUnit})`}
@@ -331,7 +332,7 @@ export default function StorekeeperInventoryManagement() {
                               )}
                             </div>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex flex-row sm:flex-row gap-2 w-full sm:w-auto">
                             <Button
                               variant="outline"
                               size="sm"
@@ -341,9 +342,10 @@ export default function StorekeeperInventoryManagement() {
                                 receiveStockForm.reset();
                               }}
                               data-testid={`button-receive-stock-${item.id}`}
+                              className="flex-1 sm:flex-none"
                             >
-                              <TrendingUp className="w-4 h-4 mr-1" />
-                              Receive
+                              <TrendingUp className="w-4 h-4 sm:mr-1" />
+                              <span className="hidden sm:inline">Receive</span>
                             </Button>
                             <Button
                               variant="outline"
@@ -354,9 +356,10 @@ export default function StorekeeperInventoryManagement() {
                                 issueStockForm.reset();
                               }}
                               data-testid={`button-issue-stock-${item.id}`}
+                              className="flex-1 sm:flex-none"
                             >
-                              <ArrowRightLeft className="w-4 h-4 mr-1" />
-                              Issue
+                              <ArrowRightLeft className="w-4 h-4 sm:mr-1" />
+                              <span className="hidden sm:inline">Issue</span>
                             </Button>
                           </div>
                         </div>
@@ -495,13 +498,13 @@ export default function StorekeeperInventoryManagement() {
 
       {/* Add Item Modal */}
       <Dialog open={isAddItemModalOpen} onOpenChange={setIsAddItemModalOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Inventory Item</DialogTitle>
           </DialogHeader>
           <Form {...addItemForm}>
             <form onSubmit={addItemForm.handleSubmit(onAddItem)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={addItemForm.control}
                   name="name"
@@ -553,7 +556,7 @@ export default function StorekeeperInventoryManagement() {
                     <FormDescription className="text-xs">
                       Select which departments can view and use this inventory item
                     </FormDescription>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
                       {[
                         { value: 'restaurant', label: 'Restaurant' },
                         { value: 'bar', label: 'Bar' },
@@ -607,7 +610,7 @@ export default function StorekeeperInventoryManagement() {
                 )}
               />
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <FormField
                   control={addItemForm.control}
                   name="baseUnit"
@@ -622,11 +625,12 @@ export default function StorekeeperInventoryManagement() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="kg">Kilograms (kg)</SelectItem>
-                          <SelectItem value="grams">Grams (g)</SelectItem>
-                          <SelectItem value="liters">Liters (L)</SelectItem>
+                          <SelectItem value="g">Grams (g)</SelectItem>
+                          <SelectItem value="L">Liters (L)</SelectItem>
                           <SelectItem value="ml">Milliliters (ml)</SelectItem>
-                          <SelectItem value="pieces">Pieces</SelectItem>
-                          <SelectItem value="units">Units</SelectItem>
+                          <SelectItem value="piece">Pieces (piece)</SelectItem>
+                          <SelectItem value="dozen">Dozen</SelectItem>
+                          <SelectItem value="pack">Packs</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -671,7 +675,7 @@ export default function StorekeeperInventoryManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <FormField
                   control={addItemForm.control}
                   name="reorderLevel"

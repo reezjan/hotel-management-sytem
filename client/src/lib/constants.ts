@@ -192,6 +192,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Clock', label: 'Duty Status', id: 'duty' },
     { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
     { icon: 'ClipboardList', label: 'KOT Orders', id: 'kot' },
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
     { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
   ],
   [ROLES.BARTENDER]: [
@@ -199,6 +200,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Clock', label: 'Duty Status', id: 'duty' },
     { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
     { icon: 'ClipboardList', label: 'KOT Orders', id: 'kot' },
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
     { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
   ],
   [ROLES.BARISTA]: [
@@ -206,6 +208,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Clock', label: 'Duty Status', id: 'duty' },
     { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
     { icon: 'ClipboardList', label: 'KOT Orders', id: 'kot' },
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
     { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
   ],
   [ROLES.SECURITY_HEAD]: [
