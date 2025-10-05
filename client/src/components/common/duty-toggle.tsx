@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
@@ -13,6 +13,16 @@ export function DutyToggle({ userId }: DutyToggleProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isOnDuty, setIsOnDuty] = useState(false);
+
+  const { data: userData } = useQuery<any>({
+    queryKey: ["/api/user"]
+  });
+
+  useEffect(() => {
+    if (userData?.isOnline !== undefined) {
+      setIsOnDuty(userData.isOnline);
+    }
+  }, [userData]);
 
   const updateDutyMutation = useMutation({
     mutationFn: async (isOnline: boolean) => {
