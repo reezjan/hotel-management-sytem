@@ -74,7 +74,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'vehicles': '/vehicle-logs',
         'duty': '/duty-tracking',
         'tasks': '/task-assignment',
-        'maintenance': '/maintenance-requests'
+        'maintenance': '/maintenance-requests',
+        'request-stock': '/security-head/request-stock'
       },
       'finance': {
         'dashboard': '/finance',
@@ -92,6 +93,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'orders': '/waiter/orders',
         'billing': '/waiter/billing',
         'search': '/waiter/food-search',
+        'request-stock': '/waiter/request-stock',
         'maintenance': '/waiter/maintenance'
       },
       'cashier': {
@@ -106,6 +108,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       'front_desk': {
         'dashboard': '/front-desk',
         'guests': '/guests',
+        'request-stock': '/front-desk/request-stock',
         'duty': '/duty-status',
         'tasks': '/task-management',
         'checkin': '/check-in-out',
@@ -119,12 +122,14 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'duty': '/surveillance-officer/duty-status',
         'tasks': '/surveillance-officer/my-tasks',
         'vehicles': '/surveillance-officer/vehicle-logs',
-        'maintenance': '/surveillance-officer/maintenance-reports'
+        'maintenance': '/surveillance-officer/maintenance-reports',
+        'request-stock': '/surveillance-officer/request-stock'
       },
       'housekeeping_staff': {
         'dashboard': '/housekeeping-staff',
         'duty': '/housekeeping-staff/duty-status',
         'tasks': '/housekeeping-staff/my-tasks',
+        'request-stock': '/housekeeping-staff/request-stock',
         'maintenance': '/housekeeping-staff/maintenance-reports'
       },
       'kitchen_staff': {
@@ -156,7 +161,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'duty': '/duty-status',
         'tasks': '/my-tasks',
         'vehicles': '/vehicle-check',
-        'maintenance': '/maintenance-reports'
+        'maintenance': '/maintenance-reports',
+        'request-stock': '/security-guard/request-stock'
       },
       'storekeeper': {
         'dashboard': '/storekeeper',

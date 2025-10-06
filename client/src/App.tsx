@@ -114,6 +114,7 @@ function Router() {
       <ProtectedRoute path="/housekeeping-staff" component={HousekeepingStaffDashboard} allowedRoles={["housekeeping_staff"]} />
       <ProtectedRoute path="/housekeeping-staff/duty-status" component={HousekeepingStaffDutyStatus} allowedRoles={["housekeeping_staff"]} />
       <ProtectedRoute path="/housekeeping-staff/my-tasks" component={HousekeepingStaffMyTasks} allowedRoles={["housekeeping_staff"]} />
+      <ProtectedRoute path="/housekeeping-staff/request-stock" component={RequestStock} allowedRoles={["housekeeping_staff"]} />
       <ProtectedRoute path="/housekeeping-staff/maintenance-reports" component={HousekeepingStaffMaintenanceReports} allowedRoles={["housekeeping_staff"]} />
       <ProtectedRoute path="/restaurant-bar-manager" component={RestaurantBarManagerDashboard} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/staff-management" component={RestaurantStaffManagement} allowedRoles={["restaurant_bar_manager"]} />
@@ -131,6 +132,7 @@ function Router() {
       <ProtectedRoute path="/waiter/orders" component={WaiterOrders} allowedRoles={["waiter"]} />
       <ProtectedRoute path="/waiter/billing" component={WaiterBilling} allowedRoles={["waiter"]} />
       <ProtectedRoute path="/waiter/food-search" component={WaiterFoodSearch} allowedRoles={["waiter"]} />
+      <ProtectedRoute path="/waiter/request-stock" component={RequestStock} allowedRoles={["waiter"]} />
       <ProtectedRoute path="/kitchen-staff" component={KitchenStaffDashboard} allowedRoles={["kitchen_staff"]} />
       <ProtectedRoute path="/kitchen-staff/request-stock" component={RequestStock} allowedRoles={["kitchen_staff"]} />
       <ProtectedRoute path="/bartender" component={BartenderDashboard} allowedRoles={["bartender"]} />
@@ -139,12 +141,15 @@ function Router() {
       <ProtectedRoute path="/barista/request-stock" component={RequestStock} allowedRoles={["barista"]} />
       <ProtectedRoute path="/cashier" component={CashierDashboard} allowedRoles={["cashier"]} />
       <ProtectedRoute path="/security-head" component={SecurityHeadDashboard} allowedRoles={["security_head"]} />
+      <ProtectedRoute path="/security-head/request-stock" component={RequestStock} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-guard" component={SecurityGuardDashboard} allowedRoles={["security_guard"]} />
+      <ProtectedRoute path="/security-guard/request-stock" component={RequestStock} allowedRoles={["security_guard"]} />
       <ProtectedRoute path="/surveillance-officer" component={SurveillanceOfficerDashboard} allowedRoles={["surveillance_officer"]} />
       <ProtectedRoute path="/surveillance-officer/duty-status" component={SurveillanceOfficerDutyStatus} allowedRoles={["surveillance_officer"]} />
       <ProtectedRoute path="/surveillance-officer/my-tasks" component={SurveillanceOfficerMyTasks} allowedRoles={["surveillance_officer"]} />
       <ProtectedRoute path="/surveillance-officer/vehicle-logs" component={SurveillanceOfficerVehicleLogs} allowedRoles={["surveillance_officer"]} />
       <ProtectedRoute path="/surveillance-officer/maintenance-reports" component={SurveillanceOfficerMaintenanceReports} allowedRoles={["surveillance_officer"]} />
+      <ProtectedRoute path="/surveillance-officer/request-stock" component={RequestStock} allowedRoles={["surveillance_officer"]} />
       
       {/* Finance Routes - Specific routes MUST come before general /finance route */}
       <ProtectedRoute path="/finance/transactions" component={FinanceTransactions} allowedRoles={["finance"]} />
@@ -156,6 +161,7 @@ function Router() {
       <ProtectedRoute path="/finance" component={FinanceDashboard} allowedRoles={["finance"]} />
       
       <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
+      <ProtectedRoute path="/front-desk/request-stock" component={RequestStock} allowedRoles={["front_desk"]} />
       <ProtectedRoute path="/guests" component={GuestsPage} allowedRoles={["front_desk", "manager", "owner"]} />
       
       {/* Storekeeper Routes */}
