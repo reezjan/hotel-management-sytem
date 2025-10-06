@@ -1,5 +1,5 @@
 import { db } from './db';
-import { roles, roleCreationPermissions, users, hotels } from '@shared/schema';
+import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems } from '@shared/schema';
 import { hashPassword } from './auth';
 import { eq } from 'drizzle-orm';
 
@@ -151,6 +151,7 @@ async function seed() {
     const managerRole = await db.select().from(roles).where(eq(roles.name, 'manager'));
     const baristaRole = await db.select().from(roles).where(eq(roles.name, 'barista'));
     const storekeeperRole = await db.select().from(roles).where(eq(roles.name, 'storekeeper'));
+    const frontDeskRole = await db.select().from(roles).where(eq(roles.name, 'front_desk'));
 
     // Create test users
     console.log('\n👥 Creating test users...');
@@ -179,6 +180,12 @@ async function seed() {
         password: 'storekeeper',
         roleId: storekeeperRole[0].id,
         email: 'storekeeper@testhotel.local'
+      },
+      {
+        username: 'sita',
+        password: 'sitasita',
+        roleId: frontDeskRole[0].id,
+        email: 'sita@testhotel.local'
       }
     ];
 
@@ -204,7 +211,164 @@ async function seed() {
       }
     }
 
+    // Create room types
+    console.log('\n🛏️  Creating room types...');
+    const roomTypeData = [
+      { name: 'Standard', description: 'Standard room with basic amenities', priceInhouse: '2000', priceWalkin: '2500' },
+      { name: 'Deluxe', description: 'Deluxe room with premium amenities', priceInhouse: '3500', priceWalkin: '4000' },
+      { name: 'Suite', description: 'Luxury suite with separate living area', priceInhouse: '5000', priceWalkin: '6000' }
+    ];
+
+    const createdRoomTypes = [];
+    for (const rt of roomTypeData) {
+      const existing = await db.select().from(roomTypes).where(eq(roomTypes.name, rt.name));
+      if (existing.length === 0) {
+        const [created] = await db.insert(roomTypes).values({
+          hotelId: testHotel.id,
+          ...rt
+        }).returning();
+        createdRoomTypes.push(created);
+        console.log(`  ✓ Created room type: ${rt.name}`);
+      } else {
+        createdRoomTypes.push(existing[0]);
+        console.log(`  → Room type already exists: ${rt.name}`);
+      }
+    }
+
+    // Create rooms
+    console.log('\n🚪 Creating rooms...');
+    const roomNumbers = ['101', '102', '103', '201', '202', '301'];
+    let roomIndex = 0;
+    for (const roomNum of roomNumbers) {
+      const existing = await db.select().from(rooms).where(eq(rooms.roomNumber, roomNum));
+      if (existing.length === 0) {
+        const roomTypeIndex = roomIndex % createdRoomTypes.length;
+        await db.insert(rooms).values({
+          hotelId: testHotel.id,
+          roomNumber: roomNum,
+          roomTypeId: createdRoomTypes[roomTypeIndex].id,
+          isOccupied: false
+        });
+        console.log(`  ✓ Created room: ${roomNum}`);
+      } else {
+        console.log(`  → Room already exists: ${roomNum}`);
+      }
+      roomIndex++;
+    }
+
+    // Create meal plans
+    console.log('\n🍽️  Creating meal plans...');
+    const mealPlanData = [
+      { planType: 'EP', planName: 'European Plan (Room Only)', pricePerPerson: '0', description: 'Room only, no meals included' },
+      { planType: 'CP', planName: 'Continental Plan (Bed & Breakfast)', pricePerPerson: '500', description: 'Includes breakfast' },
+      { planType: 'MAP', planName: 'Modified American Plan', pricePerPerson: '1200', description: 'Includes breakfast and dinner' },
+      { planType: 'AP', planName: 'American Plan (Full Board)', pricePerPerson: '2000', description: 'Includes all three meals' }
+    ];
+
+    for (const plan of mealPlanData) {
+      const existing = await db.select().from(mealPlans).where(eq(mealPlans.planType, plan.planType));
+      if (existing.length === 0) {
+        await db.insert(mealPlans).values({
+          hotelId: testHotel.id,
+          ...plan
+        });
+        console.log(`  ✓ Created meal plan: ${plan.planType}`);
+      } else {
+        console.log(`  → Meal plan already exists: ${plan.planType}`);
+      }
+    }
+
+    // Create discount voucher
+    console.log('\n🎟️  Creating discount voucher...');
+    const existingVoucher = await db.select().from(vouchers).where(eq(vouchers.code, 'DISCOUNT1000'));
+    if (existingVoucher.length === 0) {
+      await db.insert(vouchers).values({
+        hotelId: testHotel.id,
+        code: 'DISCOUNT1000',
+        discountAmount: '1000',
+        discountType: 'fixed',
+        validFrom: new Date(),
+        validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
+        maxUses: 100,
+        usedCount: 0
+      });
+      console.log('  ✓ Created discount voucher: DISCOUNT1000 (Rs. 1000 off)');
+    } else {
+      console.log('  → Discount voucher already exists: DISCOUNT1000');
+    }
+
+    // Create menu categories
+    console.log('\n🍴 Creating menu categories...');
+    const categoryData = [
+      { name: 'Breakfast' },
+      { name: 'Main Course' },
+      { name: 'Appetizers' },
+      { name: 'Beverages' },
+      { name: 'Desserts' }
+    ];
+
+    const createdCategories = [];
+    for (const cat of categoryData) {
+      const existing = await db.select().from(menuCategories).where(eq(menuCategories.name, cat.name));
+      if (existing.length === 0) {
+        const [created] = await db.insert(menuCategories).values({
+          hotelId: testHotel.id,
+          ...cat
+        }).returning();
+        createdCategories.push(created);
+        console.log(`  ✓ Created category: ${cat.name}`);
+      } else {
+        createdCategories.push(existing[0]);
+        console.log(`  → Category already exists: ${cat.name}`);
+      }
+    }
+
+    // Create menu items
+    console.log('\n📋 Creating menu items...');
+    const menuItemsData = [
+      { categoryName: 'Breakfast', name: 'Pancakes with Syrup', price: '350', description: 'Fluffy pancakes with maple syrup' },
+      { categoryName: 'Breakfast', name: 'Eggs Benedict', price: '450', description: 'Poached eggs with hollandaise sauce' },
+      { categoryName: 'Breakfast', name: 'Continental Breakfast', price: '500', description: 'Toast, eggs, juice, and coffee' },
+      { categoryName: 'Main Course', name: 'Chicken Tikka Masala', price: '650', description: 'Creamy chicken curry with rice' },
+      { categoryName: 'Main Course', name: 'Grilled Salmon', price: '850', description: 'Fresh salmon with vegetables' },
+      { categoryName: 'Main Course', name: 'Vegetable Biryani', price: '450', description: 'Aromatic rice with mixed vegetables' },
+      { categoryName: 'Appetizers', name: 'Spring Rolls', price: '250', description: 'Crispy vegetable spring rolls' },
+      { categoryName: 'Appetizers', name: 'Chicken Wings', price: '400', description: 'Spicy buffalo wings' },
+      { categoryName: 'Beverages', name: 'Espresso', price: '150', description: 'Double shot espresso' },
+      { categoryName: 'Beverages', name: 'Cappuccino', price: '200', description: 'Espresso with steamed milk' },
+      { categoryName: 'Beverages', name: 'Fresh Orange Juice', price: '180', description: 'Freshly squeezed orange juice' },
+      { categoryName: 'Desserts', name: 'Chocolate Cake', price: '300', description: 'Rich chocolate layer cake' },
+      { categoryName: 'Desserts', name: 'Ice Cream Sundae', price: '250', description: 'Vanilla ice cream with toppings' }
+    ];
+
+    for (const item of menuItemsData) {
+      const category = createdCategories.find(c => c.name === item.categoryName);
+      if (category) {
+        const existing = await db.select().from(menuItems).where(eq(menuItems.name, item.name));
+        if (existing.length === 0) {
+          await db.insert(menuItems).values({
+            hotelId: testHotel.id,
+            categoryId: category.id,
+            name: item.name,
+            price: item.price,
+            description: item.description,
+            active: true
+          });
+          console.log(`  ✓ Created menu item: ${item.name}`);
+        } else {
+          console.log(`  → Menu item already exists: ${item.name}`);
+        }
+      }
+    }
+
     console.log('\n✅ Database seeded successfully!');
+    console.log('\n📝 Summary:');
+    console.log('  - Hotel: Test Hotel');
+    console.log('  - Users: owner, manager, barista, store, sita');
+    console.log('  - Rooms: 101, 102, 103, 201, 202, 301');
+    console.log('  - Meal Plans: EP, CP, MAP, AP');
+    console.log('  - Discount Code: DISCOUNT1000 (Rs. 1000 off)');
+    console.log('  - Menu Items: 13 items across 5 categories');
     process.exit(0);
   } catch (error) {
     console.error('❌ Seeding failed:', error);
