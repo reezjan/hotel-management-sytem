@@ -291,6 +291,21 @@ export const tasks = pgTable("tasks", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
+// Room Cleaning Queue Table
+export const roomCleaningQueue = pgTable("room_cleaning_queue", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  roomId: uuid("room_id").references(() => rooms.id),
+  roomNumber: text("room_number").notNull(),
+  guestName: text("guest_name"),
+  guestId: uuid("guest_id").references(() => guests.id),
+  checkoutAt: timestamp("checkout_at", { withTimezone: true }).defaultNow(),
+  status: text("status").default('pending'),
+  taskId: uuid("task_id").references(() => tasks.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+});
+
 // Restaurant Tables Table
 export const restaurantTables = pgTable("restaurant_tables", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -628,6 +643,15 @@ export const insertTaskSchema = createInsertSchema(tasks).omit({
     })
     .optional()
 });
+
+export const insertRoomCleaningQueueSchema = createInsertSchema(roomCleaningQueue).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertRoomCleaningQueue = z.infer<typeof insertRoomCleaningQueueSchema>;
+export type SelectRoomCleaningQueue = typeof roomCleaningQueue.$inferSelect;
 
 export const insertTransactionSchema = createInsertSchema(transactions).omit({
   id: true,

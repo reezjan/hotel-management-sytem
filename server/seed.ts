@@ -152,6 +152,12 @@ async function seed() {
     const baristaRole = await db.select().from(roles).where(eq(roles.name, 'barista'));
     const storekeeperRole = await db.select().from(roles).where(eq(roles.name, 'storekeeper'));
     const frontDeskRole = await db.select().from(roles).where(eq(roles.name, 'front_desk'));
+    const restaurantBarManagerRole = await db.select().from(roles).where(eq(roles.name, 'restaurant_bar_manager'));
+    const waiterRole = await db.select().from(roles).where(eq(roles.name, 'waiter'));
+    const bartenderRole = await db.select().from(roles).where(eq(roles.name, 'bartender'));
+    const cashierRole = await db.select().from(roles).where(eq(roles.name, 'cashier'));
+    const housekeepingSupervisorRole = await db.select().from(roles).where(eq(roles.name, 'housekeeping_supervisor'));
+    const housekeepingStaffRole = await db.select().from(roles).where(eq(roles.name, 'housekeeping_staff'));
 
     // Create test users
     console.log('\n👥 Creating test users...');
@@ -186,6 +192,42 @@ async function seed() {
         password: 'sitasita',
         roleId: frontDeskRole[0].id,
         email: 'sita@testhotel.local'
+      },
+      {
+        username: 'rbmanager',
+        password: 'rbmanager',
+        roleId: restaurantBarManagerRole[0].id,
+        email: 'rbmanager@testhotel.local'
+      },
+      {
+        username: 'waiter',
+        password: 'waiter',
+        roleId: waiterRole[0].id,
+        email: 'waiter@testhotel.local'
+      },
+      {
+        username: 'bartender',
+        password: 'bartender',
+        roleId: bartenderRole[0].id,
+        email: 'bartender@testhotel.local'
+      },
+      {
+        username: 'cashier',
+        password: 'cashier',
+        roleId: cashierRole[0].id,
+        email: 'cashier@testhotel.local'
+      },
+      {
+        username: 'hksupervisor',
+        password: 'hksupervisor',
+        roleId: housekeepingSupervisorRole[0].id,
+        email: 'hksupervisor@testhotel.local'
+      },
+      {
+        username: 'hkstaff',
+        password: 'hkstaff',
+        roleId: housekeepingStaffRole[0].id,
+        email: 'hkstaff@testhotel.local'
       }
     ];
 

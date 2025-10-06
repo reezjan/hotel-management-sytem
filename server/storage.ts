@@ -7,6 +7,7 @@ import {
   menuItems,
   menuCategories,
   tasks,
+  roomCleaningQueue,
   transactions,
   maintenanceRequests,
   kotOrders,
@@ -41,6 +42,8 @@ import {
   type InsertMenuItem,
   type Task,
   type InsertTask,
+  type SelectRoomCleaningQueue,
+  type InsertRoomCleaningQueue,
   type Transaction,
   type InsertTransaction,
   type MaintenanceRequest,
@@ -164,6 +167,11 @@ export interface IStorage {
   createTask(task: InsertTask): Promise<Task>;
   updateTask(id: string, task: Partial<InsertTask>): Promise<Task>;
   deleteTask(id: string): Promise<void>;
+  
+  // Room Cleaning Queue operations
+  getRoomCleaningQueueByHotel(hotelId: string): Promise<SelectRoomCleaningQueue[]>;
+  createRoomCleaningQueue(queue: InsertRoomCleaningQueue): Promise<SelectRoomCleaningQueue>;
+  updateRoomCleaningQueue(id: string, queue: Partial<InsertRoomCleaningQueue>): Promise<SelectRoomCleaningQueue>;
   
   // Transaction operations
   getTransactionsByHotel(hotelId: string): Promise<Transaction[]>;
@@ -651,6 +659,32 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(tasks)
       .where(eq(tasks.id, id));
+  }
+
+  // Room Cleaning Queue operations
+  async getRoomCleaningQueueByHotel(hotelId: string): Promise<SelectRoomCleaningQueue[]> {
+    return await db
+      .select()
+      .from(roomCleaningQueue)
+      .where(eq(roomCleaningQueue.hotelId, hotelId))
+      .orderBy(desc(roomCleaningQueue.checkoutAt));
+  }
+
+  async createRoomCleaningQueue(queueData: InsertRoomCleaningQueue): Promise<SelectRoomCleaningQueue> {
+    const [queue] = await db
+      .insert(roomCleaningQueue)
+      .values(queueData)
+      .returning();
+    return queue;
+  }
+
+  async updateRoomCleaningQueue(id: string, queueData: Partial<InsertRoomCleaningQueue>): Promise<SelectRoomCleaningQueue> {
+    const [queue] = await db
+      .update(roomCleaningQueue)
+      .set({ ...queueData, updatedAt: new Date() })
+      .where(eq(roomCleaningQueue.id, id))
+      .returning();
+    return queue;
   }
 
   // Transaction operations

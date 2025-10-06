@@ -801,6 +801,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/hotels/current/room-cleaning-queue", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const queue = await storage.getRoomCleaningQueueByHotel(user.hotelId);
+      res.json(queue);
+    } catch (error) {
+      console.error("Room cleaning queue fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch room cleaning queue" });
+    }
+  });
+
+  app.patch("/api/room-cleaning-queue/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const { id } = req.params;
+      const { status, taskId } = req.body;
+      const updateData: any = {};
+      if (status) updateData.status = status;
+      if (taskId !== undefined) updateData.taskId = taskId;
+      
+      const queue = await storage.updateRoomCleaningQueue(id, updateData);
+      res.json(queue);
+    } catch (error) {
+      console.error("Room cleaning queue update error:", error);
+      res.status(400).json({ message: "Failed to update room cleaning queue" });
+    }
+  });
+
   app.get("/api/hotels/current/maintenance-requests", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -1839,6 +1875,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/rooms/:id", async (req, res) => {
     try {
       const { id } = req.params;
+      
+      // Get existing room to detect checkout
+      const existingRoom = await storage.getRoom(id);
+      if (!existingRoom) {
+        return res.status(404).json({ message: "Room not found" });
+      }
+      
       // Extract occupantDetails separately since it's a jsonb field that may not validate properly
       const { occupantDetails, ...restBody } = req.body;
       const validatedData = insertRoomSchema.partial().parse(restBody);
@@ -1846,6 +1889,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const roomData = occupantDetails !== undefined 
         ? { ...validatedData, occupantDetails } 
         : validatedData;
+      
+      // Detect checkout: room was occupied and is now being set to unoccupied
+      const isCheckout = existingRoom.isOccupied && roomData.isOccupied === false;
+      
+      if (isCheckout && existingRoom.occupantDetails) {
+        // Extract guest information before it's cleared
+        const occupant = existingRoom.occupantDetails as any;
+        const guestName = occupant?.guestName || occupant?.firstName 
+          ? `${occupant.firstName || ''} ${occupant.lastName || ''}`.trim()
+          : 'Guest';
+        
+        // Create room cleaning queue entry
+        await storage.createRoomCleaningQueue({
+          hotelId: existingRoom.hotelId,
+          roomId: existingRoom.id,
+          roomNumber: existingRoom.roomNumber || 'Unknown',
+          guestName: guestName,
+          guestId: occupant?.guestId || null,
+          status: 'pending'
+        });
+      }
+      
       const room = await storage.updateRoom(id, roomData);
       res.json(room);
     } catch (error) {
