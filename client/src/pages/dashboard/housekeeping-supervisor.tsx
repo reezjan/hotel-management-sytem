@@ -11,11 +11,15 @@ export default function HousekeepingSupervisorDashboard() {
   const [, setLocation] = useLocation();
 
   const { data: staff = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/users"]
+    queryKey: ["/api/hotels/current/users"],
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true
   });
 
   const { data: tasks = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/tasks"]
+    queryKey: ["/api/hotels/current/tasks"],
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true
   });
 
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');

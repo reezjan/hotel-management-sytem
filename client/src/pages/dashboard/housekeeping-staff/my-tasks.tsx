@@ -17,7 +17,9 @@ export default function HousekeepingStaffMyTasks() {
 
   const { data: tasks = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/users", user?.id, "tasks"],
-    enabled: !!user?.id
+    enabled: !!user?.id,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true
   });
 
   const updateTaskMutation = useMutation({

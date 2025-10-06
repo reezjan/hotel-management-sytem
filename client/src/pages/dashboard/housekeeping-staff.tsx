@@ -28,7 +28,10 @@ export default function HousekeepingStaffDashboard() {
   const [photo, setPhoto] = useState<string>("");
 
   const { data: tasks = [] } = useQuery<any[]>({
-    queryKey: ["/api/users", user?.id, "tasks"]
+    queryKey: ["/api/users", user?.id, "tasks"],
+    enabled: !!user?.id,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true
   });
 
   const updateTaskMutation = useMutation({
