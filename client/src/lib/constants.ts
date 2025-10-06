@@ -254,7 +254,6 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Edit', label: 'Inventory Management', id: 'management' },
     { icon: 'ClipboardCheck', label: 'Stock Requests', id: 'stock-requests' },
     { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
-    { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
-    { icon: 'TrendingDown', label: 'Consumption Tracking', id: 'consumption' }
+    { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' }
   ]
 };

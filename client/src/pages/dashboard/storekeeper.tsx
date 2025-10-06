@@ -37,7 +37,11 @@ export default function StorekeeperDashboard() {
   });
 
   const { data: transactions = [], isLoading: loadingTransactions } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/inventory-transactions"]
+    queryKey: ["/api/hotels/current/inventory-transactions"],
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true
   });
 
   const { data: tasks = [], isLoading: loadingTasks } = useQuery<any[]>({
@@ -61,10 +65,14 @@ export default function StorekeeperDashboard() {
     mutationFn: async (data: any) => {
       return await apiRequest("POST", "/api/hotels/current/wastages", data);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ 
+        queryKey: ["/api/hotels/current/inventory-items"]
+      });
+      await queryClient.refetchQueries({ 
+        queryKey: ["/api/hotels/current/inventory-transactions"]
+      });
       toast({ title: "Wastage recorded successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-items"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-transactions"] });
       setWastageDialogOpen(false);
       setWastageData({ itemId: "", qty: "", unit: "", reason: "" });
     },
@@ -177,6 +185,13 @@ export default function StorekeeperDashboard() {
                 </div>
                 <div>
                   <Label>Unit</Label>
+                  {selectedItem?.measurementCategory && (
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {selectedItem.measurementCategory === 'weight' && '⚖️ Weight/Mass units'}
+                      {selectedItem.measurementCategory === 'volume' && '🧪 Volume/Liquid units'}
+                      {selectedItem.measurementCategory === 'count' && '📦 Count/Quantity units'}
+                    </p>
+                  )}
                   <Select
                     value={wastageData.unit}
                     onValueChange={(value) => setWastageData({ ...wastageData, unit: value })}

@@ -102,7 +102,7 @@ export default function StorekeeperInventoryTracking() {
                           <div>
                             <span className="text-muted-foreground">Cost/Unit:</span>
                             <span className="ml-2 font-medium">
-                              ${parseFloat(item.costPerUnit || 0).toFixed(2)}
+                              रु{parseFloat(item.costPerUnit || 0).toFixed(2)}
                             </span>
                           </div>
                           {item.storageLocation && (

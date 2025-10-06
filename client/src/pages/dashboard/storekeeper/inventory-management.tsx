@@ -390,6 +390,13 @@ export default function StorekeeperInventoryManagement() {
                   {inventoryTransactions.map((transaction: any) => {
                     const item = inventoryItems.find((i: any) => i.id === transaction.itemId);
                     const isReceive = transaction.transactionType === 'receive';
+                    const isWastage = transaction.transactionType === 'wastage';
+                    
+                    const getBadgeVariant = () => {
+                      if (isReceive) return "default";
+                      if (isWastage) return "destructive";
+                      return "secondary";
+                    };
                     
                     return (
                       <div
@@ -400,7 +407,7 @@ export default function StorekeeperInventoryManagement() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <Badge variant={isReceive ? "default" : "secondary"}>
+                              <Badge variant={getBadgeVariant()}>
                                 {transaction.transactionType.toUpperCase()}
                               </Badge>
                               <span className="font-medium">{item?.name || 'Unknown Item'}</span>
