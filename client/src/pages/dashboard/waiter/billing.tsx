@@ -25,10 +25,14 @@ export default function WaiterBilling() {
 
   const { data: tables = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/restaurant-tables"],
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true
   });
 
   const { data: kotOrders = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/kot-orders"],
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true
   });
 
   const { data: menuItems = [] } = useQuery<any[]>({
@@ -64,8 +68,13 @@ export default function WaiterBilling() {
       return response;
     },
     onSuccess: (data: any) => {
-      setAppliedVoucher(data);
-      toast({ title: "Voucher applied successfully!" });
+      if (data.valid && data.voucher) {
+        setAppliedVoucher(data.voucher);
+        toast({ title: "Voucher applied successfully!" });
+      } else {
+        setAppliedVoucher(null);
+        toast({ title: "Invalid voucher", description: data.message || "Voucher code is invalid", variant: "destructive" });
+      }
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message || "Invalid voucher code", variant: "destructive" });
@@ -139,7 +148,7 @@ export default function WaiterBilling() {
     const totalTax = Object.values(taxBreakdown).reduce((sum: number, t: any) => sum + t.amount, 0);
     let grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
     
-    // Apply voucher discount
+    // Apply voucher discount (same logic as hotel billing)
     let discountAmount = 0;
     if (appliedVoucher) {
       if (appliedVoucher.discountType === 'percentage') {

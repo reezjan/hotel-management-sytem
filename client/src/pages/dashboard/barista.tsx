@@ -35,7 +35,7 @@ interface KotOrder {
 
 interface RestaurantTable {
   id: string;
-  tableNumber: string;
+  name: string;
 }
 
 interface InventoryItem {
@@ -77,11 +77,15 @@ export default function BaristaDashboard() {
   });
 
   const { data: kotOrders = [] } = useQuery({
-    queryKey: ["/api/hotels/current/kot-orders"]
+    queryKey: ["/api/hotels/current/kot-orders"],
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true
   });
 
   const { data: tables = [] } = useQuery({
-    queryKey: ["/api/hotels/current/restaurant-tables"]
+    queryKey: ["/api/hotels/current/restaurant-tables"],
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true
   });
 
   const { data: inventoryItems = [] } = useQuery({
@@ -228,7 +232,7 @@ export default function BaristaDashboard() {
   const getTableNumber = (tableId: string) => {
     if (!Array.isArray(tables)) return tableId;
     const table = (tables as RestaurantTable[]).find((t: RestaurantTable) => t.id === tableId);
-    return table ? `Table ${table.tableNumber}` : tableId;
+    return table?.name || tableId;
   };
 
   const renderKotCard = (order: KotOrder) => (
