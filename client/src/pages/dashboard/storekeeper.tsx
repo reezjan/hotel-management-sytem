@@ -36,8 +36,8 @@ export default function StorekeeperDashboard() {
     queryKey: ["/api/hotels/current/low-stock-items"]
   });
 
-  const { data: consumptions = [], isLoading: loadingConsumptions } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/inventory-consumptions"]
+  const { data: transactions = [], isLoading: loadingTransactions } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/inventory-transactions"]
   });
 
   const { data: tasks = [], isLoading: loadingTasks } = useQuery<any[]>({
@@ -63,7 +63,6 @@ export default function StorekeeperDashboard() {
     },
     onSuccess: () => {
       toast({ title: "Wastage recorded successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-consumptions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-items"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-transactions"] });
       setWastageDialogOpen(false);
@@ -92,13 +91,14 @@ export default function StorekeeperDashboard() {
     });
   };
 
-  const recentActivity = consumptions.slice(0, 10).map((consumption: any) => {
-    const item = inventoryItems.find((i: any) => i.id === consumption.itemId);
+  const recentActivity = transactions.slice(0, 10).map((transaction: any) => {
+    const item = inventoryItems.find((i: any) => i.id === transaction.itemId);
     return {
-      ...consumption,
+      ...transaction,
       itemName: item?.name || 'Unknown Item',
-      unit: consumption.unit || item?.baseUnit || item?.unit || '',
-      type: consumption.referenceEntity === 'wastage' ? 'wastage' : 'consumption'
+      unit: item?.baseUnit || item?.unit || '',
+      qty: transaction.qtyBase || transaction.qtyPackage,
+      type: transaction.transactionType
     };
   });
 
@@ -229,7 +229,7 @@ export default function StorekeeperDashboard() {
             <CardTitle>Recent Inventory Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            {loadingConsumptions ? (
+            {loadingTransactions ? (
               <p className="text-center text-muted-foreground py-4">Loading...</p>
             ) : recentActivity.length === 0 ? (
               <p className="text-center text-muted-foreground py-4" data-testid="no-activity-message">
@@ -252,8 +252,8 @@ export default function StorekeeperDashboard() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <Badge variant={activity.type === 'wastage' ? 'destructive' : 'default'}>
-                        {activity.type || 'consumption'}
+                      <Badge variant={activity.type === 'wastage' ? 'destructive' : activity.type === 'receive' ? 'default' : 'secondary'}>
+                        {activity.type}
                       </Badge>
                       {activity.createdAt && (
                         <p className="text-xs text-muted-foreground mt-1">
