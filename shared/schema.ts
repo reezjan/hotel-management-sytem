@@ -695,9 +695,7 @@ export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
 
 export const insertWastageSchema = createInsertSchema(wastages).omit({
   id: true,
-  createdAt: true,
-  hotelId: true,
-  recordedBy: true
+  createdAt: true
 });
 
 export const insertVehicleLogSchema = createInsertSchema(vehicleLogs).omit({

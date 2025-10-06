@@ -6,6 +6,7 @@ import { setupVite, serveStatic, log } from "./vite";
 process.env.TZ = 'Asia/Kathmandu';
 
 const app = express();
+app.set('etag', false);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 

@@ -165,11 +165,22 @@ export function validateUnitCategory(unit: UnitCode, category: MeasurementCatego
   }
 }
 
-export function getCategoryForUnit(unit: UnitCode): MeasurementCategoryType | null {
-  if (weightUnits.includes(unit)) return MeasurementCategory.WEIGHT;
-  if (volumeUnits.includes(unit)) return MeasurementCategory.VOLUME;
-  if (countUnits.includes(unit)) return MeasurementCategory.COUNT;
-  return null;
+export function getCategoryForUnit(unit: string): MeasurementCategoryType {
+  const normalizedUnit = unit.toLowerCase();
+  
+  if (weightUnits.includes(normalizedUnit as UnitCode)) return MeasurementCategory.WEIGHT;
+  if (volumeUnits.includes(normalizedUnit as UnitCode)) return MeasurementCategory.VOLUME;
+  if (countUnits.includes(normalizedUnit as UnitCode)) return MeasurementCategory.COUNT;
+  
+  const weightAliases = ['kilogram', 'gram', 'milligram', 'pound', 'ounce', 'ton', 'tonne'];
+  const volumeAliases = ['liter', 'litre', 'milliliter', 'millilitre', 'gallon', 'quart', 'pint', 'teaspoon', 'tablespoon'];
+  const countAliases = ['unit', 'item', 'box', 'bottle', 'can', 'bag'];
+  
+  if (weightAliases.some(alias => normalizedUnit.includes(alias))) return MeasurementCategory.WEIGHT;
+  if (volumeAliases.some(alias => normalizedUnit.includes(alias))) return MeasurementCategory.VOLUME;
+  if (countAliases.some(alias => normalizedUnit.includes(alias))) return MeasurementCategory.COUNT;
+  
+  return MeasurementCategory.COUNT;
 }
 
 export function getUnitLabel(unit: UnitCode): string {

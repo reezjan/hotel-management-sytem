@@ -1102,6 +1102,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      
       const transactions = await storage.getInventoryTransactionsByHotel(user.hotelId);
       res.json(transactions);
     } catch (error) {

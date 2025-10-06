@@ -1008,7 +1008,7 @@ export class DatabaseStorage implements IStorage {
         createdBy: wastageData.recordedBy
       });
 
-    await db
+    const [transaction] = await db
       .insert(inventoryTransactions)
       .values({
         hotelId: wastageData.hotelId,
@@ -1017,7 +1017,8 @@ export class DatabaseStorage implements IStorage {
         qtyBase: String(wastageQtyInBaseUnits),
         notes: wastageData.reason,
         recordedBy: wastageData.recordedBy
-      });
+      })
+      .returning();
 
     return wastage;
   }
@@ -1398,17 +1399,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryItem(itemData: any): Promise<InventoryItem> {
+    const { getCategoryForUnit } = await import('@shared/measurements');
+    const category = itemData.baseUnit ? getCategoryForUnit(itemData.baseUnit) : 'count';
+    
     const [item] = await db
       .insert(inventoryItems)
-      .values(itemData)
+      .values({
+        ...itemData,
+        measurementCategory: category
+      })
       .returning();
     return item;
   }
 
   async updateInventoryItem(id: string, itemData: any): Promise<InventoryItem> {
+    const updateData = { ...itemData, updatedAt: new Date() };
+    
+    if (itemData.baseUnit) {
+      const { getCategoryForUnit } = await import('@shared/measurements');
+      updateData.measurementCategory = getCategoryForUnit(itemData.baseUnit);
+    }
+    
     const [item] = await db
       .update(inventoryItems)
-      .set({ ...itemData, updatedAt: new Date() })
+      .set(updateData)
       .where(eq(inventoryItems.id, id))
       .returning();
     return item;
