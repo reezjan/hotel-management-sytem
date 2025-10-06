@@ -2842,26 +2842,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Authentication required" });
       }
       const user = req.user as any;
+      
+      console.log('[Stock Request Approval] User:', {
+        id: user?.id,
+        username: user?.username,
+        hotelId: user?.hotelId,
+        roleId: user?.roleId,
+        roleName: user?.role?.name
+      });
+      
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
       const userRole = user.role?.name || '';
       if (userRole !== 'storekeeper') {
-        return res.status(403).json({ message: "Only storekeeper can approve stock requests" });
+        return res.status(403).json({ 
+          message: `Only storekeeper can approve stock requests. Your role: ${userRole}` 
+        });
       }
       
       const { id } = req.params;
       const existingRequest = await storage.getStockRequest(id);
-      if (!existingRequest || existingRequest.hotelId !== user.hotelId) {
+      if (!existingRequest) {
         return res.status(404).json({ message: "Stock request not found" });
       }
       
+      if (existingRequest.hotelId !== user.hotelId) {
+        return res.status(403).json({ message: "Stock request belongs to different hotel" });
+      }
+      
       const request = await storage.approveStockRequest(id, user.id);
+      console.log('[Stock Request Approval] Success:', request.id);
       res.json(request);
     } catch (error) {
       console.error("Stock request approval error:", error);
-      res.status(400).json({ message: "Failed to approve stock request" });
+      res.status(400).json({ 
+        message: "Failed to approve stock request",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 

@@ -1,5 +1,5 @@
 import { db } from './db';
-import { roles, roleCreationPermissions, users } from '@shared/schema';
+import { roles, roleCreationPermissions, users, hotels } from '@shared/schema';
 import { hashPassword } from './auth';
 import { eq } from 'drizzle-orm';
 
@@ -123,6 +123,85 @@ async function seed() {
       console.log('    Password: aef009750905865270b03eb27ceba80e');
     } else {
       console.log('  → Superadmin already exists');
+    }
+
+    // Create test hotel
+    console.log('\n🏨 Creating test hotel...');
+    const existingHotel = await db
+      .select()
+      .from(hotels)
+      .where(eq(hotels.name, 'Test Hotel'));
+
+    let testHotel;
+    if (existingHotel.length === 0) {
+      const [newHotel] = await db.insert(hotels).values({
+        name: 'Test Hotel',
+        address: 'Kathmandu, Nepal',
+        phone: '+977-1-1234567'
+      }).returning();
+      testHotel = newHotel;
+      console.log('  ✓ Test hotel created');
+    } else {
+      testHotel = existingHotel[0];
+      console.log('  → Test hotel already exists');
+    }
+
+    // Get role IDs
+    const ownerRole = await db.select().from(roles).where(eq(roles.name, 'owner'));
+    const managerRole = await db.select().from(roles).where(eq(roles.name, 'manager'));
+    const baristaRole = await db.select().from(roles).where(eq(roles.name, 'barista'));
+    const storekeeperRole = await db.select().from(roles).where(eq(roles.name, 'storekeeper'));
+
+    // Create test users
+    console.log('\n👥 Creating test users...');
+    
+    const testUsers = [
+      {
+        username: 'owner',
+        password: 'owner123',
+        roleId: ownerRole[0].id,
+        email: 'owner@testhotel.local'
+      },
+      {
+        username: 'manager',
+        password: 'manager',
+        roleId: managerRole[0].id,
+        email: 'manager@testhotel.local'
+      },
+      {
+        username: 'barista',
+        password: 'barista',
+        roleId: baristaRole[0].id,
+        email: 'barista@testhotel.local'
+      },
+      {
+        username: 'store',
+        password: 'storekeeper',
+        roleId: storekeeperRole[0].id,
+        email: 'storekeeper@testhotel.local'
+      }
+    ];
+
+    for (const user of testUsers) {
+      const existing = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, user.username));
+
+      if (existing.length === 0) {
+        const passwordHash = await hashPassword(user.password);
+        await db.insert(users).values({
+          username: user.username,
+          roleId: user.roleId,
+          passwordHash,
+          isActive: true,
+          email: user.email,
+          hotelId: testHotel.id
+        });
+        console.log(`  ✓ Created user: ${user.username} (password: ${user.password})`);
+      } else {
+        console.log(`  → User already exists: ${user.username}`);
+      }
     }
 
     console.log('\n✅ Database seeded successfully!');
