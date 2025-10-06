@@ -66,11 +66,14 @@ export default function StorekeeperDashboard() {
       return await apiRequest("POST", "/api/hotels/current/wastages", data);
     },
     onSuccess: async () => {
-      await queryClient.refetchQueries({ 
+      await queryClient.invalidateQueries({ 
         queryKey: ["/api/hotels/current/inventory-items"]
       });
-      await queryClient.refetchQueries({ 
+      await queryClient.invalidateQueries({ 
         queryKey: ["/api/hotels/current/inventory-transactions"]
+      });
+      await queryClient.invalidateQueries({ 
+        queryKey: ["/api/hotels/current/inventory-consumptions"]
       });
       toast({ title: "Wastage recorded successfully" });
       setWastageDialogOpen(false);
