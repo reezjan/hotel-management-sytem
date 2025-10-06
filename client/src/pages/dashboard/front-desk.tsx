@@ -64,6 +64,8 @@ export default function FrontDeskDashboard() {
   const [foodOrderItems, setFoodOrderItems] = useState<Array<{ item: MenuItem; quantity: number }>>([]);
   const [guestType, setGuestType] = useState<"inhouse" | "walkin">("walkin");
   const [officeName, setOfficeName] = useState("");
+  const [isExtendStayModalOpen, setIsExtendStayModalOpen] = useState(false);
+  const [newCheckoutDate, setNewCheckoutDate] = useState<Date | undefined>(undefined);
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
@@ -302,6 +304,36 @@ export default function FrontDeskDashboard() {
     }
   });
 
+  const extendStayMutation = useMutation({
+    mutationFn: async (data: { roomId: string; newCheckoutDate: Date }) => {
+      const room = rooms.find(r => r.id === data.roomId);
+      if (!room || !room.occupantDetails) {
+        throw new Error("Room not found or not occupied");
+      }
+
+      await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
+        occupantDetails: {
+          ...room.occupantDetails,
+          checkOutDate: data.newCheckoutDate.toISOString()
+        }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
+      toast({ title: "Checkout date extended successfully" });
+      setIsExtendStayModalOpen(false);
+      setSelectedRoom(null);
+      setNewCheckoutDate(undefined);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to extend stay", 
+        description: error.message || "Could not update checkout date",
+        variant: "destructive" 
+      });
+    }
+  });
+
   const handleValidateVoucher = async () => {
     if (!voucherCode.trim()) {
       toast({ title: "Please enter a voucher code", variant: "destructive" });
@@ -394,6 +426,12 @@ export default function FrontDeskDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "vouchers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
       toast({ title: "Guest checked out successfully" });
+      
+      // Print receipt automatically before clearing room data
+      if (selectedRoom) {
+        handlePrintReceipt(selectedRoom, 'checkout');
+      }
+      
       setIsCheckOutModalOpen(false);
       setSelectedRoom(null);
       setSelectedVoucher("");
@@ -478,12 +516,13 @@ export default function FrontDeskDashboard() {
   const calculateCheckoutBill = (room: any) => {
     const roomPricePerDay = room.occupantDetails?.roomPrice ? Number(room.occupantDetails.roomPrice) : 0;
     const checkInDate = room.occupantDetails?.checkInDate ? new Date(room.occupantDetails.checkInDate) : null;
-    const checkOutDate = room.occupantDetails?.checkOutDate ? new Date(room.occupantDetails.checkOutDate) : new Date();
+    // Use actual checkout date (today) instead of booked checkout date for accurate billing
+    const actualCheckOutDate = new Date();
     
-    // Calculate number of days
+    // Calculate number of days based on actual stay duration
     let numberOfDays = 1;
-    if (checkInDate && checkOutDate) {
-      const timeDiff = checkOutDate.getTime() - checkInDate.getTime();
+    if (checkInDate) {
+      const timeDiff = actualCheckOutDate.getTime() - checkInDate.getTime();
       numberOfDays = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
     }
     
@@ -575,6 +614,7 @@ export default function FrontDeskDashboard() {
 
     return {
       subtotal,
+      discountedSubtotal,
       taxBreakdown,
       totalTax,
       discountAmount,
@@ -602,6 +642,13 @@ export default function FrontDeskDashboard() {
     setValidatedVoucher(null);
     setSelectedCheckoutPaymentMethod("");
     setIsCheckOutModalOpen(true);
+  };
+
+  const handleExtendStay = (room: any) => {
+    setSelectedRoom(room);
+    const currentCheckoutDate = room.occupantDetails?.checkOutDate ? new Date(room.occupantDetails.checkOutDate) : new Date();
+    setNewCheckoutDate(currentCheckoutDate);
+    setIsExtendStayModalOpen(true);
   };
 
   const onSubmitCheckIn = (data: any) => {
@@ -819,10 +866,19 @@ export default function FrontDeskDashboard() {
                 <span>${formatCurrency(billCalc.totalMealPlanCharges)}</span>
               </div>
             ` : ''}
-            ${billCalc.totalFoodCharges > 0 ? `
-              <div class="item-row">
-                <span>Food & Beverage:</span>
-                <span>${formatCurrency(billCalc.totalFoodCharges)}</span>
+            ${billCalc.totalFoodCharges > 0 && guest?.foodCharges?.length > 0 ? `
+              <div class="bold" style="margin-top: 5px;">Food & Beverage:</div>
+              ${guest.foodCharges.map((charge: any) => 
+                charge.items.map((item: any) => `
+                  <div class="item-row" style="font-size: 11px; padding-left: 10px;">
+                    <span>${item.name} x ${item.quantity}</span>
+                    <span>${formatCurrency(item.total)}</span>
+                  </div>
+                `).join('')
+              ).join('')}
+              <div class="item-row" style="padding-left: 10px;">
+                <span class="bold">F&B Subtotal:</span>
+                <span class="bold">${formatCurrency(billCalc.totalFoodCharges)}</span>
               </div>
             ` : ''}
             <div class="line"></div>
@@ -830,6 +886,16 @@ export default function FrontDeskDashboard() {
               <span>Subtotal:</span>
               <span>${formatCurrency(billCalc.subtotal)}</span>
             </div>
+            ${billCalc.discountAmount > 0 ? `
+              <div class="item-row">
+                <span>Discount ${validatedVoucher ? `(${validatedVoucher.code})` : ''}:</span>
+                <span>-${formatCurrency(billCalc.discountAmount)}</span>
+              </div>
+              <div class="item-row bold">
+                <span>Discounted Subtotal:</span>
+                <span>${formatCurrency(billCalc.discountedSubtotal)}</span>
+              </div>
+            ` : ''}
             ${Object.entries(billCalc.taxBreakdown).map(([name, tax]: [string, any]) => `
               <div class="item-row">
                 <span>${name} (${tax.rate}%):</span>
@@ -840,12 +906,6 @@ export default function FrontDeskDashboard() {
               <div class="item-row">
                 <span>Total Tax:</span>
                 <span>${formatCurrency(billCalc.totalTax)}</span>
-              </div>
-            ` : ''}
-            ${billCalc.discountAmount > 0 ? `
-              <div class="item-row">
-                <span>Discount ${validatedVoucher ? `(${validatedVoucher.code})` : ''}:</span>
-                <span>-${formatCurrency(billCalc.discountAmount)}</span>
               </div>
             ` : ''}
             <div class="double-line"></div>
@@ -947,64 +1007,64 @@ export default function FrontDeskDashboard() {
             <CardTitle>Front Desk Operations</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col"
+                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
                 onClick={() => setIsCheckInModalOpen(true)}
                 data-testid="button-check-in"
               >
-                <UserCheck className="h-6 w-6 mb-2" />
-                <span className="text-sm">Check-in Guest</span>
+                <UserCheck className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
+                <span className="text-xs sm:text-sm">Check-in Guest</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col"
+                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
                 onClick={() => setIsReservationModalOpen(true)}
                 data-testid="button-new-reservation"
               >
-                <CalendarPlus className="h-6 w-6 mb-2" />
-                <span className="text-sm">New Reservation</span>
+                <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
+                <span className="text-xs sm:text-sm">New Reservation</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col"
+                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
                 onClick={() => setIsFoodOrderModalOpen(true)}
                 data-testid="button-food-order"
               >
-                <Utensils className="h-6 w-6 mb-2" />
-                <span className="text-sm">Food Order</span>
+                <Utensils className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
+                <span className="text-xs sm:text-sm">Food Order</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col"
+                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
                 onClick={() => setIsRoomServiceModalOpen(true)}
                 data-testid="button-room-service"
               >
-                <HandPlatter className="h-6 w-6 mb-2" />
-                <span className="text-sm">Room Service</span>
+                <HandPlatter className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
+                <span className="text-xs sm:text-sm">Room Service</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col"
+                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
                 onClick={() => setIsMaintenanceModalOpen(true)}
                 data-testid="button-maintenance-request"
               >
-                <Wrench className="h-6 w-6 mb-2" />
-                <span className="text-sm">Maintenance</span>
+                <Wrench className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
+                <span className="text-xs sm:text-sm">Maintenance</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col"
+                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
                 onClick={() => setIsCashDepositModalOpen(true)}
                 data-testid="button-cash-deposit"
               >
-                <DollarSign className="h-6 w-6 mb-2" />
-                <span className="text-sm">Cash Deposit</span>
+                <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
+                <span className="text-xs sm:text-sm">Cash Deposit</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm" 
                 onClick={() => {
                   const room = rooms.find(r => r.isOccupied);
                   if (room) handlePrintReceipt(room, 'bill');
@@ -1012,8 +1072,8 @@ export default function FrontDeskDashboard() {
                 }}
                 data-testid="button-print-reports"
               >
-                <Printer className="h-6 w-6 mb-2" />
-                <span className="text-sm">Print Bill</span>
+                <Printer className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
+                <span className="text-xs sm:text-sm">Print Bill</span>
               </Button>
             </div>
           </CardContent>
@@ -1025,20 +1085,20 @@ export default function FrontDeskDashboard() {
             <CardTitle>Room Status Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
               {rooms.slice(0, 12).map((room, index) => (
                 <div
                   key={room.id}
-                  className={`p-4 border-2 rounded-lg text-center ${
+                  className={`p-2 sm:p-3 md:p-4 border-2 rounded-lg text-center ${
                     room.isOccupied 
-                      ? 'border-red-300 bg-red-50' 
-                      : 'border-green-300 bg-green-50'
+                      ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20' 
+                      : 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20'
                   }`}
                   data-testid={`room-status-${index}`}
                 >
-                  <Bed className={`h-6 w-6 mx-auto mb-2 ${room.isOccupied ? 'text-red-600' : 'text-green-600'}`} />
-                  <h3 className="font-medium text-foreground">{room.roomNumber}</h3>
-                  <p className="text-xs text-muted-foreground mb-2">
+                  <Bed className={`h-5 w-5 sm:h-6 sm:w-6 mx-auto mb-1 sm:mb-2 ${room.isOccupied ? 'text-red-600' : 'text-green-600'}`} />
+                  <h3 className="font-medium text-sm sm:text-base text-foreground">{room.roomNumber}</h3>
+                  <p className="text-xs text-muted-foreground mb-1 sm:mb-2">
                     {room.roomType?.name || 'Standard'}
                   </p>
                   <Badge 
@@ -1050,7 +1110,7 @@ export default function FrontDeskDashboard() {
                   {room.isOccupied && room.occupantDetails ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs text-foreground font-medium">{(room.occupantDetails as any)?.name || 'Guest'}</p>
-                      <div className="flex space-x-1">
+                      <div className="flex flex-wrap gap-1">
                         <Button
                           size="sm"
                           variant="outline"
@@ -1059,6 +1119,15 @@ export default function FrontDeskDashboard() {
                           data-testid={`button-checkout-${index}`}
                         >
                           Check Out
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleExtendStay(room)}
+                          className="h-6 text-xs px-2"
+                          data-testid={`button-extend-${index}`}
+                        >
+                          Extend
                         </Button>
                         <Button
                           size="sm"
@@ -1543,15 +1612,40 @@ export default function FrontDeskDashboard() {
                             </div>
                           )}
                           {billCalc.totalFoodCharges > 0 && (
-                            <div className="flex justify-between">
-                              <span>Food & Beverage Charges</span>
-                              <span data-testid="checkout-food-price">NPR {billCalc.totalFoodCharges.toFixed(2)}</span>
+                            <div className="space-y-1">
+                              <div className="font-medium text-sm">Food & Beverage:</div>
+                              {selectedRoom.occupantDetails?.foodCharges?.map((charge: any, chargeIdx: number) => (
+                                <div key={chargeIdx} className="pl-4 space-y-0.5">
+                                  {charge.items.map((item: any, itemIdx: number) => (
+                                    <div key={itemIdx} className="flex justify-between text-sm text-muted-foreground">
+                                      <span>{item.name} × {item.quantity}</span>
+                                      <span>NPR {item.total.toFixed(2)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ))}
+                              <div className="flex justify-between font-medium text-sm pl-4 pt-1 border-t">
+                                <span>F&B Subtotal:</span>
+                                <span data-testid="checkout-food-price">NPR {billCalc.totalFoodCharges.toFixed(2)}</span>
+                              </div>
                             </div>
                           )}
                           <div className="flex justify-between pt-1 border-t">
                             <span>Subtotal</span>
                             <span data-testid="checkout-subtotal">NPR {billCalc.subtotal.toFixed(2)}</span>
                           </div>
+                          {billCalc.discountAmount > 0 && (
+                            <div className="flex justify-between text-green-600">
+                              <span>Discount {validatedVoucher ? `(${validatedVoucher.code})` : ''}</span>
+                              <span data-testid="checkout-discount">- NPR {billCalc.discountAmount.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {billCalc.discountAmount > 0 && (
+                            <div className="flex justify-between pt-1 border-t font-medium">
+                              <span>Discounted Subtotal</span>
+                              <span data-testid="checkout-discounted-subtotal">NPR {billCalc.discountedSubtotal.toFixed(2)}</span>
+                            </div>
+                          )}
                           {Object.keys(billCalc.taxBreakdown).map((taxType) => {
                             const details = billCalc.taxBreakdown[taxType];
                             return (
@@ -1565,12 +1659,6 @@ export default function FrontDeskDashboard() {
                             <div className="flex justify-between pt-1 border-t font-medium">
                               <span>Total Tax</span>
                               <span data-testid="checkout-total-tax">NPR {billCalc.totalTax.toFixed(2)}</span>
-                            </div>
-                          )}
-                          {billCalc.discountAmount > 0 && (
-                            <div className="flex justify-between text-green-600">
-                              <span>Discount {validatedVoucher ? `(${validatedVoucher.code})` : ''}</span>
-                              <span data-testid="checkout-discount">- NPR {billCalc.discountAmount.toFixed(2)}</span>
                             </div>
                           )}
                           <div className="flex justify-between font-bold text-lg pt-2 border-t">
@@ -1667,6 +1755,82 @@ export default function FrontDeskDashboard() {
                       Cancel
                     </Button>
                   </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Extend Stay Modal */}
+        <Dialog open={isExtendStayModalOpen} onOpenChange={setIsExtendStayModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Extend Guest Stay</DialogTitle>
+            </DialogHeader>
+            
+            {selectedRoom && (
+              <div className="space-y-4">
+                <div className="bg-muted p-4 rounded-md space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium">Room:</span>
+                    <span className="text-sm">{selectedRoom.roomNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium">Guest:</span>
+                    <span className="text-sm">{selectedRoom.occupantDetails?.name || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium">Current Checkout:</span>
+                    <span className="text-sm">
+                      {selectedRoom.occupantDetails?.checkOutDate ? formatDate(selectedRoom.occupantDetails.checkOutDate) : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium mb-2 block">New Checkout Date</label>
+                  <Calendar
+                    mode="single"
+                    selected={newCheckoutDate}
+                    onSelect={setNewCheckoutDate}
+                    disabled={(date) => {
+                      const checkInDate = selectedRoom.occupantDetails?.checkInDate ? new Date(selectedRoom.occupantDetails.checkInDate) : new Date();
+                      return date <= checkInDate;
+                    }}
+                    className="rounded-md border"
+                    data-testid="calendar-extend-checkout"
+                  />
+                </div>
+
+                <div className="flex space-x-3">
+                  <Button
+                    className="flex-1"
+                    disabled={!newCheckoutDate || extendStayMutation.isPending}
+                    onClick={() => {
+                      if (newCheckoutDate && selectedRoom) {
+                        extendStayMutation.mutate({
+                          roomId: selectedRoom.id,
+                          newCheckoutDate: newCheckoutDate
+                        });
+                      }
+                    }}
+                    data-testid="button-confirm-extend"
+                  >
+                    {extendStayMutation.isPending ? "Updating..." : "Confirm Extension"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => {
+                      setIsExtendStayModalOpen(false);
+                      setSelectedRoom(null);
+                      setNewCheckoutDate(undefined);
+                    }}
+                    data-testid="button-cancel-extend"
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
             )}
