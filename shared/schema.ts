@@ -198,6 +198,7 @@ export const inventoryConsumptions = pgTable("inventory_consumptions", {
   hotelId: uuid("hotel_id").references(() => hotels.id),
   itemId: uuid("item_id").references(() => inventoryItems.id),
   qty: numeric("qty", { precision: 12, scale: 3 }).notNull(),
+  unit: text("unit"),
   reason: text("reason"),
   referenceEntity: text("reference_entity"),
   createdBy: uuid("created_by").references(() => users.id),
@@ -210,6 +211,7 @@ export const wastages = pgTable("wastages", {
   hotelId: uuid("hotel_id").references(() => hotels.id),
   itemId: uuid("item_id").references(() => inventoryItems.id),
   qty: numeric("qty", { precision: 12, scale: 3 }).notNull(),
+  unit: text("unit"),
   reason: text("reason").notNull(),
   recordedBy: uuid("recorded_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()

@@ -949,13 +949,35 @@ export class DatabaseStorage implements IStorage {
     }
 
     const wastageQty = Number(wastageData.qty);
+    const wastageUnit = wastageData.unit || inventoryItem.baseUnit;
+    const baseUnit = (inventoryItem.baseUnit || inventoryItem.unit) as any;
+    const category = (inventoryItem.measurementCategory || 'weight') as any;
+    const conversionProfile = inventoryItem.conversionProfile as any;
+
+    let wastageQtyInBaseUnits = wastageQty;
+    if (wastageUnit !== baseUnit) {
+      const { convertToBase } = await import('@shared/measurements');
+      try {
+        wastageQtyInBaseUnits = convertToBase(
+          wastageQty,
+          wastageUnit as any,
+          baseUnit,
+          category,
+          conversionProfile
+        );
+      } catch (error) {
+        console.error(`Unit conversion error for ${inventoryItem.name}:`, error);
+        throw new Error(`Cannot convert from ${wastageUnit} to ${baseUnit}`);
+      }
+    }
+
     const currentStock = Number(inventoryItem.baseStockQty || inventoryItem.stockQty || 0);
     
-    if (wastageQty > currentStock) {
-      throw new Error(`Insufficient stock. Current stock: ${currentStock}, requested wastage: ${wastageQty}`);
+    if (wastageQtyInBaseUnits > currentStock) {
+      throw new Error(`Insufficient stock. Current stock: ${currentStock} ${baseUnit}, requested wastage: ${wastageQty} ${wastageUnit} (${wastageQtyInBaseUnits.toFixed(3)} ${baseUnit})`);
     }
     
-    const newQuantity = currentStock - wastageQty;
+    const newQuantity = currentStock - wastageQtyInBaseUnits;
 
     await db
       .update(inventoryItems)
@@ -968,7 +990,10 @@ export class DatabaseStorage implements IStorage {
 
     const [wastage] = await db
       .insert(wastages)
-      .values(wastageData)
+      .values({
+        ...wastageData,
+        unit: wastageUnit
+      })
       .returning();
 
     await db
@@ -976,10 +1001,22 @@ export class DatabaseStorage implements IStorage {
       .values({
         hotelId: wastageData.hotelId,
         itemId: wastageData.itemId,
-        qty: wastageData.qty,
+        qty: String(wastageQtyInBaseUnits),
+        unit: baseUnit,
         reason: `Wastage: ${wastageData.reason}`,
         referenceEntity: 'wastage',
         createdBy: wastageData.recordedBy
+      });
+
+    await db
+      .insert(inventoryTransactions)
+      .values({
+        hotelId: wastageData.hotelId,
+        itemId: wastageData.itemId,
+        transactionType: 'wastage',
+        qtyBase: String(wastageQtyInBaseUnits),
+        notes: wastageData.reason,
+        recordedBy: wastageData.recordedBy
       });
 
     return wastage;
