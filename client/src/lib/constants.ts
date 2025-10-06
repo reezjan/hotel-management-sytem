@@ -256,6 +256,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
     { icon: 'Clock', label: 'Duty Tracking', id: 'duty' },
+    { icon: 'DoorClosed', label: 'Room Cleaning Queue', id: 'cleaning-queue' },
     { icon: 'ClipboardList', label: 'Task Assignment', id: 'tasks' },
     { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
     { icon: 'MapPin', label: 'Staff Tracking', id: 'tracking' }

@@ -53,6 +53,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'dashboard': '/housekeeping-supervisor',
         'staff': '/housekeeping-supervisor/staff-management',
         'duty': '/housekeeping-supervisor/duty-tracking',
+        'cleaning-queue': '/housekeeping-supervisor/cleaning-queue',
         'tasks': '/housekeeping-supervisor/task-assignment',
         'maintenance': '/housekeeping-supervisor/maintenance-requests',
         'tracking': '/housekeeping-supervisor/staff-tracking'
