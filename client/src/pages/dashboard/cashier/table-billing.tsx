@@ -120,7 +120,7 @@ export default function CashierTableBilling() {
     }
   );
 
-  // Calculate bill with cascading taxes and discount
+  // Calculate bill with cascading taxes (same logic as hotel billing)
   const calculateBill = () => {
     let subtotal = 0;
     
@@ -136,19 +136,6 @@ export default function CashierTableBilling() {
       });
     });
 
-    // Calculate discount
-    let discount = 0;
-    if (appliedVoucher) {
-      const discountAmount = parseFloat(appliedVoucher.discountAmount);
-      if (appliedVoucher.discountType === 'percentage') {
-        discount = Math.round((subtotal * discountAmount / 100) * 100) / 100;
-      } else {
-        discount = Math.round(discountAmount * 100) / 100;
-      }
-    }
-
-    const discountedSubtotal = Math.max(0, Math.round((subtotal - discount) * 100) / 100);
-
     // Get active taxes
     const activeTaxes = hotelTaxes.filter((tax: any) => tax.isActive);
     
@@ -162,8 +149,8 @@ export default function CashierTableBilling() {
       return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
     });
 
-    // Apply cascading taxes on discounted subtotal
-    let runningTotal = discountedSubtotal;
+    // Apply cascading taxes
+    let runningTotal = subtotal;
     const taxBreakdown: any = {};
     
     sortedTaxes.forEach((tax: any) => {
@@ -181,14 +168,24 @@ export default function CashierTableBilling() {
     });
 
     const totalTax = Object.values(taxBreakdown).reduce((sum: number, t: any) => sum + t.amount, 0);
-    const grandTotal = Math.round((discountedSubtotal + totalTax) * 100) / 100;
+    let grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
+    
+    // Apply voucher discount after taxes (same logic as hotel billing)
+    let discountAmount = 0;
+    if (appliedVoucher) {
+      if (appliedVoucher.discountType === 'percentage') {
+        discountAmount = Math.round((grandTotal * (parseFloat(appliedVoucher.discountAmount) / 100)) * 100) / 100;
+      } else if (appliedVoucher.discountType === 'fixed') {
+        discountAmount = Math.min(parseFloat(appliedVoucher.discountAmount), grandTotal);
+      }
+      grandTotal = Math.round((grandTotal - discountAmount) * 100) / 100;
+    }
 
     return {
       subtotal,
-      discount,
-      discountedSubtotal,
       taxBreakdown,
       totalTax,
+      discountAmount,
       grandTotal
     };
   };
@@ -230,25 +227,21 @@ export default function CashierTableBilling() {
     }
 
     try {
+      // Redeem voucher if applied
+      if (appliedVoucher) {
+        await apiRequest("POST", "/api/vouchers/redeem", {
+          voucherId: appliedVoucher.id
+        });
+      }
+
       // Create transaction
       await createTransactionMutation.mutateAsync({
         txnType: selectedPaymentMethod === 'cash' ? 'cash_in' : selectedPaymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
         amount: billCalc.grandTotal.toFixed(2),
         paymentMethod: selectedPaymentMethod,
         purpose: 'restaurant_sale',
-        reference: appliedVoucher ? `Voucher: ${appliedVoucher.code}, Table: ${tables.find((t: any) => t.id === selectedTable)?.name}` : `Table: ${tables.find((t: any) => t.id === selectedTable)?.name}`
+        reference: `Table: ${tables.find((t: any) => t.id === selectedTable)?.name || selectedTable}${appliedVoucher ? ` | Voucher: ${appliedVoucher.code}` : ''}`
       });
-
-      // Redeem voucher if applied
-      if (appliedVoucher) {
-        try {
-          await apiRequest("POST", "/api/vouchers/redeem", {
-            voucherId: appliedVoucher.id
-          });
-        } catch (error) {
-          toast({ title: "Warning", description: "Transaction successful but voucher redemption failed", variant: "destructive" });
-        }
-      }
 
       // Mark all orders as served
       for (const order of selectedTableOrders) {
@@ -340,14 +333,6 @@ export default function CashierTableBilling() {
     </div>
 `;
 
-    if (billCalc.discount > 0) {
-      billContent += `
-    <div style="display: flex; justify-content: space-between; padding: 3px 0; color: green;">
-      <span>Discount (${appliedVoucher?.code}):</span>
-      <span>- ${formatCurrency(billCalc.discount)}</span>
-    </div>`;
-    }
-
     Object.entries(billCalc.taxBreakdown).forEach(([taxType, details]: [string, any]) => {
       billContent += `
     <div style="display: flex; justify-content: space-between; padding: 3px 0;">
@@ -355,6 +340,14 @@ export default function CashierTableBilling() {
       <span>${formatCurrency(details.amount)}</span>
     </div>`;
     });
+
+    if (billCalc.discountAmount > 0 && appliedVoucher) {
+      billContent += `
+    <div style="display: flex; justify-content: space-between; padding: 3px 0; color: #16a34a;">
+      <span>Discount (${appliedVoucher.code}):</span>
+      <span>-${formatCurrency(billCalc.discountAmount)}</span>
+    </div>`;
+    }
 
     billContent += `
     <div style="display: flex; justify-content: space-between; padding: 10px 0 5px 0; margin-top: 5px; border-top: 2px dashed #000; font-weight: bold; font-size: 14px;">
@@ -447,9 +440,9 @@ export default function CashierTableBilling() {
                               const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
                               if (!menuItem) return null;
                               return (
-                                <div key={idx} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
+                                <div key={idx} className="flex items-center justify-between p-3 border rounded-lg bg-card">
                                   <div className="flex-1">
-                                    <p className="font-medium">{menuItem.name}</p>
+                                    <p className="font-medium text-foreground">{menuItem.name}</p>
                                     <p className="text-sm text-muted-foreground">{formatCurrency(menuItem.price)} each</p>
                                   </div>
                                   <div className="flex items-center gap-3">
@@ -462,7 +455,7 @@ export default function CashierTableBilling() {
                                     >
                                       <Minus className="h-4 w-4" />
                                     </Button>
-                                    <span className="w-10 text-center font-medium">{item.qty}</span>
+                                    <span className="w-10 text-center font-medium text-foreground">{item.qty}</span>
                                     <Button
                                       size="icon"
                                       variant="outline"
@@ -472,7 +465,7 @@ export default function CashierTableBilling() {
                                     >
                                       <Plus className="h-4 w-4" />
                                     </Button>
-                                    <span className="text-right w-24">{formatCurrency(menuItem.price * item.qty)}</span>
+                                    <span className="text-right w-24 font-medium text-foreground">{formatCurrency(menuItem.price * item.qty)}</span>
                                   </div>
                                 </div>
                               );
@@ -523,18 +516,18 @@ export default function CashierTableBilling() {
                         <span>Subtotal:</span>
                         <span>{formatCurrency(billCalc.subtotal)}</span>
                       </div>
-                      {billCalc.discount > 0 && (
-                        <div className="flex justify-between text-sm text-green-600">
-                          <span>Discount ({appliedVoucher?.code}):</span>
-                          <span>- {formatCurrency(billCalc.discount)}</span>
-                        </div>
-                      )}
                       {Object.entries(billCalc.taxBreakdown).map(([taxType, details]: [string, any]) => (
                         <div key={taxType} className="flex justify-between text-sm">
                           <span>{taxType} ({details.rate}%):</span>
                           <span>{formatCurrency(details.amount)}</span>
                         </div>
                       ))}
+                      {billCalc.discountAmount > 0 && appliedVoucher && (
+                        <div className="flex justify-between text-sm text-green-600">
+                          <span>Discount ({appliedVoucher.code}):</span>
+                          <span>-{formatCurrency(billCalc.discountAmount)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-lg font-bold pt-2 border-t">
                         <span>Total:</span>
                         <span>{formatCurrency(billCalc.grandTotal)}</span>
@@ -557,22 +550,16 @@ export default function CashierTableBilling() {
                       </Select>
                     </div>
 
-                    <div className="flex gap-3">
-                      <Button className="flex-1" onClick={handlePrintBill} variant="outline">
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print Bill
-                      </Button>
-                      <Button 
-                        className="flex-1" 
-                        onClick={handleProcessPayment}
-                        disabled={!selectedPaymentMethod || createTransactionMutation.isPending}
-                      >
-                        {selectedPaymentMethod === 'cash' && <Banknote className="h-4 w-4 mr-2" />}
-                        {selectedPaymentMethod === 'pos' && <CreditCard className="h-4 w-4 mr-2" />}
-                        {selectedPaymentMethod === 'fonepay' && <Smartphone className="h-4 w-4 mr-2" />}
-                        Process Payment
-                      </Button>
-                    </div>
+                    <Button 
+                      className="w-full" 
+                      onClick={handleProcessPayment}
+                      disabled={!selectedPaymentMethod || createTransactionMutation.isPending}
+                    >
+                      {selectedPaymentMethod === 'cash' && <Banknote className="h-4 w-4 mr-2" />}
+                      {selectedPaymentMethod === 'pos' && <CreditCard className="h-4 w-4 mr-2" />}
+                      {selectedPaymentMethod === 'fonepay' && <Smartphone className="h-4 w-4 mr-2" />}
+                      Process Payment & Print Bill
+                    </Button>
                   </>
                 )}
               </div>

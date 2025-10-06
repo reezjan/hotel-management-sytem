@@ -62,12 +62,24 @@ export default function WaiterBilling() {
     }
   });
 
-  const validateVoucherMutation = useMutation({
-    mutationFn: async (code: string) => {
-      const response = await apiRequest("POST", "/api/vouchers/validate", { code });
-      return response;
-    },
-    onSuccess: (data: any) => {
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
+
+  const handleValidateVoucher = async () => {
+    if (!voucherCode.trim()) {
+      toast({ title: "Please enter a voucher code", variant: "destructive" });
+      return;
+    }
+
+    setIsValidatingVoucher(true);
+    try {
+      const response = await fetch('/api/vouchers/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: voucherCode.trim() }),
+        credentials: 'include'
+      });
+      const data = await response.json();
+      
       if (data.valid && data.voucher) {
         setAppliedVoucher(data.voucher);
         toast({ title: "Voucher applied successfully!" });
@@ -75,11 +87,13 @@ export default function WaiterBilling() {
         setAppliedVoucher(null);
         toast({ title: "Invalid voucher", description: data.message || "Voucher code is invalid", variant: "destructive" });
       }
-    },
-    onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Invalid voucher code", variant: "destructive" });
+    } catch (error) {
+      setAppliedVoucher(null);
+      toast({ title: "Error validating voucher", variant: "destructive" });
+    } finally {
+      setIsValidatingVoucher(false);
     }
-  });
+  };
 
   const redeemVoucherMutation = useMutation({
     mutationFn: async (voucherId: string) => {
@@ -216,13 +230,6 @@ export default function WaiterBilling() {
     }
   };
 
-  const handleApplyVoucher = () => {
-    if (!voucherCode.trim()) {
-      toast({ title: "Error", description: "Please enter a voucher code", variant: "destructive" });
-      return;
-    }
-    validateVoucherMutation.mutate(voucherCode.trim());
-  };
 
   const handleRemoveVoucher = () => {
     setAppliedVoucher(null);
@@ -462,8 +469,8 @@ export default function WaiterBilling() {
                             data-testid="input-voucher-code"
                           />
                           <Button 
-                            onClick={handleApplyVoucher}
-                            disabled={!voucherCode.trim() || validateVoucherMutation.isPending}
+                            onClick={handleValidateVoucher}
+                            disabled={!voucherCode.trim() || isValidatingVoucher}
                             data-testid="button-apply-voucher"
                           >
                             Apply
