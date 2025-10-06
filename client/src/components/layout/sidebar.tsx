@@ -19,7 +19,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
   const getItemPath = (itemId: string, role: string) => {
     const pathMaps: Record<string, Record<string, string>> = {
       'super_admin': {
-        'dashboard': '/super-admin',
+        'dashboard': '/',
         'hotels': '/super-admin/hotels',
         'owners': '/super-admin/owners',
         'superadmins': '/super-admin/superadmins',
@@ -61,7 +61,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'dashboard': '/restaurant-bar-manager',
         'staff': '/restaurant-bar-manager/staff-management',
         'tables': '/restaurant-bar-manager/table-setup',
-        'inventory': '/restaurant-bar-manager/inventory-tracking',
+        'stock-requests': '/restaurant-bar-manager/stock-requests',
         'duty': '/restaurant-bar-manager/duty-tracking',
         'tasks': '/restaurant-bar-manager/task-assignment',
         'menu': '/restaurant-bar-manager/menu-management',
@@ -70,11 +70,6 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'security_head': {
         'dashboard': '/security-head',
-        'staff': '/staff-management',
-        'vehicles': '/vehicle-logs',
-        'duty': '/duty-tracking',
-        'tasks': '/task-assignment',
-        'maintenance': '/maintenance-requests',
         'request-stock': '/security-head/request-stock'
       },
       'finance': {
@@ -97,25 +92,12 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'maintenance': '/waiter/maintenance'
       },
       'cashier': {
-        'dashboard': '/cashier',
-        'duty': '/duty-status',
-        'tasks': '/task-management',
-        'orders': '/orders',
-        'billing': '/billing',
-        'search': '/food-search',
-        'print': '/print-bills'
+        'dashboard': '/cashier'
       },
       'front_desk': {
         'dashboard': '/front-desk',
         'guests': '/guests',
-        'request-stock': '/front-desk/request-stock',
-        'duty': '/duty-status',
-        'tasks': '/task-management',
-        'checkin': '/check-in-out',
-        'roomservice': '/room-service',
-        'reservations': '/reservations',
-        'customers': '/customer-details',
-        'print': '/print-receipts'
+        'request-stock': '/front-desk/request-stock'
       },
       'surveillance_officer': {
         'dashboard': '/surveillance-officer',

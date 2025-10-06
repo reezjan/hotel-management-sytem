@@ -220,13 +220,7 @@ export const COUNTRIES = [
 
 export const NAVIGATION_ITEMS = {
   [ROLES.SUPER_ADMIN]: [
-    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Hotel', label: 'Hotel Management', id: 'hotels' },
-    { icon: 'Users', label: 'Owner Management', id: 'owners' },
-    { icon: 'Shield', label: 'Super Admin Accounts', id: 'superadmins' },
-    { icon: 'Database', label: 'All Data Access', id: 'alldata' },
-    { icon: 'Trash2', label: 'Deleted Records', id: 'deleted' },
-    { icon: 'TrendingUp', label: 'System Analytics', id: 'analytics' }
+    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' }
   ],
   [ROLES.OWNER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
@@ -276,12 +270,13 @@ export const NAVIGATION_ITEMS = {
   [ROLES.RESTAURANT_BAR_MANAGER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
-    { icon: 'Package', label: 'Inventory Tracking', id: 'inventory' },
+    { icon: 'Package', label: 'Stock Requests', id: 'stock-requests' },
     { icon: 'Clock', label: 'Duty Tracking', id: 'duty' },
     { icon: 'ClipboardList', label: 'Task Assignment', id: 'tasks' },
     { icon: 'Menu', label: 'Menu Management', id: 'menu' },
     { icon: 'Table', label: 'Table Setup', id: 'tables' },
-    { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' }
+    { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.WAITER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
@@ -294,35 +289,18 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.KITCHEN_STAFF]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Clock', label: 'Duty Status', id: 'duty' },
-    { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
-    { icon: 'ClipboardList', label: 'KOT Orders', id: 'kot' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
-    { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
   ],
   [ROLES.BARTENDER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Clock', label: 'Duty Status', id: 'duty' },
-    { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
-    { icon: 'ClipboardList', label: 'KOT Orders', id: 'kot' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
-    { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
   ],
   [ROLES.BARISTA]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Clock', label: 'Duty Status', id: 'duty' },
-    { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
-    { icon: 'ClipboardList', label: 'KOT Orders', id: 'kot' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
-    { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
   ],
   [ROLES.SECURITY_HEAD]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'UserCog', label: 'Guard Management', id: 'staff' },
-    { icon: 'Clock', label: 'Duty Tracking', id: 'duty' },
-    { icon: 'ClipboardList', label: 'Task Assignment', id: 'tasks' },
-    { icon: 'Car', label: 'Vehicle Logs', id: 'vehicles' },
-    { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
     { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
   ],
   [ROLES.SECURITY_GUARD]: [

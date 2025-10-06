@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, Download } from "lucide-react";
+import { Search, Download } from "lucide-react";
 import { cn, getStatusColor } from "@/lib/utils";
 
 interface Column {
@@ -43,6 +43,34 @@ export function DataTable({
   const [searchTerm, setSearchTerm] = useState("");
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  const handleExport = () => {
+    if (sortedData.length === 0) return;
+
+    // Convert data to CSV
+    const headers = columns.map(col => col.label).join(',');
+    const rows = sortedData.map(row => 
+      columns.map(col => {
+        const value = row[col.key];
+        // Escape commas and quotes in cell values
+        const stringValue = String(value || '').replace(/"/g, '""');
+        return `"${stringValue}"`;
+      }).join(',')
+    );
+    
+    const csv = [headers, ...rows].join('\n');
+    
+    // Create and trigger download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const filteredData = data.filter(row =>
     Object.values(row).some(value =>
@@ -113,10 +141,14 @@ export function DataTable({
                 data-testid="input-search"
               />
             </div>
-            <Button variant="outline" size="sm" data-testid="button-filter">
-              <Filter className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" data-testid="button-export">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              data-testid="button-export"
+              onClick={handleExport}
+              disabled={sortedData.length === 0}
+              title="Export to CSV"
+            >
               <Download className="h-4 w-4" />
             </Button>
             {onAdd && (
