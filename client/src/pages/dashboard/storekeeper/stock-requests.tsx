@@ -21,7 +21,7 @@ export default function StorekeeperStockRequests() {
 
   const approveMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/hotels/current/stock-requests/${id}/approve`, "PATCH", {});
+      return await apiRequest("PATCH", `/api/hotels/current/stock-requests/${id}/approve`, {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/stock-requests/pending"] });
@@ -41,7 +41,7 @@ export default function StorekeeperStockRequests() {
 
   const deliverMutation = useMutation({
     mutationFn: async (id: string) => {
-      return await apiRequest(`/api/hotels/current/stock-requests/${id}/deliver`, "PATCH", {});
+      return await apiRequest("PATCH", `/api/hotels/current/stock-requests/${id}/deliver`, {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/stock-requests/pending"] });
