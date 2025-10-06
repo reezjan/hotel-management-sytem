@@ -261,7 +261,7 @@ export interface IStorage {
   createStockRequest(request: InsertStockRequest): Promise<StockRequest>;
   updateStockRequest(id: string, request: Partial<StockRequest>): Promise<StockRequest>;
   approveStockRequest(id: string, approvedBy: string): Promise<StockRequest>;
-  deliverStockRequest(id: string): Promise<StockRequest>;
+  deliverStockRequest(id: string, deliveredBy: string): Promise<StockRequest>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -943,10 +943,45 @@ export class DatabaseStorage implements IStorage {
 
   // Wastage operations
   async createWastage(wastageData: any): Promise<any> {
+    const inventoryItem = await this.getInventoryItem(wastageData.itemId);
+    if (!inventoryItem) {
+      throw new Error('Inventory item not found');
+    }
+
+    const wastageQty = Number(wastageData.qty);
+    const currentStock = Number(inventoryItem.baseStockQty || inventoryItem.stockQty || 0);
+    
+    if (wastageQty > currentStock) {
+      throw new Error(`Insufficient stock. Current stock: ${currentStock}, requested wastage: ${wastageQty}`);
+    }
+    
+    const newQuantity = currentStock - wastageQty;
+
+    await db
+      .update(inventoryItems)
+      .set({ 
+        baseStockQty: String(newQuantity),
+        stockQty: String(newQuantity),
+        updatedAt: new Date()
+      })
+      .where(eq(inventoryItems.id, wastageData.itemId));
+
     const [wastage] = await db
       .insert(wastages)
       .values(wastageData)
       .returning();
+
+    await db
+      .insert(inventoryConsumptions)
+      .values({
+        hotelId: wastageData.hotelId,
+        itemId: wastageData.itemId,
+        qty: wastageData.qty,
+        reason: `Wastage: ${wastageData.reason}`,
+        referenceEntity: 'wastage',
+        createdBy: wastageData.recordedBy
+      });
+
     return wastage;
   }
 
@@ -1657,7 +1692,7 @@ export class DatabaseStorage implements IStorage {
     return request;
   }
 
-  async deliverStockRequest(id: string): Promise<StockRequest> {
+  async deliverStockRequest(id: string, deliveredBy: string): Promise<StockRequest> {
     const request = await this.getStockRequest(id);
     if (!request) {
       throw new Error('Stock request not found');
@@ -1702,6 +1737,18 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(eq(inventoryItems.id, request.itemId));
+
+    await this.createInventoryTransaction({
+      hotelId: request.hotelId,
+      itemId: request.itemId,
+      transactionType: 'issue',
+      qtyBase: String(quantityInBaseUnit),
+      qtyPackage: request.unit === inventoryItem.packageUnit ? request.quantity : null,
+      issuedToUserId: request.requestedBy,
+      department: request.department,
+      notes: `Stock request delivered - ${request.notes || ''}`,
+      recordedBy: deliveredBy
+    });
 
     const [updatedRequest] = await db
       .update(stockRequests)

@@ -2909,7 +2909,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Can only deliver approved stock requests" });
       }
       
-      const request = await storage.deliverStockRequest(id);
+      const request = await storage.deliverStockRequest(id, user.id);
       res.json(request);
     } catch (error) {
       console.error("Stock request delivery error:", error);
