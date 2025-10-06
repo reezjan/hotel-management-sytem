@@ -405,6 +405,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/hotels/current/inventory-consumptions", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
@@ -1092,6 +1095,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Inventory transactions routes
   app.get("/api/hotels/current/inventory-transactions", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
