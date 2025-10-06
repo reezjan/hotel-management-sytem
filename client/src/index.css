@@ -106,4 +106,30 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+
+  /* Mobile touch targets - minimum 44x44px for better usability */
+  button, a, input, select, textarea {
+    @apply min-h-[44px] md:min-h-[auto];
+  }
+
+  /* Better mobile form spacing */
+  input, select, textarea {
+    @apply text-base; /* Prevents zoom on iOS */
+  }
+}
+
+@layer utilities {
+  /* Mobile-friendly spacing utilities */
+  .mobile-padding {
+    @apply p-4 md:p-6;
+  }
+
+  .mobile-gap {
+    @apply gap-3 md:gap-4;
+  }
+
+  /* Touch-friendly tap targets */
+  .tap-target {
+    @apply min-w-[44px] min-h-[44px];
+  }
 }
