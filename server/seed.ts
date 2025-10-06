@@ -1,5 +1,5 @@
 import { db } from './db';
-import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems } from '@shared/schema';
+import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables } from '@shared/schema';
 import { hashPassword } from './auth';
 import { eq } from 'drizzle-orm';
 
@@ -403,6 +403,34 @@ async function seed() {
       }
     }
 
+    // Create restaurant tables
+    console.log('\n🍽️  Creating restaurant tables...');
+    const restaurantTableData = [
+      { name: 'Table 1', capacity: 2, status: 'available' },
+      { name: 'Table 2', capacity: 2, status: 'available' },
+      { name: 'Table 3', capacity: 4, status: 'available' },
+      { name: 'Table 4', capacity: 4, status: 'available' },
+      { name: 'Table 5', capacity: 6, status: 'available' },
+      { name: 'Table 6', capacity: 6, status: 'available' },
+      { name: 'Table 7', capacity: 8, status: 'available' },
+      { name: 'Table 8', capacity: 4, status: 'available' },
+      { name: 'VIP Table 1', capacity: 10, status: 'available' },
+      { name: 'VIP Table 2', capacity: 12, status: 'available' }
+    ];
+
+    for (const table of restaurantTableData) {
+      const existing = await db.select().from(restaurantTables).where(eq(restaurantTables.name, table.name));
+      if (existing.length === 0) {
+        await db.insert(restaurantTables).values({
+          hotelId: testHotel.id,
+          ...table
+        });
+        console.log(`  ✓ Created restaurant table: ${table.name} (Capacity: ${table.capacity})`);
+      } else {
+        console.log(`  → Restaurant table already exists: ${table.name}`);
+      }
+    }
+
     console.log('\n✅ Database seeded successfully!');
     console.log('\n📝 Summary:');
     console.log('  - Hotel: Test Hotel');
@@ -411,6 +439,7 @@ async function seed() {
     console.log('  - Meal Plans: EP, CP, MAP, AP');
     console.log('  - Discount Code: DISCOUNT1000 (Rs. 1000 off)');
     console.log('  - Menu Items: 13 items across 5 categories');
+    console.log('  - Restaurant Tables: 10 tables (2-12 seating capacity)');
     process.exit(0);
   } catch (error) {
     console.error('❌ Seeding failed:', error);
