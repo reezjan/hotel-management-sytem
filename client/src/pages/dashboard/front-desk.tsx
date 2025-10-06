@@ -66,9 +66,16 @@ export default function FrontDeskDashboard() {
   const [officeName, setOfficeName] = useState("");
   const [isExtendStayModalOpen, setIsExtendStayModalOpen] = useState(false);
   const [newCheckoutDate, setNewCheckoutDate] = useState<Date | undefined>(undefined);
+  const [guestSearchQuery, setGuestSearchQuery] = useState("");
+  const [selectedGuest, setSelectedGuest] = useState<any>(null);
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
+    enabled: !!user?.hotelId
+  });
+
+  const { data: guests = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/guests"],
     enabled: !!user?.hotelId
   });
 
@@ -254,6 +261,8 @@ export default function FrontDeskDashboard() {
       setSelectedRoom(null);
       setSelectedPaymentMethod("");
       setGuestType("walkin");
+      setSelectedGuest(null);
+      setGuestSearchQuery("");
       setOfficeName("");
     },
     onError: (error: any) => {
@@ -519,11 +528,15 @@ export default function FrontDeskDashboard() {
     // Use actual checkout date (today) instead of booked checkout date for accurate billing
     const actualCheckOutDate = new Date();
     
-    // Calculate number of days based on actual stay duration
+    // Calculate number of days based on actual stay duration with 2-hour grace period
     let numberOfDays = 1;
     if (checkInDate) {
       const timeDiff = actualCheckOutDate.getTime() - checkInDate.getTime();
-      numberOfDays = Math.max(1, Math.ceil(timeDiff / (1000 * 3600 * 24)));
+      // Subtract 2-hour grace period before calculating days
+      // This prevents charging an extra day if guest is 1-2 hours late
+      const gracePeriodMs = 2 * 60 * 60 * 1000; // 2 hours
+      const adjustedTimeDiff = Math.max(0, timeDiff - gracePeriodMs);
+      numberOfDays = Math.max(1, Math.ceil(adjustedTimeDiff / (1000 * 3600 * 24)));
     }
     
     const totalRoomCharges = roomPricePerDay * numberOfDays;
@@ -1254,6 +1267,96 @@ export default function FrontDeskDashboard() {
                 Check-in Guest - Room {selectedRoom?.roomNumber}
               </DialogTitle>
             </DialogHeader>
+            
+            {/* Guest Search Feature */}
+            <div className="space-y-3 border-b pb-4 mb-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Search Existing Guest</label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedGuest(null);
+                    setGuestSearchQuery("");
+                    checkInForm.reset();
+                  }}
+                  data-testid="button-clear-guest"
+                >
+                  Clear
+                </Button>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or phone..."
+                  value={guestSearchQuery}
+                  onChange={(e) => setGuestSearchQuery(e.target.value)}
+                  className="pl-10"
+                  data-testid="input-search-guest"
+                />
+              </div>
+              
+              {guestSearchQuery && (
+                <div className="max-h-40 overflow-y-auto border rounded-md">
+                  {guests.filter((guest: any) => {
+                    const search = guestSearchQuery.toLowerCase();
+                    return (
+                      guest.firstName.toLowerCase().includes(search) ||
+                      guest.lastName.toLowerCase().includes(search) ||
+                      guest.phone.toLowerCase().includes(search)
+                    );
+                  }).length === 0 ? (
+                    <div className="p-3 text-sm text-muted-foreground text-center">
+                      No guests found. Enter details below to check in a new guest.
+                    </div>
+                  ) : (
+                    guests.filter((guest: any) => {
+                      const search = guestSearchQuery.toLowerCase();
+                      return (
+                        guest.firstName.toLowerCase().includes(search) ||
+                        guest.lastName.toLowerCase().includes(search) ||
+                        guest.phone.toLowerCase().includes(search)
+                      );
+                    }).map((guest: any) => (
+                      <button
+                        key={guest.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedGuest(guest);
+                          setGuestSearchQuery("");
+                          checkInForm.setValue("guestName", `${guest.firstName} ${guest.lastName}`);
+                          checkInForm.setValue("guestEmail", guest.email || "");
+                          checkInForm.setValue("guestPhone", guest.phone || "");
+                          checkInForm.setValue("idNumber", guest.idNumber || "");
+                          checkInForm.setValue("nationality", guest.nationality || "");
+                          toast({ title: `Selected guest: ${guest.firstName} ${guest.lastName}` });
+                        }}
+                        className="w-full p-3 text-left hover:bg-accent transition-colors border-b last:border-b-0"
+                        data-testid={`button-select-guest-${guest.id}`}
+                      >
+                        <div className="font-medium">{guest.firstName} {guest.lastName}</div>
+                        <div className="text-sm text-muted-foreground">{guest.phone}</div>
+                        {guest.email && <div className="text-xs text-muted-foreground">{guest.email}</div>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+              
+              {selectedGuest && (
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                        ✓ Guest Selected: {selectedGuest.firstName} {selectedGuest.lastName}
+                      </p>
+                      <p className="text-xs text-green-700 dark:text-green-300">{selectedGuest.phone}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             
             <Form {...checkInForm}>
               <form onSubmit={checkInForm.handleSubmit(onSubmitCheckIn)} className="space-y-4">

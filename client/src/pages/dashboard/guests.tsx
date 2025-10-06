@@ -10,6 +10,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Users, UserPlus, Search, Edit, Trash2, Phone, Mail, MapPin, CalendarIcon, IdCard } from "lucide-react";
@@ -20,6 +22,7 @@ import { formatDate, cn } from "@/lib/utils";
 import { insertGuestSchema, type Guest } from "@shared/schema";
 import { z } from "zod";
 import { format } from "date-fns";
+import { COUNTRIES } from "@/lib/constants";
 
 const guestFormSchema = insertGuestSchema.extend({
   dateOfBirth: z.date().optional().nullable()
@@ -35,6 +38,8 @@ export default function GuestsPage() {
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>();
+  const [openCountryAdd, setOpenCountryAdd] = useState(false);
+  const [openCountryEdit, setOpenCountryEdit] = useState(false);
 
   const { data: guests = [], isLoading } = useQuery<Guest[]>({
     queryKey: ["/api/hotels/current/guests"],
@@ -382,11 +387,61 @@ export default function GuestsPage() {
                     control={guestForm.control}
                     name="country"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-col">
                         <FormLabel>Country</FormLabel>
-                        <FormControl>
-                          <Input {...field} value={field.value || ""} placeholder="Nepal" data-testid="input-country" />
-                        </FormControl>
+                        <Popover open={openCountryAdd} onOpenChange={setOpenCountryAdd}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  "w-full justify-between",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                                data-testid="select-country"
+                              >
+                                {field.value
+                                  ? COUNTRIES.find((country) => country.name === field.value)
+                                    ? `${COUNTRIES.find((country) => country.name === field.value)?.flag} ${field.value}`
+                                    : "Select country"
+                                  : "Select country"}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-full p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Type to search countries..." />
+                              <CommandList>
+                                <CommandEmpty>No country found.</CommandEmpty>
+                                <CommandGroup>
+                                  {COUNTRIES.map((country) => (
+                                    <CommandItem
+                                      key={country.code}
+                                      value={country.name}
+                                      onSelect={() => {
+                                        field.onChange(country.name);
+                                        setOpenCountryAdd(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          country.name === field.value
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        )}
+                                      />
+                                      <span className="text-lg mr-2">{country.flag}</span>
+                                      {country.name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -604,11 +659,60 @@ export default function GuestsPage() {
                     control={guestForm.control}
                     name="country"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-col">
                         <FormLabel>Country</FormLabel>
-                        <FormControl>
-                          <Input {...field} value={field.value || ""} placeholder="Nepal" />
-                        </FormControl>
+                        <Popover open={openCountryEdit} onOpenChange={setOpenCountryEdit}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  "w-full justify-between",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                              >
+                                {field.value
+                                  ? COUNTRIES.find((country) => country.name === field.value)
+                                    ? `${COUNTRIES.find((country) => country.name === field.value)?.flag} ${field.value}`
+                                    : "Select country"
+                                  : "Select country"}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-full p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Type to search countries..." />
+                              <CommandList>
+                                <CommandEmpty>No country found.</CommandEmpty>
+                                <CommandGroup>
+                                  {COUNTRIES.map((country) => (
+                                    <CommandItem
+                                      key={country.code}
+                                      value={country.name}
+                                      onSelect={() => {
+                                        field.onChange(country.name);
+                                        setOpenCountryEdit(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          country.name === field.value
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        )}
+                                      />
+                                      <span className="text-lg mr-2">{country.flag}</span>
+                                      {country.name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                         <FormMessage />
                       </FormItem>
                     )}
