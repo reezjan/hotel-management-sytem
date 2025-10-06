@@ -110,6 +110,11 @@ export default function FrontDeskDashboard() {
     enabled: !!user?.hotelId
   });
 
+  const { data: transactions = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/transactions"],
+    enabled: !!user?.hotelId
+  });
+
   const checkInForm = useForm({
     defaultValues: {
       guestName: "",
@@ -228,12 +233,19 @@ export default function FrontDeskDashboard() {
           paymentMethod: selectedPaymentMethod,
           purpose: 'room_advance_payment',
           reference: `Room ${selectedRoom?.roomNumber} - ${data.guestName}`,
+          details: {
+            roomId: data.roomId,
+            roomNumber: selectedRoom?.roomNumber,
+            guestName: data.guestName,
+            checkInDate: data.checkInDate
+          },
           createdBy: user?.id
         });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
       toast({ title: "Guest checked in successfully" });
       checkInForm.reset();
       setIsCheckInModalOpen(false);
@@ -483,6 +495,22 @@ export default function FrontDeskDashboard() {
     
     const subtotal = totalRoomCharges + totalMealPlanCharges + totalFoodCharges;
 
+    // Apply voucher discount on subtotal first
+    let discountAmount = 0;
+    let discountedSubtotal = subtotal;
+    
+    if (validatedVoucher) {
+      if (validatedVoucher.discountType === 'percentage') {
+        // Apply percentage discount on subtotal (before tax)
+        discountAmount = Math.round((subtotal * (parseFloat(validatedVoucher.discountAmount) / 100)) * 100) / 100;
+        discountedSubtotal = Math.round((subtotal - discountAmount) * 100) / 100;
+      } else if (validatedVoucher.discountType === 'fixed') {
+        // Apply fixed discount on subtotal
+        discountAmount = Math.min(parseFloat(validatedVoucher.discountAmount), subtotal);
+        discountedSubtotal = Math.round((subtotal - discountAmount) * 100) / 100;
+      }
+    }
+
     // Get active taxes
     const activeTaxes = hotelTaxes.filter((tax: any) => tax.isActive);
     
@@ -494,8 +522,8 @@ export default function FrontDeskDashboard() {
       return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
     });
 
-    // Apply cascading taxes
-    let runningTotal = subtotal;
+    // Apply cascading taxes on discounted subtotal
+    let runningTotal = discountedSubtotal;
     const taxBreakdown: any = {};
     
     sortedTaxes.forEach((tax: any) => {
@@ -512,25 +540,47 @@ export default function FrontDeskDashboard() {
     });
 
     const totalTax = Object.values(taxBreakdown).reduce((sum: number, t: any) => sum + t.amount, 0);
-    let grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
     
-    // Apply voucher discount
-    let discountAmount = 0;
-    if (validatedVoucher) {
-      if (validatedVoucher.discountType === 'percentage') {
-        discountAmount = Math.round((grandTotal * (parseFloat(validatedVoucher.discountAmount) / 100)) * 100) / 100;
-      } else if (validatedVoucher.discountType === 'fixed') {
-        discountAmount = Math.min(parseFloat(validatedVoucher.discountAmount), grandTotal);
+    // Calculate grand total: discounted subtotal + tax
+    let grandTotal = Math.round((discountedSubtotal + totalTax) * 100) / 100;
+
+    // Calculate advance payment deductions
+    const roomId = room.id;
+    const guestName = room.occupantDetails?.name || '';
+    const roomNumber = room.roomNumber || '';
+    
+    // Find all advance payment transactions for this specific room
+    // Use exact roomId match for new transactions, fallback to reference string matching for legacy transactions
+    const advancePayments = transactions.filter((txn: any) => {
+      const isAdvancePayment = txn.purpose === 'room_advance_payment';
+      
+      // Prefer exact roomId match if available (new transactions)
+      if (txn.details?.roomId) {
+        return isAdvancePayment && txn.details.roomId === roomId;
       }
-      grandTotal = Math.round((grandTotal - discountAmount) * 100) / 100;
-    }
+      
+      // Fallback to reference string matching for legacy transactions (before this fix)
+      const matchesRoom = txn.reference?.includes(`Room ${roomNumber}`);
+      const matchesGuest = txn.reference?.includes(guestName);
+      return isAdvancePayment && matchesRoom && matchesGuest;
+    });
+    
+    // Sum up all advance payments
+    const totalAdvancePayment = advancePayments.reduce((sum: number, txn: any) => {
+      return sum + (parseFloat(txn.amount) || 0);
+    }, 0);
+
+    // Deduct advance payment from grand total
+    const finalAmount = Math.max(0, Math.round((grandTotal - totalAdvancePayment) * 100) / 100);
 
     return {
       subtotal,
       taxBreakdown,
       totalTax,
       discountAmount,
+      advancePayment: totalAdvancePayment,
       grandTotal,
+      finalAmount,
       numberOfDays,
       totalRoomCharges,
       mealPlanCostPerDay: parseFloat(mealPlanCostPerDay.toString()),
@@ -548,6 +598,9 @@ export default function FrontDeskDashboard() {
 
   const handleCheckOut = (room: any) => {
     setSelectedRoom(room);
+    setVoucherCode("");
+    setValidatedVoucher(null);
+    setSelectedCheckoutPaymentMethod("");
     setIsCheckOutModalOpen(true);
   };
 
@@ -1524,6 +1577,16 @@ export default function FrontDeskDashboard() {
                             <span>Total Amount</span>
                             <span data-testid="checkout-total">NPR {billCalc.grandTotal.toFixed(2)}</span>
                           </div>
+                          {billCalc.advancePayment > 0 && (
+                            <div className="flex justify-between text-blue-600">
+                              <span>Advance Payment Paid</span>
+                              <span data-testid="checkout-advance-payment">- NPR {billCalc.advancePayment.toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between font-bold text-xl pt-2 border-t border-2">
+                            <span>Amount to Pay</span>
+                            <span className="text-primary" data-testid="checkout-final-amount">NPR {billCalc.finalAmount.toFixed(2)}</span>
+                          </div>
                         </CardContent>
                       </Card>
                     );
@@ -1578,7 +1641,7 @@ export default function FrontDeskDashboard() {
                           guestName: selectedRoom.occupantDetails?.name || 'Guest',
                           totalAmount: billCalc.subtotal + billCalc.totalTax,
                           discountAmount: billCalc.discountAmount,
-                          finalAmount: billCalc.grandTotal,
+                          finalAmount: billCalc.finalAmount,
                           voucherId: validatedVoucher?.id || undefined,
                           billingDetails: billCalc
                         });
