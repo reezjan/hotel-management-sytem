@@ -22,7 +22,7 @@ export default function StorekeeperConsumptionTracking() {
     return {
       ...consumption,
       itemName: item?.name || 'Unknown Item',
-      unit: item?.unit || item?.baseUnit || '',
+      unit: consumption.unit || item?.baseUnit || item?.unit || '',
       type: consumption.referenceEntity === 'wastage' ? 'wastage' : 'consumption'
     };
   });

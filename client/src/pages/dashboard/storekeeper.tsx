@@ -13,7 +13,8 @@ import { Package, AlertTriangle, CheckSquare, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { getSupportedUnitsForItem, getUnitLabel } from "@shared/measurements";
 
 export default function StorekeeperDashboard() {
   const { user } = useAuth();
@@ -23,6 +24,7 @@ export default function StorekeeperDashboard() {
   const [wastageData, setWastageData] = useState({
     itemId: "",
     qty: "",
+    unit: "",
     reason: ""
   });
 
@@ -44,6 +46,17 @@ export default function StorekeeperDashboard() {
 
   const pendingTasks = tasks.filter((t: any) => t.status === 'pending');
 
+  const selectedItem = useMemo(() => {
+    return inventoryItems.find((item: any) => item.id === wastageData.itemId);
+  }, [inventoryItems, wastageData.itemId]);
+
+  const availableUnits = useMemo(() => {
+    if (!selectedItem) return [];
+    const category = selectedItem.measurementCategory || 'weight';
+    const conversionProfile = selectedItem.conversionProfile || {};
+    return getSupportedUnitsForItem(category as any, conversionProfile);
+  }, [selectedItem]);
+
   const createWastageMutation = useMutation({
     mutationFn: async (data: any) => {
       return await apiRequest("POST", "/api/hotels/current/wastages", data);
@@ -52,8 +65,9 @@ export default function StorekeeperDashboard() {
       toast({ title: "Wastage recorded successfully" });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-consumptions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-transactions"] });
       setWastageDialogOpen(false);
-      setWastageData({ itemId: "", qty: "", reason: "" });
+      setWastageData({ itemId: "", qty: "", unit: "", reason: "" });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -61,7 +75,7 @@ export default function StorekeeperDashboard() {
   });
 
   const submitWastage = () => {
-    if (!wastageData.itemId || !wastageData.qty || !wastageData.reason.trim()) {
+    if (!wastageData.itemId || !wastageData.qty || !wastageData.unit || !wastageData.reason.trim()) {
       toast({ title: "Please fill all wastage fields", variant: "destructive" });
       return;
     }
@@ -73,6 +87,7 @@ export default function StorekeeperDashboard() {
     createWastageMutation.mutate({
       itemId: wastageData.itemId,
       qty: qty.toString(),
+      unit: wastageData.unit,
       reason: wastageData.reason.trim()
     });
   };
@@ -82,7 +97,7 @@ export default function StorekeeperDashboard() {
     return {
       ...consumption,
       itemName: item?.name || 'Unknown Item',
-      unit: item?.unit || item?.baseUnit || '',
+      unit: consumption.unit || item?.baseUnit || item?.unit || '',
       type: consumption.referenceEntity === 'wastage' ? 'wastage' : 'consumption'
     };
   });
@@ -131,7 +146,11 @@ export default function StorekeeperDashboard() {
                   <Label>Inventory Item</Label>
                   <Select
                     value={wastageData.itemId}
-                    onValueChange={(value) => setWastageData({ ...wastageData, itemId: value })}
+                    onValueChange={(value) => {
+                      const item = inventoryItems.find((i: any) => i.id === value);
+                      const defaultUnit = item?.baseUnit || item?.unit || '';
+                      setWastageData({ ...wastageData, itemId: value, unit: defaultUnit });
+                    }}
                   >
                     <SelectTrigger data-testid="select-wastage-item">
                       <SelectValue placeholder="Select item" />
@@ -155,6 +174,25 @@ export default function StorekeeperDashboard() {
                     placeholder="Enter quantity"
                     data-testid="input-wastage-quantity"
                   />
+                </div>
+                <div>
+                  <Label>Unit</Label>
+                  <Select
+                    value={wastageData.unit}
+                    onValueChange={(value) => setWastageData({ ...wastageData, unit: value })}
+                    disabled={!wastageData.itemId}
+                  >
+                    <SelectTrigger data-testid="select-wastage-unit">
+                      <SelectValue placeholder="Select unit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableUnits.map((unit) => (
+                        <SelectItem key={unit} value={unit}>
+                          {getUnitLabel(unit as any)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label>Reason</Label>
