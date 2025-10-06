@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { DataTable } from "@/components/tables/data-table";
@@ -7,16 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Users, Clock, CheckSquare, Wrench, UserPlus, ClipboardList } from "lucide-react";
 
 export default function HousekeepingSupervisorDashboard() {
+  const [, setLocation] = useLocation();
+
   const { data: staff = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"]
   });
 
   const { data: tasks = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/tasks"]
-  });
-
-  const { data: maintenanceRequests = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/maintenance-requests"]
   });
 
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');
@@ -59,13 +58,6 @@ export default function HousekeepingSupervisorDashboard() {
     { key: "createdAt", label: "Created", sortable: true }
   ];
 
-  const maintenanceColumns = [
-    { key: "description", label: "Request", sortable: true },
-    { key: "department", label: "Department", sortable: true },
-    { key: "status", label: "Status", sortable: true },
-    { key: "createdAt", label: "Reported", sortable: true }
-  ];
-
   const staffActions = [
     { label: "Assign Task", action: (row: any) => console.log("Assign task to:", row) },
     { label: "Remove", action: (row: any) => console.log("Remove staff:", row), variant: "destructive" as const }
@@ -74,11 +66,6 @@ export default function HousekeepingSupervisorDashboard() {
   const taskActions = [
     { label: "Edit", action: (row: any) => console.log("Edit task:", row) },
     { label: "Complete", action: (row: any) => console.log("Complete task:", row) }
-  ];
-
-  const maintenanceActions = [
-    { label: "Forward to Finance", action: (row: any) => console.log("Forward to finance:", row) },
-    { label: "Assign", action: (row: any) => console.log("Assign maintenance:", row) }
   ];
 
   return (
@@ -127,19 +114,39 @@ export default function HousekeepingSupervisorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-add-staff">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                data-testid="button-add-staff"
+                onClick={() => setLocation("/housekeeping-supervisor/staff-management")}
+              >
                 <UserPlus className="h-6 w-6 mb-2" />
                 <span className="text-sm">Add Staff</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-assign-tasks">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                data-testid="button-assign-tasks"
+                onClick={() => setLocation("/housekeeping-supervisor/task-assignment")}
+              >
                 <CheckSquare className="h-6 w-6 mb-2" />
                 <span className="text-sm">Assign Tasks</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-duty-roster">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                data-testid="button-duty-roster"
+                onClick={() => setLocation("/housekeeping-supervisor/duty-tracking")}
+              >
                 <Clock className="h-6 w-6 mb-2" />
                 <span className="text-sm">Duty Roster</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-maintenance">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                data-testid="button-maintenance"
+                onClick={() => setLocation("/housekeeping-supervisor/maintenance-requests")}
+              >
                 <Wrench className="h-6 w-6 mb-2" />
                 <span className="text-sm">Maintenance</span>
               </Button>
@@ -153,7 +160,7 @@ export default function HousekeepingSupervisorDashboard() {
           data={housekeepingStaff}
           columns={staffColumns}
           actions={staffActions}
-          onAdd={() => console.log("Add housekeeping staff")}
+          onAdd={() => setLocation("/housekeeping-supervisor/staff-management")}
           addButtonLabel="Add Staff Member"
           searchPlaceholder="Search staff..."
         />
@@ -164,48 +171,10 @@ export default function HousekeepingSupervisorDashboard() {
           data={tasks}
           columns={taskColumns}
           actions={taskActions}
-          onAdd={() => console.log("Create new task")}
+          onAdd={() => setLocation("/housekeeping-supervisor/task-assignment")}
           addButtonLabel="Create Task"
           searchPlaceholder="Search tasks..."
         />
-
-        {/* Maintenance Requests */}
-        <DataTable
-          title="Maintenance Requests"
-          data={maintenanceRequests}
-          columns={maintenanceColumns}
-          actions={maintenanceActions}
-          searchPlaceholder="Search maintenance requests..."
-        />
-
-        {/* Daily Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Today's Summary</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg" data-testid="summary-rooms-cleaned">
-                  <div className="text-2xl font-bold text-blue-600">18</div>
-                  <div className="text-sm text-blue-700">Rooms Cleaned</div>
-                </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg" data-testid="summary-tasks-completed">
-                  <div className="text-2xl font-bold text-green-600">{completedTasks.length}</div>
-                  <div className="text-sm text-green-700">Tasks Completed</div>
-                </div>
-                <div className="text-center p-4 bg-orange-50 rounded-lg" data-testid="summary-maintenance-pending">
-                  <div className="text-2xl font-bold text-orange-600">{maintenanceRequests.filter(r => r.status === 'open').length}</div>
-                  <div className="text-sm text-orange-700">Maintenance Pending</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg" data-testid="summary-staff-efficiency">
-                  <div className="text-2xl font-bold text-purple-600">92%</div>
-                  <div className="text-sm text-purple-700">Staff Efficiency</div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </DashboardLayout>
   );

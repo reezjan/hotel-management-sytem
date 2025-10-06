@@ -3,7 +3,6 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { DataTable } from "@/components/tables/data-table";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Send, CheckCircle } from "lucide-react";
 
 export default function HousekeepingSupervisorMaintenanceRequests() {
   const { toast } = useToast();
@@ -21,24 +20,13 @@ export default function HousekeepingSupervisorMaintenanceRequests() {
     }
   });
 
-  const { data: staff = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/users"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/users", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch staff");
-      return response.json();
-    }
-  });
-
-  const financeStaff = staff.filter(s => s.role?.name === 'finance');
-
   const updateRequestMutation = useMutation({
-    mutationFn: async ({ id, status, assignedTo }: { id: string; status: string; assignedTo?: string }) => {
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const response = await fetch(`/api/hotels/current/maintenance-requests/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ status, assignedTo })
+        body: JSON.stringify({ status })
       });
       if (!response.ok) throw new Error("Failed to update request");
       return response.json();
@@ -52,16 +40,17 @@ export default function HousekeepingSupervisorMaintenanceRequests() {
     }
   });
 
-  const handleForwardToFinance = (request: any) => {
-    if (financeStaff.length === 0) {
-      toast({ title: "No finance staff available", variant: "destructive" });
-      return;
-    }
-    
+  const handleDecline = (request: any) => {
     updateRequestMutation.mutate({
       id: request.id,
-      status: "in_progress",
-      assignedTo: financeStaff[0].id
+      status: "declined"
+    });
+  };
+
+  const handleFixing = (request: any) => {
+    updateRequestMutation.mutate({
+      id: request.id,
+      status: "fixing"
     });
   };
 
@@ -92,11 +81,15 @@ export default function HousekeepingSupervisorMaintenanceRequests() {
 
   const actions = [
     {
-      label: "Forward to Finance",
-      action: (row: any) => handleForwardToFinance(row)
+      label: "Declined",
+      action: (row: any) => handleDecline(row)
     },
     {
-      label: "Mark Resolved",
+      label: "Fixing",
+      action: (row: any) => handleFixing(row)
+    },
+    {
+      label: "Resolved",
       action: (row: any) => handleResolve(row)
     }
   ];
