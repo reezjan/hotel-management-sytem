@@ -76,7 +76,6 @@ import StorekeeperInventoryTracking from "@/pages/dashboard/storekeeper/inventor
 import StorekeeperInventoryManagement from "@/pages/dashboard/storekeeper/inventory-management";
 import StorekeeperMaintenanceRequests from "@/pages/dashboard/storekeeper/maintenance-requests";
 import StorekeeperMyTasks from "@/pages/dashboard/storekeeper/my-tasks";
-import StorekeeperConsumptionTracking from "@/pages/dashboard/storekeeper/consumption-tracking";
 import RequestStock from "@/pages/dashboard/stock-requests/request-stock";
 import StorekeeperStockRequests from "@/pages/dashboard/storekeeper/stock-requests";
 import DepartmentStockRequests from "@/pages/dashboard/department-stock-requests";
@@ -172,7 +171,6 @@ function Router() {
       <ProtectedRoute path="/storekeeper/stock-requests" component={StorekeeperStockRequests} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/maintenance-requests" component={StorekeeperMaintenanceRequests} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/my-tasks" component={StorekeeperMyTasks} allowedRoles={["storekeeper"]} />
-      <ProtectedRoute path="/storekeeper/consumption-tracking" component={StorekeeperConsumptionTracking} allowedRoles={["storekeeper"]} />
       
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
