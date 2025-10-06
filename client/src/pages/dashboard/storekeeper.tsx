@@ -1,14 +1,30 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, AlertTriangle, Clock, CheckSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Package, AlertTriangle, CheckSquare, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { getStatusColor } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 export default function StorekeeperDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [wastageDialogOpen, setWastageDialogOpen] = useState(false);
+  const [wastageData, setWastageData] = useState({
+    itemId: "",
+    qty: "",
+    reason: ""
+  });
 
   const { data: inventoryItems = [], isLoading: loadingInventory } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory-items"]
@@ -27,20 +43,54 @@ export default function StorekeeperDashboard() {
   });
 
   const pendingTasks = tasks.filter((t: any) => t.status === 'pending');
-  const dutyStatus = (user as any)?.dutyStatus || 'off';
+
+  const createWastageMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("POST", "/api/hotels/current/wastages", data);
+    },
+    onSuccess: () => {
+      toast({ title: "Wastage recorded successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-consumptions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/inventory-items"] });
+      setWastageDialogOpen(false);
+      setWastageData({ itemId: "", qty: "", reason: "" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const submitWastage = () => {
+    if (!wastageData.itemId || !wastageData.qty || !wastageData.reason.trim()) {
+      toast({ title: "Please fill all wastage fields", variant: "destructive" });
+      return;
+    }
+    const qty = parseFloat(wastageData.qty);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: "Please enter a valid quantity", variant: "destructive" });
+      return;
+    }
+    createWastageMutation.mutate({
+      itemId: wastageData.itemId,
+      qty: qty.toString(),
+      reason: wastageData.reason.trim()
+    });
+  };
 
   const recentActivity = consumptions.slice(0, 10).map((consumption: any) => {
-    const item = inventoryItems.find((i: any) => i.id === consumption.inventoryItemId);
+    const item = inventoryItems.find((i: any) => i.id === consumption.itemId);
     return {
       ...consumption,
-      itemName: item?.name || 'Unknown Item'
+      itemName: item?.name || 'Unknown Item',
+      unit: item?.unit || item?.baseUnit || '',
+      type: consumption.referenceEntity === 'wastage' ? 'wastage' : 'consumption'
     };
   });
 
   return (
     <DashboardLayout title="Storekeeper Dashboard">
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <StatsCard
             title="Total Items"
             value={inventoryItems.length}
@@ -56,19 +106,84 @@ export default function StorekeeperDashboard() {
             data-testid="stat-low-stock"
           />
           <StatsCard
-            title="Duty Status"
-            value={dutyStatus === 'on' ? 'On Duty' : 'Off Duty'}
-            icon={<Clock />}
-            iconColor={dutyStatus === 'on' ? 'text-green-500' : 'text-gray-500'}
-            data-testid="stat-duty-status"
-          />
-          <StatsCard
             title="Pending Tasks"
             value={pendingTasks.length}
             icon={<CheckSquare />}
             iconColor="text-orange-500"
             data-testid="stat-pending-tasks"
           />
+        </div>
+
+        <div className="flex justify-end">
+          <Dialog open={wastageDialogOpen} onOpenChange={setWastageDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-record-wastage">
+                <Trash2 className="w-4 h-4 mr-2" /> Record Wastage
+              </Button>
+            </DialogTrigger>
+            <DialogContent data-testid="dialog-record-wastage">
+              <DialogHeader>
+                <DialogTitle>Record Wastage</DialogTitle>
+                <DialogDescription>Record inventory wastage with reason</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Inventory Item</Label>
+                  <Select
+                    value={wastageData.itemId}
+                    onValueChange={(value) => setWastageData({ ...wastageData, itemId: value })}
+                  >
+                    <SelectTrigger data-testid="select-wastage-item">
+                      <SelectValue placeholder="Select item" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inventoryItems.map((item: any) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name} ({item.unit || item.baseUnit})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Quantity</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={wastageData.qty}
+                    onChange={(e) => setWastageData({ ...wastageData, qty: e.target.value })}
+                    placeholder="Enter quantity"
+                    data-testid="input-wastage-quantity"
+                  />
+                </div>
+                <div>
+                  <Label>Reason</Label>
+                  <Textarea
+                    value={wastageData.reason}
+                    onChange={(e) => setWastageData({ ...wastageData, reason: e.target.value })}
+                    placeholder="Explain reason for wastage"
+                    data-testid="input-wastage-reason"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setWastageDialogOpen(false)}
+                    data-testid="button-cancel-wastage"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={submitWastage}
+                    disabled={createWastageMutation.isPending}
+                    data-testid="button-submit-wastage"
+                  >
+                    {createWastageMutation.isPending ? "Recording..." : "Record Wastage"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <Card>

@@ -18,10 +18,12 @@ export default function StorekeeperConsumptionTracking() {
   });
 
   const enrichedConsumptions = consumptions.map((consumption: any) => {
-    const item = inventoryItems.find((i: any) => i.id === consumption.inventoryItemId);
+    const item = inventoryItems.find((i: any) => i.id === consumption.itemId);
     return {
       ...consumption,
-      itemName: item?.name || 'Unknown Item'
+      itemName: item?.name || 'Unknown Item',
+      unit: item?.unit || item?.baseUnit || '',
+      type: consumption.referenceEntity === 'wastage' ? 'wastage' : 'consumption'
     };
   });
 
@@ -29,8 +31,8 @@ export default function StorekeeperConsumptionTracking() {
     consumption.itemName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalConsumptions = consumptions.length;
-  const wastageCount = consumptions.filter((c: any) => c.type === 'wastage').length;
+  const totalConsumptions = enrichedConsumptions.length;
+  const wastageCount = enrichedConsumptions.filter((c: any) => c.type === 'wastage').length;
   const regularConsumptions = totalConsumptions - wastageCount;
 
   return (
