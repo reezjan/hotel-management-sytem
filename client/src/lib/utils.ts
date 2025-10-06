@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number, currency: string = 'NPR'): string {
-  const currencySymbol = currency === 'NPR' || !currency ? '₹' : '₹';
+  const currencySymbol = currency === 'NPR' || !currency ? 'रु' : 'रु';
   
   const formatted = new Intl.NumberFormat('en-NP', {
     minimumFractionDigits: 2,

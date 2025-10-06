@@ -55,6 +55,7 @@ import KitchenStaffDashboard from "@/pages/dashboard/kitchen-staff";
 import BartenderDashboard from "@/pages/dashboard/bartender";
 import BaristaDashboard from "@/pages/dashboard/barista";
 import CashierDashboard from "@/pages/dashboard/cashier";
+import CashierTableBilling from "@/pages/dashboard/cashier/table-billing";
 import SecurityHeadDashboard from "@/pages/dashboard/security-head";
 import SecurityGuardDashboard from "@/pages/dashboard/security-guard";
 import SurveillanceOfficerDashboard from "@/pages/dashboard/surveillance-officer";
@@ -141,6 +142,7 @@ function Router() {
       <ProtectedRoute path="/barista" component={BaristaDashboard} allowedRoles={["barista"]} />
       <ProtectedRoute path="/barista/request-stock" component={RequestStock} allowedRoles={["barista"]} />
       <ProtectedRoute path="/cashier" component={CashierDashboard} allowedRoles={["cashier"]} />
+      <ProtectedRoute path="/cashier/table-billing" component={CashierTableBilling} allowedRoles={["cashier"]} />
       <ProtectedRoute path="/security-head" component={SecurityHeadDashboard} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-head/request-stock" component={RequestStock} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-guard" component={SecurityGuardDashboard} allowedRoles={["security_guard"]} />

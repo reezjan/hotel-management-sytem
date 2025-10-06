@@ -245,7 +245,8 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Receipt', label: 'Transactions', id: 'transactions' }
   ],
   [ROLES.CASHIER]: [
-    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' }
+    { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
+    { icon: 'Receipt', label: 'Table Billing', id: 'table-billing' }
   ],
   [ROLES.FRONT_DESK]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },

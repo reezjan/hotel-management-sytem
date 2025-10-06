@@ -93,7 +93,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'maintenance': '/waiter/maintenance'
       },
       'cashier': {
-        'dashboard': '/cashier'
+        'dashboard': '/cashier',
+        'table-billing': '/cashier/table-billing'
       },
       'front_desk': {
         'dashboard': '/front-desk',
