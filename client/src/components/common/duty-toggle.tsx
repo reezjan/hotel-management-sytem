@@ -51,14 +51,14 @@ export function DutyToggle({ userId }: DutyToggleProps) {
   };
 
   return (
-    <div className="flex items-center space-x-2">
-      <span className="text-sm text-muted-foreground">Duty Status:</span>
+    <div className="flex items-center space-x-1 md:space-x-2">
+      <span className="text-xs md:text-sm text-muted-foreground hidden sm:inline">Duty Status:</span>
       <Button
         size="sm"
         variant={isOnDuty ? "default" : "destructive"}
         onClick={handleToggle}
         disabled={updateDutyMutation.isPending}
-        className="flex items-center space-x-2 px-3 py-1 rounded-full text-sm"
+        className="flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1 rounded-full text-xs md:text-sm"
         data-testid="button-duty-toggle"
       >
         <div className={cn(
