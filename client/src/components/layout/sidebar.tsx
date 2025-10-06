@@ -171,8 +171,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'management': '/storekeeper/inventory-management',
         'stock-requests': '/storekeeper/stock-requests',
         'maintenance': '/storekeeper/maintenance-requests',
-        'tasks': '/storekeeper/my-tasks',
-        'consumption': '/storekeeper/consumption-tracking'
+        'tasks': '/storekeeper/my-tasks'
       }
     };
 
