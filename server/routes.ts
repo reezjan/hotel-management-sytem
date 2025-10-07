@@ -1287,6 +1287,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/halls/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+      const hall = await storage.getHall(id);
+      
+      if (!hall) {
+        return res.status(404).json({ message: "Hall not found" });
+      }
+
+      res.json(hall);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch hall" });
+    }
+  });
+
   app.post("/api/halls", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {

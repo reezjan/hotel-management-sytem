@@ -135,6 +135,7 @@ export interface IStorage {
   
   // Amenity operations - Halls
   getHallsByHotel(hotelId: string): Promise<Hall[]>;
+  getHall(id: string): Promise<Hall | undefined>;
   createHall(hall: InsertHall): Promise<Hall>;
   updateHall(id: string, hotelId: string, hall: Partial<InsertHall>): Promise<Hall | null>;
   deleteHall(id: string, hotelId: string): Promise<boolean>;
@@ -1305,6 +1306,15 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(halls.name));
   }
 
+  async getHall(id: string): Promise<Hall | undefined> {
+    const [hall] = await db
+      .select()
+      .from(halls)
+      .where(eq(halls.id, id))
+      .limit(1);
+    return hall;
+  }
+
   async createHall(hall: InsertHall): Promise<Hall> {
     const [created] = await db.insert(halls).values(hall).returning();
     return created;
@@ -1952,7 +1962,7 @@ export class DatabaseStorage implements IStorage {
   ): Promise<boolean> {
     const conditions = [
       eq(hallBookings.hallId, hallId),
-      sql`${hallBookings.status} != 'cancelled'`,
+      sql`${hallBookings.status} IN ('deposit_pending', 'confirmed', 'in_progress', 'completed')`,
       sql`${hallBookings.bookingStartTime} < ${endTime.toISOString()}`,
       sql`${hallBookings.bookingEndTime} > ${startTime.toISOString()}`
     ];
