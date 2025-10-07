@@ -97,16 +97,19 @@ export function setupAuth(app: Express) {
     res.json(sanitizeUser(req.user as SelectUser));
   });
 
-  // Password reset endpoint
+  // Password change endpoint
   app.post("/api/reset-password", async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.sendStatus(401);
       
-      const { securityAnswer1, securityAnswer2, newPassword } = req.body;
+      const { oldPassword, newPassword } = req.body;
       const user = req.user as SelectUser;
       
-      // For now, we'll skip security question validation since it's not fully implemented
-      // In a real application, you would validate the security answers here
+      // Verify old password
+      const isOldPasswordValid = await comparePasswords(oldPassword, user.passwordHash);
+      if (!isOldPasswordValid) {
+        return res.status(400).json({ message: "Current password is incorrect" });
+      }
       
       // Hash the new password
       const hashedPassword = await hashPassword(newPassword);
@@ -114,10 +117,10 @@ export function setupAuth(app: Express) {
       // Update user's password in database
       await storage.updateUser(user.id, { passwordHash: hashedPassword });
       
-      res.json({ message: "Password reset successfully" });
+      res.json({ message: "Password changed successfully" });
     } catch (error) {
-      console.error("Password reset error:", error);
-      res.status(400).json({ message: "Failed to reset password" });
+      console.error("Password change error:", error);
+      res.status(400).json({ message: "Failed to change password" });
     }
   });
 }
