@@ -225,6 +225,7 @@ export const NAVIGATION_ITEMS = {
   [ROLES.OWNER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'Users', label: 'Guest Management', id: 'guests' },
+    { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'PieChart', label: 'Financial Overview', id: 'financial' },
     { icon: 'Package', label: 'Inventory Tracking', id: 'inventory' },
     { icon: 'Bed', label: 'Room Occupancy', id: 'occupancy' },
@@ -235,6 +236,7 @@ export const NAVIGATION_ITEMS = {
   [ROLES.MANAGER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'Users', label: 'Guest Management', id: 'guests' },
+    { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
     { icon: 'CreditCard', label: 'Vendor Payments', id: 'payments' },
     { icon: 'Tag', label: 'Discount Vouchers', id: 'vouchers' },
@@ -325,6 +327,7 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.FINANCE]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
+    { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'Receipt', label: 'Transactions', id: 'transactions' },
     { icon: 'TrendingUp', label: 'Revenue Reports', id: 'revenue' },
     { icon: 'TrendingDown', label: 'Expense Tracking', id: 'expenses' },

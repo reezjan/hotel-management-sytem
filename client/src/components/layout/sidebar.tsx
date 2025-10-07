@@ -30,6 +30,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       'owner': {
         'dashboard': '/owner',
         'guests': '/guests',
+        'hall-bookings': '/hall-bookings',
         'financial': '/owner/financial',
         'inventory': '/owner/inventory',
         'occupancy': '/owner/occupancy',
@@ -40,6 +41,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       'manager': {
         'dashboard': '/manager',
         'guests': '/guests',
+        'hall-bookings': '/hall-bookings',
         'staff': '/manager/staff',
         'payments': '/manager/vendor-payments',
         'vouchers': '/manager/discount-vouchers',
@@ -75,6 +77,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'finance': {
         'dashboard': '/finance',
+        'hall-bookings': '/hall-bookings',
         'transactions': '/finance/transactions',
         'revenue': '/finance/revenue',
         'expenses': '/finance/expenses',
@@ -94,11 +97,13 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       },
       'cashier': {
         'dashboard': '/cashier',
-        'table-billing': '/cashier/table-billing'
+        'table-billing': '/cashier/table-billing',
+        'hall-bookings': '/hall-bookings'
       },
       'front_desk': {
         'dashboard': '/front-desk',
         'guests': '/guests',
+        'hall-bookings': '/hall-bookings',
         'request-stock': '/front-desk/request-stock'
       },
       'surveillance_officer': {
