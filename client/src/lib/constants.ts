@@ -246,11 +246,13 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.CASHIER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Receipt', label: 'Table Billing', id: 'table-billing' }
+    { icon: 'Receipt', label: 'Table Billing', id: 'table-billing' },
+    { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' }
   ],
   [ROLES.FRONT_DESK]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'Users', label: 'Guest Management', id: 'guests' },
+    { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
   ],
   [ROLES.HOUSEKEEPING_SUPERVISOR]: [
