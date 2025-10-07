@@ -1616,6 +1616,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single hotel by ID (after all /current routes to avoid conflicts)
+  app.get("/api/hotels/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const hotel = await storage.getHotel(id);
+      if (!hotel) {
+        return res.status(404).json({ message: "Hotel not found" });
+      }
+      res.json(hotel);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch hotel" });
+    }
+  });
+
   // User routes
   app.get("/api/hotels/:hotelId/users", async (req, res) => {
     try {
@@ -3497,10 +3511,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { hotelId } = req.params;
       
       const userRole = user.role?.name || '';
-      const canManage = ['manager', 'owner', 'super_admin', 'front_desk'].includes(userRole);
+      const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
       
       if (!canManage) {
-        return res.status(403).json({ message: "Only managers and front desk can create bookings" });
+        return res.status(403).json({ message: "Only managers and owners can create bookings" });
       }
       
       const bookingData = insertHallBookingSchema.parse({
@@ -3536,13 +3550,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       
       const userRole = user.role?.name || '';
-      const canManage = ['manager', 'owner', 'super_admin', 'front_desk'].includes(userRole);
+      const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
       const isFinance = userRole === 'finance';
       const isCashier = userRole === 'cashier';
+      const isFrontDesk = userRole === 'front_desk';
       
-      // Cashier has no update permissions
-      if (isCashier) {
-        return res.status(403).json({ message: "Cashiers have view-only access" });
+      // Cashier and front desk have no update permissions
+      if (isCashier || isFrontDesk) {
+        return res.status(403).json({ message: "Only managers and owners can update bookings" });
       }
       
       const booking = await storage.getHallBooking(id);
@@ -3602,10 +3617,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       
       const userRole = user.role?.name || '';
-      const canConfirm = ['manager', 'owner', 'super_admin', 'front_desk'].includes(userRole);
+      const canConfirm = ['manager', 'owner', 'super_admin'].includes(userRole);
       
       if (!canConfirm) {
-        return res.status(403).json({ message: "Only managers and front desk can confirm bookings" });
+        return res.status(403).json({ message: "Only managers and owners can confirm bookings" });
       }
       
       const booking = await storage.confirmHallBooking(id, user.id);
@@ -3626,10 +3641,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { reason } = req.body;
       
       const userRole = user.role?.name || '';
-      const canCancel = ['manager', 'owner', 'super_admin', 'front_desk'].includes(userRole);
+      const canCancel = ['manager', 'owner', 'super_admin'].includes(userRole);
       
       if (!canCancel) {
-        return res.status(403).json({ message: "Only managers and front desk can cancel bookings" });
+        return res.status(403).json({ message: "Only managers and owners can cancel bookings" });
       }
       
       if (!reason) {
@@ -3658,7 +3673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const userRole = user.role?.name || '';
-      const canManage = ['manager', 'owner', 'super_admin', 'front_desk', 'finance'].includes(userRole);
+      const canManage = ['manager', 'owner', 'super_admin', 'front_desk', 'finance', 'cashier'].includes(userRole);
       
       if (!canManage) {
         return res.status(403).json({ message: "Insufficient permissions" });
