@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,8 @@ import {
   Users,
   Building2,
   Edit,
-  Trash2
+  Trash2,
+  Eye
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +37,7 @@ import { format } from "date-fns";
 import { insertHallBookingSchema } from "@shared/schema";
 import type { SelectHallBooking, Hall } from "@shared/schema";
 import { z } from "zod";
+import { BookingWizard } from "@/components/modals/booking-wizard";
 
 const bookingFormSchema = insertHallBookingSchema.omit({ 
   hotelId: true, 
@@ -48,7 +51,7 @@ export default function HallBookings() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<SelectHallBooking | null>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
@@ -323,12 +326,20 @@ export default function HallBookings() {
             <h1 className="text-3xl font-bold" data-testid="heading-hall-bookings">Hall Bookings</h1>
             <p className="text-muted-foreground">Manage hall reservations and events</p>
           </div>
-          {canManage && (
-            <Button onClick={() => setIsCreateModalOpen(true)} data-testid="button-create-booking">
-              <Plus className="w-4 h-4 mr-2" />
-              New Booking
-            </Button>
-          )}
+          <div className="flex gap-2">
+            <Link href="/dashboard/hall-calendar">
+              <Button variant="outline" data-testid="button-calendar-view">
+                <CalendarCheck className="w-4 h-4 mr-2" />
+                Calendar View
+              </Button>
+            </Link>
+            {canManage && (
+              <Button onClick={() => setIsWizardOpen(true)} data-testid="button-create-booking">
+                <Plus className="w-4 h-4 mr-2" />
+                New Booking
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
@@ -389,6 +400,16 @@ export default function HallBookings() {
                           </div>
                         </div>
                         <div className="flex gap-2">
+                          <Link href={`/dashboard/bookings/${booking.id}`}>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              data-testid={`button-view-${booking.id}`}
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              View
+                            </Button>
+                          </Link>
                           {booking.status === "pending" && canManage && (
                             <>
                               <Button 
@@ -496,7 +517,15 @@ export default function HallBookings() {
           </CardContent>
         </Card>
 
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <BookingWizard
+          open={isWizardOpen}
+          onOpenChange={setIsWizardOpen}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "hall-bookings"] });
+          }}
+        />
+
+        <Dialog open={false} onOpenChange={() => {}}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Booking</DialogTitle>
