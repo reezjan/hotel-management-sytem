@@ -32,6 +32,7 @@ import {
   guests,
   stockRequests,
   hallBookings,
+  bookingPayments,
   type User,
   type UserWithRole,
   type InsertUser,
@@ -284,6 +285,7 @@ export interface IStorage {
   confirmHallBooking(id: string, confirmedBy: string): Promise<SelectHallBooking>;
   cancelHallBooking(id: string, cancelledBy: string, reason: string): Promise<SelectHallBooking>;
   checkHallAvailability(hallId: string, startTime: Date, endTime: Date, excludeBookingId?: string): Promise<boolean>;
+  createBookingPayment(payment: any): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1965,6 +1967,14 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions));
     
     return conflicts.length === 0;
+  }
+
+  async createBookingPayment(paymentData: any): Promise<any> {
+    const [payment] = await db
+      .insert(bookingPayments)
+      .values(paymentData)
+      .returning();
+    return payment;
   }
 }
 

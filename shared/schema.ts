@@ -519,10 +519,12 @@ export const hallBookings = pgTable("hall_bookings", {
   bookingEndTime: timestamp("booking_end_time", { withTimezone: true }).notNull(),
   duration: numeric("duration", { precision: 6, scale: 2 }),
   numberOfPeople: integer("number_of_people"),
+  actualNumberOfPeople: integer("actual_number_of_people"),
   hallBasePrice: numeric("hall_base_price", { precision: 12, scale: 2 }),
   foodServices: jsonb("food_services").default('[]'),
   otherServices: jsonb("other_services").default('[]'),
   servicePackages: jsonb("service_packages").default('[]'),
+  customServices: text("custom_services"),
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
   advancePaid: numeric("advance_paid", { precision: 12, scale: 2 }).default('0'),
   balanceDue: numeric("balance_due", { precision: 12, scale: 2 }).notNull(),
@@ -533,10 +535,12 @@ export const hallBookings = pgTable("hall_bookings", {
   confirmedBy: uuid("confirmed_by").references(() => users.id),
   cancelledBy: uuid("cancelled_by").references(() => users.id),
   cancellationReason: text("cancellation_reason"),
+  finalizedBy: uuid("finalized_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
-  cancelledAt: timestamp("cancelled_at", { withTimezone: true })
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  finalizedAt: timestamp("finalized_at", { withTimezone: true })
 });
 
 // Booking Payment Records Table

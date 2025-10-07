@@ -3625,6 +3625,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH endpoint for final billing updates
+  app.patch("/api/hotels/:hotelId/hall-bookings/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { hotelId, id } = req.params;
+      
+      if (user.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const userRole = user.role?.name || '';
+      const canManage = ['manager', 'owner', 'super_admin', 'front_desk', 'finance'].includes(userRole);
+      
+      if (!canManage) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const booking = await storage.getHallBooking(id);
+      if (!booking || booking.hotelId !== hotelId) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      
+      const updateData: any = {};
+      if (req.body.actualNumberOfPeople !== undefined) updateData.actualNumberOfPeople = req.body.actualNumberOfPeople;
+      if (req.body.customServices !== undefined) updateData.customServices = req.body.customServices;
+      if (req.body.totalAmount !== undefined) updateData.totalAmount = req.body.totalAmount;
+      if (req.body.balanceDue !== undefined) updateData.balanceDue = req.body.balanceDue;
+      if (req.body.status !== undefined) updateData.status = req.body.status;
+      if (req.body.status === 'completed') updateData.finalizedBy = user.id;
+      if (req.body.status === 'completed') updateData.finalizedAt = new Date();
+      
+      const updatedBooking = await storage.updateHallBooking(id, updateData);
+      res.json(updatedBooking);
+    } catch (error) {
+      console.error("Update hall booking error:", error);
+      res.status(400).json({ message: "Failed to update hall booking" });
+    }
+  });
+
+  // POST endpoint for recording booking payments
+  app.post("/api/hotels/:hotelId/booking-payments", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { hotelId } = req.params;
+      
+      if (user.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const userRole = user.role?.name || '';
+      const canRecord = ['manager', 'owner', 'super_admin', 'front_desk', 'finance', 'cashier'].includes(userRole);
+      
+      if (!canRecord) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const paymentData = {
+        hotelId,
+        bookingId: req.body.bookingId,
+        amount: req.body.amount,
+        paymentMethod: req.body.paymentMethod,
+        receiptNumber: req.body.receiptNumber || null,
+        notes: req.body.notes || null,
+        recordedBy: user.id
+      };
+      
+      const payment = await storage.createBookingPayment(paymentData);
+      res.status(201).json(payment);
+    } catch (error) {
+      console.error("Create booking payment error:", error);
+      res.status(400).json({ message: "Failed to record payment" });
+    }
+  });
+
   // Hall availability calendar endpoint
   app.get("/api/halls/:hallId/calendar", async (req, res) => {
     try {
