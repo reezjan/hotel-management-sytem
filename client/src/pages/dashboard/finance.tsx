@@ -1,11 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Smartphone, Building, CheckCircle, XCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Smartphone, Building, CheckCircle, XCircle, Landmark } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +23,29 @@ export default function FinanceDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const [isBankDepositModalOpen, setIsBankDepositModalOpen] = useState(false);
+  const [isVendorPaymentModalOpen, setIsVendorPaymentModalOpen] = useState(false);
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+
+  const bankDepositForm = useForm({
+    defaultValues: {
+      amount: "",
+      bankName: "",
+      notes: ""
+    }
+  });
+
+  const vendorPaymentForm = useForm({
+    defaultValues: {
+      vendorId: "",
+      amount: "",
+      paymentMethod: "",
+      chequeNumber: "",
+      bankName: "",
+      notes: ""
+    }
+  });
 
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery<Transaction[]>({
     queryKey: ["/api/hotels/current/transactions"],
@@ -33,10 +63,9 @@ export default function FinanceDashboard() {
     enabled: !!user?.hotelId
   });
 
-  // Filter cash deposit requests (cash_out transactions with purpose containing "Cash Deposit Request")
+  // Filter cash deposit requests (cash_deposit_request transactions)
   const cashDepositRequests = transactions.filter(t => 
-    t.txnType === 'cash_out' && 
-    t.purpose?.includes('Cash Deposit Request')
+    t.txnType === 'cash_deposit_request'
   );
 
   const pendingCashDeposits = cashDepositRequests.filter(t => !t.reference?.includes('APPROVED') && !t.reference?.includes('REJECTED'));
@@ -81,15 +110,121 @@ export default function FinanceDashboard() {
     }
   });
 
+  const bankDepositMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const amount = parseFloat(data.amount);
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error("Please enter a valid amount");
+      }
+      if (!data.bankName || data.bankName.trim() === "") {
+        throw new Error("Bank name is required");
+      }
+
+      await apiRequest("POST", "/api/transactions", {
+        hotelId: user?.hotelId,
+        txnType: "bank_deposit",
+        amount: amount.toFixed(2),
+        paymentMethod: "cash",
+        purpose: "Cash deposited to bank",
+        reference: `Deposited by ${user?.username}`,
+        details: {
+          bankName: data.bankName.trim(),
+          notes: data.notes || "",
+          depositedBy: user?.username,
+          depositedAt: new Date().toISOString()
+        },
+        createdBy: user?.id
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      toast({ title: "Success", description: "Cash deposited to bank successfully" });
+      bankDepositForm.reset();
+      setIsBankDepositModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to deposit cash to bank", 
+        variant: "destructive" 
+      });
+    }
+  });
+
+  const vendorPaymentMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const amount = parseFloat(data.amount);
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error("Please enter a valid amount");
+      }
+      if (!data.vendorId) {
+        throw new Error("Please select a vendor");
+      }
+      if (!data.paymentMethod) {
+        throw new Error("Please select a payment method");
+      }
+      
+      // Validate cheque details if payment method is cheque
+      if (data.paymentMethod === "cheque") {
+        if (!data.chequeNumber || data.chequeNumber.trim() === "") {
+          throw new Error("Cheque number is required");
+        }
+        if (!data.bankName || data.bankName.trim() === "") {
+          throw new Error("Bank name is required for cheque payment");
+        }
+      }
+
+      const vendor = vendors.find(v => v.id === data.vendorId);
+      const details: any = {
+        vendorId: data.vendorId,
+        vendorName: vendor?.name || "Unknown",
+        notes: data.notes || "",
+        paidBy: user?.username
+      };
+
+      if (data.paymentMethod === "cheque") {
+        details.chequeNumber = data.chequeNumber.trim();
+        details.bankName = data.bankName.trim();
+      }
+
+      await apiRequest("POST", "/api/transactions", {
+        hotelId: user?.hotelId,
+        txnType: "vendor_payment",
+        amount: amount.toFixed(2),
+        paymentMethod: data.paymentMethod,
+        purpose: `Payment to ${vendor?.name || 'vendor'}`,
+        reference: `Paid by ${user?.username}`,
+        details,
+        createdBy: user?.id
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      toast({ title: "Success", description: "Vendor payment processed successfully" });
+      vendorPaymentForm.reset();
+      setIsVendorPaymentModalOpen(false);
+      setSelectedVendor(null);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to process vendor payment", 
+        variant: "destructive" 
+      });
+    }
+  });
+
   // Calculate financial totals - separate revenue (income) from expenses
+  // Exclude cash_deposit_request as it's a transfer, not revenue or expense
   const revenueTransactions = transactions.filter(t => 
     t.txnType === 'cash_in' || t.txnType === 'pos_in' || t.txnType === 'fonepay_in' || 
     t.txnType === 'revenue' || (t.txnType && t.txnType.includes('_in'))
   );
   
   const expenseTransactions = transactions.filter(t => 
-    t.txnType === 'cash_out' || t.txnType === 'vendor_payment' || 
-    (t.txnType && t.txnType.includes('_out'))
+    (t.txnType === 'cash_out' || t.txnType === 'vendor_payment' || 
+    (t.txnType && t.txnType.includes('_out'))) && 
+    t.txnType !== 'cash_deposit_request'
   );
 
   // Revenue by payment method (only count income transactions)
@@ -163,6 +298,29 @@ export default function FinanceDashboard() {
       key: "details", 
       label: "Details", 
       render: (value: any, row: any) => {
+        if (row.txnType === 'cash_deposit_request') {
+          if (row.reference?.includes('APPROVED')) {
+            return (
+              <Badge className="bg-green-600 text-white" data-testid={`status-approved-${row.id}`}>
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Approved
+              </Badge>
+            );
+          } else if (row.reference?.includes('REJECTED')) {
+            return (
+              <Badge variant="destructive" data-testid={`status-rejected-${row.id}`}>
+                <XCircle className="h-3 w-3 mr-1" />
+                Rejected
+              </Badge>
+            );
+          } else {
+            return (
+              <Badge variant="secondary" data-testid={`status-pending-${row.id}`}>
+                Pending
+              </Badge>
+            );
+          }
+        }
         if (row.purpose === 'room_checkout_payment' && value) {
           return (
             <div className="text-xs space-y-1">
@@ -219,7 +377,14 @@ export default function FinanceDashboard() {
   ];
 
   const vendorActions = [
-    { label: "Pay", action: (row: any) => console.log("Pay vendor:", row) },
+    { 
+      label: "Pay", 
+      action: (row: any) => {
+        setSelectedVendor(row);
+        vendorPaymentForm.setValue("vendorId", row.id);
+        setIsVendorPaymentModalOpen(true);
+      }
+    },
     { label: "View History", action: (row: any) => console.log("View payment history:", row) },
     { label: "Edit", action: (row: any) => console.log("Edit vendor:", row) }
   ];
@@ -316,7 +481,16 @@ export default function FinanceDashboard() {
             <CardTitle>Finance Operations</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                onClick={() => setIsBankDepositModalOpen(true)}
+                data-testid="button-bank-deposit"
+              >
+                <Landmark className="h-6 w-6 mb-2" />
+                <span className="text-sm">Deposit to Bank</span>
+              </Button>
               <Button variant="outline" className="h-20 flex flex-col" data-testid="button-vendor-payment">
                 <CreditCard className="h-6 w-6 mb-2" />
                 <span className="text-sm">Vendor Payment</span>
@@ -512,6 +686,217 @@ export default function FinanceDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Bank Deposit Modal */}
+        <Dialog open={isBankDepositModalOpen} onOpenChange={setIsBankDepositModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Deposit Cash to Bank</DialogTitle>
+            </DialogHeader>
+            
+            <Form {...bankDepositForm}>
+              <form onSubmit={bankDepositForm.handleSubmit((data) => bankDepositMutation.mutate(data))} className="space-y-4">
+                <FormField
+                  control={bankDepositForm.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Amount *</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" step="0.01" placeholder="0.00" data-testid="input-bank-amount" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={bankDepositForm.control}
+                  name="bankName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Bank Name *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Enter bank name" data-testid="input-bank-name" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={bankDepositForm.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} placeholder="Additional notes..." rows={2} data-testid="textarea-bank-notes" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="flex space-x-3">
+                  <Button
+                    type="submit"
+                    className="flex-1"
+                    disabled={bankDepositMutation.isPending}
+                    data-testid="button-submit-bank-deposit"
+                  >
+                    {bankDepositMutation.isPending ? "Processing..." : "Deposit to Bank"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setIsBankDepositModalOpen(false)}
+                    data-testid="button-cancel-bank-deposit"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Vendor Payment Modal */}
+        <Dialog open={isVendorPaymentModalOpen} onOpenChange={setIsVendorPaymentModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Vendor Payment</DialogTitle>
+            </DialogHeader>
+            
+            <Form {...vendorPaymentForm}>
+              <form onSubmit={vendorPaymentForm.handleSubmit((data) => vendorPaymentMutation.mutate(data))} className="space-y-4">
+                <FormField
+                  control={vendorPaymentForm.control}
+                  name="vendorId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Vendor *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-vendor">
+                            <SelectValue placeholder="Select vendor" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {vendors.map((vendor) => (
+                            <SelectItem key={vendor.id} value={vendor.id}>
+                              {vendor.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={vendorPaymentForm.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Amount *</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" step="0.01" placeholder="0.00" data-testid="input-vendor-amount" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={vendorPaymentForm.control}
+                  name="paymentMethod"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment Method *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-payment-method">
+                            <SelectValue placeholder="Select payment method" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="cheque">Cheque</SelectItem>
+                          <SelectItem value="pos">POS</SelectItem>
+                          <SelectItem value="fonepay">Fonepay</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                
+                {vendorPaymentForm.watch("paymentMethod") === "cheque" && (
+                  <>
+                    <FormField
+                      control={vendorPaymentForm.control}
+                      name="chequeNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cheque Number *</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Enter cheque number" data-testid="input-cheque-number" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={vendorPaymentForm.control}
+                      name="bankName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Bank Name *</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Which bank cheque issued from" data-testid="input-cheque-bank" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </>
+                )}
+                
+                <FormField
+                  control={vendorPaymentForm.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} placeholder="Additional notes..." rows={2} data-testid="textarea-vendor-notes" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="flex space-x-3">
+                  <Button
+                    type="submit"
+                    className="flex-1"
+                    disabled={vendorPaymentMutation.isPending}
+                    data-testid="button-submit-vendor-payment"
+                  >
+                    {vendorPaymentMutation.isPending ? "Processing..." : "Process Payment"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => {
+                      setIsVendorPaymentModalOpen(false);
+                      setSelectedVendor(null);
+                    }}
+                    data-testid="button-cancel-vendor-payment"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

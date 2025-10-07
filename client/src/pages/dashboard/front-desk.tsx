@@ -297,10 +297,10 @@ export default function FrontDeskDashboard() {
     mutationFn: async (data: any) => {
       await apiRequest("POST", "/api/transactions", {
         hotelId: user?.hotelId,
-        txnType: data.paymentMethod === 'cash' ? 'cash_in' : data.paymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
+        txnType: 'cash_deposit_request',
         amount: String(Number(data.amount)),
         paymentMethod: data.paymentMethod,
-        purpose: data.purpose || 'cash_deposit',
+        purpose: data.purpose || 'Cash Deposit Request',
         reference: `Cash deposit by ${user?.username}`,
         createdBy: user?.id
       });

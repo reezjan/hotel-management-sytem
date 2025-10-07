@@ -100,11 +100,13 @@ export default function CashierDashboard() {
       }
       
       const result = await apiRequest("POST", "/api/transactions", {
-        txnType: "cash_out",
+        hotelId: user.hotelId,
+        txnType: "cash_deposit_request",
         amount: amount.toFixed(2),
         purpose: `Cash Deposit Request: ${data.description}`,
         reference: `Cashier: ${user.username}`,
-        paymentMethod: "cash"
+        paymentMethod: "cash",
+        createdBy: user.id
       });
       return result;
     },
