@@ -105,6 +105,17 @@ export default function BookingDetail() {
     return <Badge className={colors[status] || "bg-gray-500"}>{status.replace(/_/g, " ").toUpperCase()}</Badge>;
   };
 
+  const formatPaymentMethod = (method: string | undefined | null) => {
+    if (!method) return "Unknown";
+    const methodMap: Record<string, string> = {
+      cash: "Cash",
+      pos: "POS/Card",
+      fonepay: "Fonepay",
+      bank_transfer: "Bank Transfer"
+    };
+    return methodMap[method] || method;
+  };
+
   const userRole = user?.role?.name || '';
   const canRecordPayment = ['manager', 'owner', 'super_admin', 'front_desk', 'cashier', 'finance'].includes(userRole);
 
@@ -231,7 +242,7 @@ export default function BookingDetail() {
                       <div>
                         <p className="font-medium">{formatCurrency(Number(payment.amount))}</p>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(payment.createdAt!), "PPp")} • {payment.paymentMethod}
+                          {format(new Date(payment.createdAt!), "PPp")} • {formatPaymentMethod(payment.paymentMethod)}
                         </p>
                         {payment.receiptNumber && (
                           <p className="text-xs text-muted-foreground">Receipt: {payment.receiptNumber}</p>
