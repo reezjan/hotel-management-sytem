@@ -492,6 +492,34 @@ export const stockRequests = pgTable("stock_requests", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
+// Hall Bookings Table
+export const hallBookings = pgTable("hall_bookings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  hallId: uuid("hall_id").references(() => halls.id).notNull(),
+  customerName: text("customer_name").notNull(),
+  customerPhone: text("customer_phone").notNull(),
+  customerEmail: text("customer_email"),
+  guestId: uuid("guest_id").references(() => guests.id),
+  isInHouseGuest: boolean("is_in_house_guest").default(false),
+  bookingStartTime: timestamp("booking_start_time", { withTimezone: true }).notNull(),
+  bookingEndTime: timestamp("booking_end_time", { withTimezone: true }).notNull(),
+  totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
+  advancePaid: numeric("advance_paid", { precision: 12, scale: 2 }).default('0'),
+  balanceDue: numeric("balance_due", { precision: 12, scale: 2 }).notNull(),
+  paymentMethod: text("payment_method"),
+  status: text("status").default('pending').notNull(),
+  specialRequests: text("special_requests"),
+  createdBy: uuid("created_by").references(() => users.id),
+  confirmedBy: uuid("confirmed_by").references(() => users.id),
+  cancelledBy: uuid("cancelled_by").references(() => users.id),
+  cancellationReason: text("cancellation_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true })
+});
+
 // Relations
 export const hotelRelations = relations(hotels, ({ many }) => ({
   users: many(users),
@@ -515,7 +543,8 @@ export const hotelRelations = relations(hotels, ({ many }) => ({
   vehicleLogs: many(vehicleLogs),
   roomServiceOrders: many(roomServiceOrders),
   mealPlans: many(mealPlans),
-  stockRequests: many(stockRequests)
+  stockRequests: many(stockRequests),
+  hallBookings: many(hallBookings)
 }));
 
 export const userRelations = relations(users, ({ one, many }) => ({
@@ -598,6 +627,33 @@ export const taskRelations = relations(tasks, ({ one }) => ({
     fields: [tasks.assignedTo],
     references: [users.id],
     relationName: "assignedTasks"
+  })
+}));
+
+export const hallRelations = relations(halls, ({ one, many }) => ({
+  hotel: one(hotels, {
+    fields: [halls.hotelId],
+    references: [hotels.id]
+  }),
+  bookings: many(hallBookings)
+}));
+
+export const hallBookingRelations = relations(hallBookings, ({ one }) => ({
+  hotel: one(hotels, {
+    fields: [hallBookings.hotelId],
+    references: [hotels.id]
+  }),
+  hall: one(halls, {
+    fields: [hallBookings.hallId],
+    references: [halls.id]
+  }),
+  guest: one(guests, {
+    fields: [hallBookings.guestId],
+    references: [guests.id]
+  }),
+  createdBy: one(users, {
+    fields: [hallBookings.createdBy],
+    references: [users.id]
   })
 }));
 
@@ -758,6 +814,23 @@ export const insertStockRequestSchema = createInsertSchema(stockRequests).omit({
 }).extend({
   quantity: z.union([z.string(), z.number()]).transform((val) => String(val))
 });
+
+export const insertHallBookingSchema = createInsertSchema(hallBookings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  confirmedAt: true,
+  cancelledAt: true
+}).extend({
+  bookingStartTime: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val)),
+  bookingEndTime: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val)),
+  totalAmount: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  advancePaid: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  balanceDue: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
+export type InsertHallBooking = z.infer<typeof insertHallBookingSchema>;
+export type SelectHallBooking = typeof hallBookings.$inferSelect;
 
 export const updateKotItemSchema = z.object({
   status: z.enum(['pending', 'approved', 'declined', 'ready']),

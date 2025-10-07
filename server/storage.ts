@@ -31,6 +31,7 @@ import {
   mealPlans,
   guests,
   stockRequests,
+  hallBookings,
   type User,
   type UserWithRole,
   type InsertUser,
@@ -81,7 +82,9 @@ import {
   type Guest,
   type InsertGuest,
   type StockRequest,
-  type InsertStockRequest
+  type InsertStockRequest,
+  type SelectHallBooking,
+  type InsertHallBooking
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, desc, asc, sql } from "drizzle-orm";
@@ -271,6 +274,16 @@ export interface IStorage {
   updateStockRequest(id: string, request: Partial<StockRequest>): Promise<StockRequest>;
   approveStockRequest(id: string, approvedBy: string): Promise<StockRequest>;
   deliverStockRequest(id: string, deliveredBy: string): Promise<StockRequest>;
+  
+  // Hall booking operations
+  getHallBookingsByHotel(hotelId: string): Promise<SelectHallBooking[]>;
+  getHallBookingsByHall(hallId: string): Promise<SelectHallBooking[]>;
+  getHallBooking(id: string): Promise<SelectHallBooking | undefined>;
+  createHallBooking(booking: InsertHallBooking): Promise<SelectHallBooking>;
+  updateHallBooking(id: string, booking: Partial<InsertHallBooking>): Promise<SelectHallBooking>;
+  confirmHallBooking(id: string, confirmedBy: string): Promise<SelectHallBooking>;
+  cancelHallBooking(id: string, cancelledBy: string, reason: string): Promise<SelectHallBooking>;
+  checkHallAvailability(hallId: string, startTime: Date, endTime: Date, excludeBookingId?: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1856,6 +1869,102 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return updatedRequest;
+  }
+
+  // Hall booking operations
+  async getHallBookingsByHotel(hotelId: string): Promise<SelectHallBooking[]> {
+    return await db
+      .select()
+      .from(hallBookings)
+      .where(eq(hallBookings.hotelId, hotelId))
+      .orderBy(desc(hallBookings.bookingStartTime));
+  }
+
+  async getHallBookingsByHall(hallId: string): Promise<SelectHallBooking[]> {
+    return await db
+      .select()
+      .from(hallBookings)
+      .where(eq(hallBookings.hallId, hallId))
+      .orderBy(desc(hallBookings.bookingStartTime));
+  }
+
+  async getHallBooking(id: string): Promise<SelectHallBooking | undefined> {
+    const [booking] = await db
+      .select()
+      .from(hallBookings)
+      .where(eq(hallBookings.id, id));
+    return booking || undefined;
+  }
+
+  async createHallBooking(bookingData: InsertHallBooking): Promise<SelectHallBooking> {
+    const [booking] = await db
+      .insert(hallBookings)
+      .values(bookingData)
+      .returning();
+    return booking;
+  }
+
+  async updateHallBooking(id: string, bookingData: Partial<InsertHallBooking>): Promise<SelectHallBooking> {
+    const [booking] = await db
+      .update(hallBookings)
+      .set({ ...bookingData, updatedAt: new Date() })
+      .where(eq(hallBookings.id, id))
+      .returning();
+    return booking;
+  }
+
+  async confirmHallBooking(id: string, confirmedBy: string): Promise<SelectHallBooking> {
+    const [booking] = await db
+      .update(hallBookings)
+      .set({ 
+        status: 'confirmed',
+        confirmedBy,
+        confirmedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(hallBookings.id, id))
+      .returning();
+    return booking;
+  }
+
+  async cancelHallBooking(id: string, cancelledBy: string, reason: string): Promise<SelectHallBooking> {
+    const [booking] = await db
+      .update(hallBookings)
+      .set({ 
+        status: 'cancelled',
+        cancelledBy,
+        cancellationReason: reason,
+        cancelledAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(hallBookings.id, id))
+      .returning();
+    return booking;
+  }
+
+  async checkHallAvailability(
+    hallId: string, 
+    startTime: Date, 
+    endTime: Date, 
+    excludeBookingId?: string
+  ): Promise<boolean> {
+    const conditions = [
+      eq(hallBookings.hallId, hallId),
+      sql`${hallBookings.status} != 'cancelled'`,
+      sql`${hallBookings.bookingStartTime} < ${endTime}`,
+      sql`${hallBookings.bookingEndTime} > ${startTime}`
+    ];
+
+    if (excludeBookingId) {
+      conditions.push(sql`${hallBookings.id} != ${excludeBookingId}`);
+    }
+
+    const conflicts = await db
+      .select()
+      .from(hallBookings)
+      .where(and(...conditions));
+    
+    return conflicts.length === 0;
   }
 }
 

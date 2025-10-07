@@ -26,6 +26,7 @@ import {
   insertMealPlanSchema,
   insertGuestSchema,
   insertStockRequestSchema,
+  insertHallBookingSchema,
   vouchers
 } from "@shared/schema";
 
@@ -3390,6 +3391,230 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Meal plan deletion error:", error);
       res.status(400).json({ message: "Failed to delete meal plan" });
+    }
+  });
+
+  // Hall booking routes
+  app.get("/api/hotels/:hotelId/hall-bookings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const { hotelId } = req.params;
+      const bookings = await storage.getHallBookingsByHotel(hotelId);
+      res.json(bookings);
+    } catch (error) {
+      console.error("Get hall bookings error:", error);
+      res.status(500).json({ message: "Failed to get hall bookings" });
+    }
+  });
+
+  app.get("/api/halls/:hallId/bookings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const { hallId } = req.params;
+      const bookings = await storage.getHallBookingsByHall(hallId);
+      res.json(bookings);
+    } catch (error) {
+      console.error("Get hall bookings by hall error:", error);
+      res.status(500).json({ message: "Failed to get hall bookings" });
+    }
+  });
+
+  app.get("/api/hall-bookings/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const { id } = req.params;
+      const booking = await storage.getHallBooking(id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      res.json(booking);
+    } catch (error) {
+      console.error("Get hall booking error:", error);
+      res.status(500).json({ message: "Failed to get hall booking" });
+    }
+  });
+
+  app.post("/api/halls/:hallId/check-availability", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const { hallId } = req.params;
+      const { startTime, endTime, excludeBookingId } = req.body;
+      
+      const isAvailable = await storage.checkHallAvailability(
+        hallId,
+        new Date(startTime),
+        new Date(endTime),
+        excludeBookingId
+      );
+      
+      res.json({ available: isAvailable });
+    } catch (error) {
+      console.error("Check hall availability error:", error);
+      res.status(500).json({ message: "Failed to check availability" });
+    }
+  });
+
+  app.post("/api/hotels/:hotelId/hall-bookings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { hotelId } = req.params;
+      
+      const userRole = user.role?.name || '';
+      const canManage = ['manager', 'owner', 'super_admin', 'front_desk'].includes(userRole);
+      
+      if (!canManage) {
+        return res.status(403).json({ message: "Only managers and front desk can create bookings" });
+      }
+      
+      const bookingData = insertHallBookingSchema.parse({
+        ...req.body,
+        hotelId,
+        createdBy: user.id
+      });
+      
+      const isAvailable = await storage.checkHallAvailability(
+        bookingData.hallId,
+        bookingData.bookingStartTime,
+        bookingData.bookingEndTime
+      );
+      
+      if (!isAvailable) {
+        return res.status(409).json({ message: "Hall is not available for the selected time" });
+      }
+      
+      const booking = await storage.createHallBooking(bookingData);
+      res.status(201).json(booking);
+    } catch (error) {
+      console.error("Create hall booking error:", error);
+      res.status(400).json({ message: "Failed to create hall booking" });
+    }
+  });
+
+  app.put("/api/hall-bookings/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      
+      const userRole = user.role?.name || '';
+      const canManage = ['manager', 'owner', 'super_admin', 'front_desk'].includes(userRole);
+      const isFinance = userRole === 'finance';
+      const isCashier = userRole === 'cashier';
+      
+      // Cashier has no update permissions
+      if (isCashier) {
+        return res.status(403).json({ message: "Cashiers have view-only access" });
+      }
+      
+      const booking = await storage.getHallBooking(id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      
+      const bookingData = insertHallBookingSchema.partial().parse(req.body);
+      
+      // Finance can only update payment-related fields
+      if (isFinance) {
+        const paymentFields = ['totalAmount', 'advancePaid', 'balanceDue', 'paymentMethod'];
+        const requestedFields = Object.keys(bookingData);
+        const hasNonPaymentFields = requestedFields.some(field => !paymentFields.includes(field));
+        
+        if (hasNonPaymentFields) {
+          return res.status(403).json({ message: "Finance can only update payment-related fields" });
+        }
+      }
+      
+      // Check availability only for managers/front desk when changing dates
+      if (canManage && (bookingData.bookingStartTime || bookingData.bookingEndTime)) {
+        const startTime = bookingData.bookingStartTime || booking.bookingStartTime!;
+        const endTime = bookingData.bookingEndTime || booking.bookingEndTime!;
+        
+        const isAvailable = await storage.checkHallAvailability(
+          booking.hallId,
+          startTime,
+          endTime,
+          id
+        );
+        
+        if (!isAvailable) {
+          return res.status(409).json({ message: "Hall is not available for the selected time" });
+        }
+      }
+      
+      // Managers and front desk can update all fields
+      if (!canManage && !isFinance) {
+        return res.status(403).json({ message: "Insufficient permissions to update bookings" });
+      }
+      
+      const updatedBooking = await storage.updateHallBooking(id, bookingData);
+      res.json(updatedBooking);
+    } catch (error) {
+      console.error("Update hall booking error:", error);
+      res.status(400).json({ message: "Failed to update hall booking" });
+    }
+  });
+
+  app.post("/api/hall-bookings/:id/confirm", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      
+      const userRole = user.role?.name || '';
+      const canConfirm = ['manager', 'owner', 'super_admin', 'front_desk'].includes(userRole);
+      
+      if (!canConfirm) {
+        return res.status(403).json({ message: "Only managers and front desk can confirm bookings" });
+      }
+      
+      const booking = await storage.confirmHallBooking(id, user.id);
+      res.json(booking);
+    } catch (error) {
+      console.error("Confirm hall booking error:", error);
+      res.status(400).json({ message: "Failed to confirm hall booking" });
+    }
+  });
+
+  app.post("/api/hall-bookings/:id/cancel", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      const { reason } = req.body;
+      
+      const userRole = user.role?.name || '';
+      const canCancel = ['manager', 'owner', 'super_admin', 'front_desk'].includes(userRole);
+      
+      if (!canCancel) {
+        return res.status(403).json({ message: "Only managers and front desk can cancel bookings" });
+      }
+      
+      if (!reason) {
+        return res.status(400).json({ message: "Cancellation reason is required" });
+      }
+      
+      const booking = await storage.cancelHallBooking(id, user.id, reason);
+      res.json(booking);
+    } catch (error) {
+      console.error("Cancel hall booking error:", error);
+      res.status(400).json({ message: "Failed to cancel hall booking" });
     }
   });
 
