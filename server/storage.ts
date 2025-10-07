@@ -885,6 +885,15 @@ export class DatabaseStorage implements IStorage {
     return item;
   }
 
+  async getKotOrderById(id: string): Promise<KotOrder | undefined> {
+    const [order] = await db
+      .select()
+      .from(kotOrders)
+      .where(eq(kotOrders.id, id))
+      .limit(1);
+    return order;
+  }
+
   async createKotOrder(kotData: any): Promise<KotOrder> {
     const [kot] = await db
       .insert(kotOrders)
@@ -909,6 +918,56 @@ export class DatabaseStorage implements IStorage {
       .where(eq(kotItems.id, id))
       .returning();
     return item;
+  }
+
+  async updateKotOrderStatus(kotOrderId: string): Promise<void> {
+    try {
+      // Fetch all items for this order
+      const items = await this.getKotItems(kotOrderId);
+      
+      if (items.length === 0) {
+        // No items, keep order as 'open'
+        return;
+      }
+
+      // Count statuses
+      const statusCounts = items.reduce((acc, item) => {
+        const status = item.status || 'pending';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      let newOrderStatus = 'open';
+
+      // Determine order status based on item statuses
+      if (statusCounts['declined'] && statusCounts['declined'] > 0) {
+        // If any item is declined, keep order as 'open'
+        newOrderStatus = 'open';
+      } else if (items.every(item => item.status === 'served')) {
+        // All items served -> order completed
+        newOrderStatus = 'completed';
+      } else if (items.every(item => item.status === 'ready')) {
+        // All items ready -> order ready
+        newOrderStatus = 'ready';
+      } else if (items.every(item => item.status === 'approved' || item.status === 'ready' || item.status === 'served')) {
+        // All items are at least approved (could be mix of approved/ready/served) -> in_progress
+        newOrderStatus = 'in_progress';
+      } else {
+        // Mixed statuses including pending -> keep as open
+        newOrderStatus = 'open';
+      }
+
+      // Update the order status
+      await db
+        .update(kotOrders)
+        .set({ status: newOrderStatus, updatedAt: new Date() })
+        .where(eq(kotOrders.id, kotOrderId));
+
+      console.log(`KOT Order ${kotOrderId} status updated to: ${newOrderStatus}`);
+    } catch (error) {
+      console.error(`Failed to update KOT order status for ${kotOrderId}:`, error);
+      // Don't throw - this is a background sync operation
+    }
   }
 
   async deductInventoryForKotItem(kotItemId: string): Promise<void> {

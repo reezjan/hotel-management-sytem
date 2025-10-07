@@ -1,6 +1,10 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import cron from "node-cron";
+import { storage } from "./storage";
+import { db } from "./db";
+import { kotOrders, type KotOrder } from "@shared/schema";
 
 // Set timezone to Nepal
 process.env.TZ = 'Asia/Kathmandu';
@@ -59,6 +63,34 @@ app.use((req, res, next) => {
   } else {
     serveStatic(app);
   }
+
+  // Set up KOT order status sync cron job - runs every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      log('Running periodic KOT order status sync...');
+      
+      // Get all active KOT orders (not completed or cancelled)
+      const activeOrders = await db
+        .select()
+        .from(kotOrders);
+      
+      // Filter to active orders
+      const ordersToSync = activeOrders.filter(
+        (order: KotOrder) => order.status !== 'completed' && order.status !== 'cancelled'
+      );
+      
+      // Sync each order
+      for (const order of ordersToSync) {
+        await storage.updateKotOrderStatus(order.id);
+      }
+      
+      log(`KOT sync completed for ${ordersToSync.length} orders`);
+    } catch (error) {
+      console.error('Error in KOT sync cron job:', error);
+    }
+  });
+  
+  log('KOT order status sync cron job scheduled (every 5 minutes)');
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.

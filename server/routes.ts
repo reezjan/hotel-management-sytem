@@ -2274,6 +2274,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update the KOT item
       const updatedItem = await storage.updateKotItem(id, validatedData);
+      
+      // Sync the parent order status after item update
+      if (kotItem.kotId) {
+        await storage.updateKotOrderStatus(kotItem.kotId);
+      }
+      
       res.json(updatedItem);
     } catch (error: any) {
       if (error.name === 'ZodError') {
