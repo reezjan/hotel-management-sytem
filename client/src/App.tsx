@@ -82,6 +82,7 @@ import RequestStock from "@/pages/dashboard/stock-requests/request-stock";
 import StorekeeperStockRequests from "@/pages/dashboard/storekeeper/stock-requests";
 import DepartmentStockRequests from "@/pages/dashboard/department-stock-requests";
 import MyProfile from "@/pages/dashboard/my-profile";
+import HallBookings from "@/pages/dashboard/hall-bookings";
 
 function Router() {
   return (
@@ -167,6 +168,7 @@ function Router() {
       <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
       <ProtectedRoute path="/front-desk/request-stock" component={RequestStock} allowedRoles={["front_desk"]} />
       <ProtectedRoute path="/guests" component={GuestsPage} allowedRoles={["front_desk", "manager", "owner"]} />
+      <ProtectedRoute path="/hall-bookings" component={HallBookings} allowedRoles={["front_desk", "manager", "owner", "finance", "cashier"]} />
       
       {/* Storekeeper Routes */}
       <ProtectedRoute path="/storekeeper" component={StorekeeperDashboard} allowedRoles={["storekeeper"]} />
