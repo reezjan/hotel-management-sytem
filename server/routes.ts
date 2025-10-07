@@ -27,7 +27,14 @@ import {
   insertGuestSchema,
   insertStockRequestSchema,
   insertHallBookingSchema,
-  vouchers
+  insertServicePackageSchema,
+  insertBookingPaymentSchema,
+  vouchers,
+  guests,
+  hallBookings,
+  halls,
+  servicePackages,
+  bookingPayments
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -3615,6 +3622,382 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Cancel hall booking error:", error);
       res.status(400).json({ message: "Failed to cancel hall booking" });
+    }
+  });
+
+  // Hall availability calendar endpoint
+  app.get("/api/halls/:hallId/calendar", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { hallId } = req.params;
+      const { date } = req.query;
+      
+      // Verify hall belongs to user's hotel
+      const hall = await db.query.halls.findFirst({
+        where: and(
+          eq(halls.id, hallId),
+          eq(halls.hotelId, user.hotelId)
+        )
+      });
+      
+      if (!hall) {
+        return res.status(404).json({ message: "Hall not found" });
+      }
+      
+      const targetDate = date ? new Date(date as string) : new Date();
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const bookings = await db.query.hallBookings.findMany({
+        where: and(
+          eq(hallBookings.hallId, hallId),
+          eq(hallBookings.hotelId, user.hotelId),
+          sql`${hallBookings.bookingStartTime} < ${endOfDay.toISOString()}`,
+          sql`${hallBookings.bookingEndTime} > ${startOfDay.toISOString()}`
+        ),
+        with: {
+          guest: true
+        }
+      });
+      
+      const slots = bookings.map(booking => ({
+        id: booking.id,
+        startTime: booking.bookingStartTime,
+        endTime: booking.bookingEndTime,
+        status: booking.status,
+        customerName: booking.customerName,
+        color: booking.status === 'confirmed' ? 'red' : 
+               booking.status === 'in_progress' ? 'yellow' : 'gray'
+      }));
+      
+      res.json({ date: targetDate, slots });
+    } catch (error) {
+      console.error("Get hall calendar error:", error);
+      res.status(500).json({ message: "Failed to get hall calendar" });
+    }
+  });
+
+  // Quick availability check with suggestions
+  app.post("/api/halls/check-availability-quick", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { hallId, date, startTime, endTime } = req.body;
+      
+      // Verify hall belongs to user's hotel
+      const hall = await db.query.halls.findFirst({
+        where: and(
+          eq(halls.id, hallId),
+          eq(halls.hotelId, user.hotelId)
+        )
+      });
+      
+      if (!hall) {
+        return res.status(404).json({ message: "Hall not found" });
+      }
+      
+      const start = new Date(`${date}T${startTime}`);
+      const end = new Date(`${date}T${endTime}`);
+      
+      const isAvailable = await storage.checkHallAvailability(hallId, start, end);
+      
+      let suggestions: Array<{ startTime: string; endTime: string }> = [];
+      if (!isAvailable) {
+        // Find alternative slots on the same day
+        const dayStart = new Date(date);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(date);
+        dayEnd.setHours(23, 59, 59, 999);
+        
+        const bookings = await db.query.hallBookings.findMany({
+          where: and(
+            eq(hallBookings.hallId, hallId),
+            eq(hallBookings.hotelId, user.hotelId),
+            sql`${hallBookings.bookingStartTime} < ${dayEnd}`,
+            sql`${hallBookings.bookingEndTime} > ${dayStart}`
+          ),
+          orderBy: [asc(hallBookings.bookingStartTime)]
+        });
+        
+        // Suggest slots between bookings
+        const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // hours
+        const slots = [];
+        
+        let currentTime = new Date(dayStart);
+        currentTime.setHours(6, 0, 0, 0); // Start from 6 AM
+        
+        for (const booking of bookings) {
+          const bookingStart = new Date(booking.bookingStartTime!);
+          const gap = (bookingStart.getTime() - currentTime.getTime()) / (1000 * 60 * 60);
+          
+          if (gap >= duration) {
+            slots.push({
+              startTime: currentTime.toISOString(),
+              endTime: new Date(currentTime.getTime() + duration * 60 * 60 * 1000).toISOString()
+            });
+          }
+          currentTime = new Date(booking.bookingEndTime!);
+        }
+        
+        // Check if there's time left at the end of the day
+        const endOfOperations = new Date(dayStart);
+        endOfOperations.setHours(22, 0, 0, 0); // Until 10 PM
+        const finalGap = (endOfOperations.getTime() - currentTime.getTime()) / (1000 * 60 * 60);
+        
+        if (finalGap >= duration) {
+          slots.push({
+            startTime: currentTime.toISOString(),
+            endTime: new Date(currentTime.getTime() + duration * 60 * 60 * 1000).toISOString()
+          });
+        }
+        
+        suggestions = slots.slice(0, 3); // Return top 3 suggestions
+      }
+      
+      res.json({ available: isAvailable, suggestions });
+    } catch (error) {
+      console.error("Quick availability check error:", error);
+      res.status(500).json({ message: "Failed to check availability" });
+    }
+  });
+
+  // Guest lookup/search endpoint
+  app.get("/api/guests/search", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { phone, email } = req.query;
+      
+      if (!phone && !email) {
+        return res.status(400).json({ message: "Phone or email is required" });
+      }
+      
+      let guest = null;
+      
+      if (phone) {
+        guest = await db.query.guests.findFirst({
+          where: and(
+            eq(guests.hotelId, user.hotelId),
+            eq(guests.phone, phone as string)
+          )
+        });
+      } else if (email) {
+        guest = await db.query.guests.findFirst({
+          where: and(
+            eq(guests.hotelId, user.hotelId),
+            eq(guests.email, email as string)
+          )
+        });
+      }
+      
+      res.json(guest || null);
+    } catch (error) {
+      console.error("Guest search error:", error);
+      res.status(500).json({ message: "Failed to search guest" });
+    }
+  });
+
+  // Service Package endpoints
+  app.get("/api/service-packages", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      
+      const packages = await db.query.servicePackages.findMany({
+        where: eq(servicePackages.hotelId, user.hotelId)
+      });
+      
+      res.json(packages);
+    } catch (error) {
+      console.error("Get service packages error:", error);
+      res.status(500).json({ message: "Failed to get service packages" });
+    }
+  });
+
+  app.post("/api/service-packages", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      
+      const userRole = user.role?.name || '';
+      const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
+      
+      if (!canManage) {
+        return res.status(403).json({ message: "Only managers can create service packages" });
+      }
+      
+      const packageData = insertServicePackageSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId
+      });
+      
+      const [newPackage] = await db.insert(servicePackages)
+        .values(packageData)
+        .returning();
+      
+      res.status(201).json(newPackage);
+    } catch (error) {
+      console.error("Create service package error:", error);
+      res.status(400).json({ message: "Failed to create service package" });
+    }
+  });
+
+  app.put("/api/service-packages/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      
+      const userRole = user.role?.name || '';
+      const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
+      
+      if (!canManage) {
+        return res.status(403).json({ message: "Only managers can update service packages" });
+      }
+      
+      const packageData = insertServicePackageSchema.partial().parse(req.body);
+      
+      const [updated] = await db.update(servicePackages)
+        .set({ ...packageData, updatedAt: new Date() })
+        .where(and(
+          eq(servicePackages.id, id),
+          eq(servicePackages.hotelId, user.hotelId)
+        ))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Service package not found" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Update service package error:", error);
+      res.status(400).json({ message: "Failed to update service package" });
+    }
+  });
+
+  app.delete("/api/service-packages/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      
+      const userRole = user.role?.name || '';
+      const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
+      
+      if (!canManage) {
+        return res.status(403).json({ message: "Only managers can delete service packages" });
+      }
+      
+      await db.delete(servicePackages)
+        .where(and(
+          eq(servicePackages.id, id),
+          eq(servicePackages.hotelId, user.hotelId)
+        ));
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete service package error:", error);
+      res.status(400).json({ message: "Failed to delete service package" });
+    }
+  });
+
+  // Payment recording endpoints
+  app.get("/api/bookings/:bookingId/payments", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const { bookingId } = req.params;
+      
+      const payments = await db.query.bookingPayments.findMany({
+        where: eq(bookingPayments.bookingId, bookingId),
+        with: {
+          recordedBy: {
+            columns: {
+              id: true,
+              username: true
+            }
+          }
+        },
+        orderBy: [asc(bookingPayments.createdAt)]
+      });
+      
+      res.json(payments);
+    } catch (error) {
+      console.error("Get booking payments error:", error);
+      res.status(500).json({ message: "Failed to get booking payments" });
+    }
+  });
+
+  app.post("/api/bookings/:bookingId/payments", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { bookingId } = req.params;
+      
+      const userRole = user.role?.name || '';
+      const canRecord = ['manager', 'owner', 'super_admin', 'front_desk', 'cashier', 'finance'].includes(userRole);
+      
+      if (!canRecord) {
+        return res.status(403).json({ message: "Insufficient permissions to record payments" });
+      }
+      
+      // Get the booking to update balance
+      const booking = await db.query.hallBookings.findFirst({
+        where: eq(hallBookings.id, bookingId)
+      });
+      
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      
+      const paymentData = insertBookingPaymentSchema.parse({
+        ...req.body,
+        bookingId,
+        hotelId: user.hotelId,
+        recordedBy: user.id
+      });
+      
+      const [payment] = await db.insert(bookingPayments)
+        .values(paymentData)
+        .returning();
+      
+      // Update booking's advance paid and balance due
+      const newAdvancePaid = Number(booking.advancePaid || 0) + Number(paymentData.amount);
+      const newBalanceDue = Number(booking.totalAmount) - newAdvancePaid;
+      
+      await db.update(hallBookings)
+        .set({
+          advancePaid: newAdvancePaid.toString(),
+          balanceDue: newBalanceDue.toString(),
+          updatedAt: new Date()
+        })
+        .where(eq(hallBookings.id, bookingId));
+      
+      res.status(201).json(payment);
+    } catch (error) {
+      console.error("Record payment error:", error);
+      res.status(400).json({ message: "Failed to record payment" });
     }
   });
 
