@@ -73,6 +73,8 @@ export default function HallBookings() {
       customerPhone: "",
       bookingStartTime: new Date(),
       bookingEndTime: new Date(),
+      numberOfPeople: 0,
+      hallBasePrice: "0",
       totalAmount: "0",
       advancePaid: "0",
       balanceDue: "0",
@@ -82,6 +84,48 @@ export default function HallBookings() {
     }
   });
 
+  // Watch for hall selection to auto-populate base price
+  const selectedHallId = bookingForm.watch("hallId");
+  const numberOfPeople = bookingForm.watch("numberOfPeople");
+  const hallBasePrice = bookingForm.watch("hallBasePrice");
+  
+  // Auto-populate hall price when hall is selected
+  const handleHallChange = (hallId: string) => {
+    const selectedHall = halls.find(h => h.id === hallId);
+    if (selectedHall) {
+      const basePrice = selectedHall.priceInhouse || selectedHall.priceWalkin || "0";
+      bookingForm.setValue("hallBasePrice", basePrice);
+      // Recalculate total when hall changes
+      calculateTotalPrice(basePrice, numberOfPeople);
+    }
+  };
+
+  // Calculate total price based on base price and number of people
+  const calculateTotalPrice = (basePrice: string, numPeople: number) => {
+    const base = parseFloat(basePrice || "0");
+    const perPersonCost = 0; // You can add per-person cost logic here if needed
+    const total = base + (numPeople * perPersonCost);
+    bookingForm.setValue("totalAmount", total.toFixed(2));
+    
+    // Recalculate balance due
+    const advance = parseFloat(bookingForm.getValues("advancePaid") || "0");
+    bookingForm.setValue("balanceDue", (total - advance).toFixed(2));
+  };
+
+  // Recalculate when number of people changes
+  const handlePeopleChange = (value: string) => {
+    const numPeople = parseInt(value) || 0;
+    bookingForm.setValue("numberOfPeople", numPeople);
+    calculateTotalPrice(hallBasePrice, numPeople);
+  };
+
+  // Recalculate balance when advance payment changes
+  const handleAdvanceChange = (value: string) => {
+    const advance = parseFloat(value || "0");
+    const total = parseFloat(bookingForm.getValues("totalAmount") || "0");
+    bookingForm.setValue("balanceDue", (total - advance).toFixed(2));
+  };
+
   const editForm = useForm({
     resolver: zodResolver(bookingFormSchema.partial()),
     defaultValues: {
@@ -90,6 +134,8 @@ export default function HallBookings() {
       customerPhone: "",
       bookingStartTime: new Date(),
       bookingEndTime: new Date(),
+      numberOfPeople: 0,
+      hallBasePrice: "0",
       totalAmount: "0",
       advancePaid: "0",
       balanceDue: "0",
@@ -97,6 +143,19 @@ export default function HallBookings() {
       specialRequests: ""
     }
   });
+
+  // Edit form handlers for dynamic calculation
+  const handleEditAdvanceChange = (value: string) => {
+    const advance = parseFloat(value || "0");
+    const total = parseFloat(editForm.getValues("totalAmount") || "0");
+    editForm.setValue("balanceDue", (total - advance).toFixed(2));
+  };
+
+  const handleEditTotalChange = (value: string) => {
+    const total = parseFloat(value || "0");
+    const advance = parseFloat(editForm.getValues("advancePaid") || "0");
+    editForm.setValue("balanceDue", (total - advance).toFixed(2));
+  };
 
   const checkAvailabilityMutation = useMutation({
     mutationFn: async (data: { hallId: string; startTime: Date; endTime: Date; excludeBookingId?: string }) => {
@@ -212,6 +271,8 @@ export default function HallBookings() {
       customerPhone: booking.customerPhone || "",
       bookingStartTime: booking.bookingStartTime ? new Date(booking.bookingStartTime) : new Date(),
       bookingEndTime: booking.bookingEndTime ? new Date(booking.bookingEndTime) : new Date(),
+      numberOfPeople: booking.numberOfPeople || 0,
+      hallBasePrice: booking.hallBasePrice || "0",
       totalAmount: booking.totalAmount || "0",
       advancePaid: booking.advancePaid || "0",
       balanceDue: booking.balanceDue || "0",
@@ -448,7 +509,7 @@ export default function HallBookings() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Hall</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={(value) => { field.onChange(value); handleHallChange(value); }} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-hall">
                             <SelectValue placeholder="Select a hall" />
@@ -457,7 +518,7 @@ export default function HallBookings() {
                         <SelectContent>
                           {halls.map((hall) => (
                             <SelectItem key={hall.id} value={hall.id} data-testid={`option-hall-${hall.id}`}>
-                              {hall.name} ({hall.capacity} capacity)
+                              {hall.name} - Rs. {hall.priceInhouse || hall.priceWalkin || "0"} ({hall.capacity} capacity)
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -466,6 +527,42 @@ export default function HallBookings() {
                     </FormItem>
                   )}
                 />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={bookingForm.control}
+                    name="numberOfPeople"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Number of People</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            type="number" 
+                            placeholder="0" 
+                            data-testid="input-num-people"
+                            onChange={(e) => { field.onChange(e); handlePeopleChange(e.target.value); }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={bookingForm.control}
+                    name="hallBasePrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Hall Base Price (Auto-filled)</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" step="0.01" readOnly className="bg-muted" data-testid="input-base-price" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
@@ -517,9 +614,22 @@ export default function HallBookings() {
                     name="totalAmount"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Total Amount</FormLabel>
+                        <FormLabel>Total Amount (Editable by Front Desk)</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" step="0.01" placeholder="0.00" data-testid="input-total" />
+                          <Input 
+                            {...field} 
+                            type="number" 
+                            step="0.01" 
+                            placeholder="0.00" 
+                            data-testid="input-total"
+                            onChange={(e) => {
+                              field.onChange(e);
+                              // Recalculate balance when total changes
+                              const total = parseFloat(e.target.value || "0");
+                              const advance = parseFloat(bookingForm.getValues("advancePaid") || "0");
+                              bookingForm.setValue("balanceDue", (total - advance).toFixed(2));
+                            }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -632,7 +742,14 @@ export default function HallBookings() {
                       <FormItem>
                         <FormLabel>Advance Paid</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" step="0.01" placeholder="0.00" data-testid="input-advance" />
+                          <Input 
+                            {...field} 
+                            type="number" 
+                            step="0.01" 
+                            placeholder="0.00" 
+                            data-testid="input-advance"
+                            onChange={(e) => { field.onChange(e); handleAdvanceChange(e.target.value); }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -644,9 +761,9 @@ export default function HallBookings() {
                     name="balanceDue"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Balance Due</FormLabel>
+                        <FormLabel>Balance Due (Auto-calculated)</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" step="0.01" placeholder="0.00" data-testid="input-balance" />
+                          <Input {...field} type="number" step="0.01" placeholder="0.00" readOnly className="bg-muted" data-testid="input-balance" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -733,6 +850,36 @@ export default function HallBookings() {
                         </FormItem>
                       )}
                     />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={editForm.control}
+                        name="numberOfPeople"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Number of People</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="number" placeholder="0" data-testid="input-edit-num-people" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={editForm.control}
+                        name="hallBasePrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Hall Base Price</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="number" step="0.01" readOnly className="bg-muted" data-testid="input-edit-base-price" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </>
                 )}
 
@@ -742,9 +889,16 @@ export default function HallBookings() {
                     name="totalAmount"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Total Amount</FormLabel>
+                        <FormLabel>Total Amount (Editable)</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" step="0.01" placeholder="0.00" data-testid="input-edit-total" />
+                          <Input 
+                            {...field} 
+                            type="number" 
+                            step="0.01" 
+                            placeholder="0.00" 
+                            data-testid="input-edit-total"
+                            onChange={(e) => { field.onChange(e); handleEditTotalChange(e.target.value); }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -783,7 +937,14 @@ export default function HallBookings() {
                       <FormItem>
                         <FormLabel>Advance Paid</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" step="0.01" placeholder="0.00" data-testid="input-edit-advance" />
+                          <Input 
+                            {...field} 
+                            type="number" 
+                            step="0.01" 
+                            placeholder="0.00" 
+                            data-testid="input-edit-advance"
+                            onChange={(e) => { field.onChange(e); handleEditAdvanceChange(e.target.value); }}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -795,9 +956,9 @@ export default function HallBookings() {
                     name="balanceDue"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Balance Due</FormLabel>
+                        <FormLabel>Balance Due (Auto-calculated)</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" step="0.01" placeholder="0.00" data-testid="input-edit-balance" />
+                          <Input {...field} type="number" step="0.01" placeholder="0.00" readOnly className="bg-muted" data-testid="input-edit-balance" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
