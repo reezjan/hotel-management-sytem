@@ -7,10 +7,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { Eye, EyeOff } from "lucide-react";
 
 const passwordResetSchema = z.object({
-  securityAnswer1: z.string().min(1, "Security answer is required"),
-  securityAnswer2: z.string().min(1, "Security answer is required"),
+  oldPassword: z.string().min(1, "Current password is required"),
   newPassword: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string().min(6, "Password must be at least 6 characters")
 }).refine((data) => data.newPassword === data.confirmPassword, {
@@ -28,12 +28,14 @@ interface PasswordResetModalProps {
 export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const form = useForm<PasswordResetData>({
     resolver: zodResolver(passwordResetSchema),
     defaultValues: {
-      securityAnswer1: "",
-      securityAnswer2: "",
+      oldPassword: "",
       newPassword: "",
       confirmPassword: ""
     }
@@ -49,8 +51,7 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
         },
         credentials: "include",
         body: JSON.stringify({
-          securityAnswer1: data.securityAnswer1,
-          securityAnswer2: data.securityAnswer2,
+          oldPassword: data.oldPassword,
           newPassword: data.newPassword
         }),
       });
@@ -60,7 +61,7 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
       }
       
       toast({
-        title: "Password Reset Successful",
+        title: "Password Changed Successfully",
         description: "Your password has been updated successfully.",
       });
       
@@ -68,8 +69,8 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
       onClose();
     } catch (error) {
       toast({
-        title: "Password Reset Failed",
-        description: "Please check your security answers and try again.",
+        title: "Password Change Failed",
+        description: "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -81,41 +82,46 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md" data-testid="modal-password-reset">
         <DialogHeader>
-          <DialogTitle>Reset Password</DialogTitle>
+          <DialogTitle>Change Password</DialogTitle>
         </DialogHeader>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="securityAnswer1"
+              name="oldPassword"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Security Question 1</FormLabel>
-                  <p className="text-sm text-muted-foreground mb-1">What was your first pet's name?</p>
+                  <FormLabel>Current Password</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="Your answer" data-testid="input-security-answer-1" />
+                    <div className="relative">
+                      <Input 
+                        {...field} 
+                        type={showOldPassword ? "text" : "password"} 
+                        placeholder="Enter current password" 
+                        data-testid="input-old-password" 
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowOldPassword(!showOldPassword)}
+                        data-testid="button-toggle-old-password"
+                      >
+                        {showOldPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            
-            <FormField
-              control={form.control}
-              name="securityAnswer2"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Security Question 2</FormLabel>
-                  <p className="text-sm text-muted-foreground mb-1">What city were you born in?</p>
-                  <FormControl>
-                    <Input {...field} placeholder="Your answer" data-testid="input-security-answer-2" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
+
             <FormField
               control={form.control}
               name="newPassword"
@@ -123,7 +129,28 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
                 <FormItem>
                   <FormLabel>New Password</FormLabel>
                   <FormControl>
-                    <Input {...field} type="password" placeholder="Enter new password" data-testid="input-new-password" />
+                    <div className="relative">
+                      <Input 
+                        {...field} 
+                        type={showNewPassword ? "text" : "password"} 
+                        placeholder="Enter new password" 
+                        data-testid="input-new-password" 
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        data-testid="button-toggle-new-password"
+                      >
+                        {showNewPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -137,7 +164,28 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
                 <FormItem>
                   <FormLabel>Confirm Password</FormLabel>
                   <FormControl>
-                    <Input {...field} type="password" placeholder="Confirm new password" data-testid="input-confirm-password" />
+                    <div className="relative">
+                      <Input 
+                        {...field} 
+                        type={showConfirmPassword ? "text" : "password"} 
+                        placeholder="Confirm new password" 
+                        data-testid="input-confirm-password" 
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        data-testid="button-toggle-confirm-password"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -149,16 +197,16 @@ export function PasswordResetModal({ isOpen, onClose }: PasswordResetModalProps)
                 type="submit" 
                 className="flex-1" 
                 disabled={isSubmitting}
-                data-testid="button-reset-password"
+                data-testid="button-change-password"
               >
-                {isSubmitting ? "Resetting..." : "Reset Password"}
+                {isSubmitting ? "Changing..." : "Change Password"}
               </Button>
               <Button 
                 type="button" 
                 variant="secondary" 
                 className="flex-1" 
                 onClick={onClose}
-                data-testid="button-cancel-reset"
+                data-testid="button-cancel-change"
               >
                 Cancel
               </Button>

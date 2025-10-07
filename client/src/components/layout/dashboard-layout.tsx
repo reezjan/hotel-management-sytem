@@ -4,10 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Sidebar } from "./sidebar";
 import { DutyToggle } from "../common/duty-toggle";
-import { PasswordResetModal } from "../common/password-reset-modal";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Hotel, LogOut, Settings, Menu } from "lucide-react";
+import { Hotel, User, Menu } from "lucide-react";
 import { DUTY_ROLES } from "@/lib/constants";
+import { useLocation } from "wouter";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -16,8 +16,8 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children, title, currentHotel }: DashboardLayoutProps) {
-  const { user, logoutMutation } = useAuth();
-  const [isPasswordResetOpen, setIsPasswordResetOpen] = useState(false);
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Fetch current hotel data if not provided
@@ -30,8 +30,8 @@ export function DashboardLayout({ children, title, currentHotel }: DashboardLayo
   const userRole = user?.role?.name;
   const showDutyToggle = userRole && DUTY_ROLES.includes(userRole as any);
 
-  const handleLogout = () => {
-    logoutMutation.mutate();
+  const handleMyProfileClick = () => {
+    setLocation("/my-profile");
   };
 
   return (
@@ -83,21 +83,10 @@ export function DashboardLayout({ children, title, currentHotel }: DashboardLayo
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9"
-                  onClick={() => setIsPasswordResetOpen(true)}
-                  data-testid="button-settings"
+                  onClick={handleMyProfileClick}
+                  data-testid="button-my-profile"
                 >
-                  <Settings className="h-4 w-4" />
-                </Button>
-                
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9"
-                  onClick={handleLogout}
-                  disabled={logoutMutation.isPending}
-                  data-testid="button-logout"
-                >
-                  <LogOut className="h-4 w-4" />
+                  <User className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -116,12 +105,6 @@ export function DashboardLayout({ children, title, currentHotel }: DashboardLayo
           {children}
         </main>
       </div>
-
-      {/* Password Reset Modal */}
-      <PasswordResetModal 
-        isOpen={isPasswordResetOpen}
-        onClose={() => setIsPasswordResetOpen(false)}
-      />
     </div>
   );
 }

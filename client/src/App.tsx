@@ -81,6 +81,7 @@ import StorekeeperMyTasks from "@/pages/dashboard/storekeeper/my-tasks";
 import RequestStock from "@/pages/dashboard/stock-requests/request-stock";
 import StorekeeperStockRequests from "@/pages/dashboard/storekeeper/stock-requests";
 import DepartmentStockRequests from "@/pages/dashboard/department-stock-requests";
+import MyProfile from "@/pages/dashboard/my-profile";
 
 function Router() {
   return (
@@ -175,6 +176,9 @@ function Router() {
       <ProtectedRoute path="/storekeeper/stock-requests" component={StorekeeperStockRequests} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/maintenance-requests" component={StorekeeperMaintenanceRequests} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/my-tasks" component={StorekeeperMyTasks} allowedRoles={["storekeeper"]} />
+      
+      {/* My Profile - accessible to all authenticated users */}
+      <ProtectedRoute path="/my-profile" component={MyProfile} allowedRoles={["super_admin", "owner", "manager", "housekeeping_supervisor", "housekeeping_staff", "restaurant_bar_manager", "waiter", "kitchen_staff", "bartender", "barista", "security_head", "security_guard", "surveillance_officer", "finance", "front_desk", "cashier", "storekeeper"]} />
       
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
