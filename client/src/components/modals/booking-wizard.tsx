@@ -15,13 +15,20 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Calendar as CalendarIcon, Clock, Users, DollarSign, Package, CheckCircle, Loader2, Search, AlertCircle } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Users, DollarSign, Package, CheckCircle, Loader2, Search, AlertCircle, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn, formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import type { Hall, SelectServicePackage, Guest } from "@shared/schema";
+
+interface ServiceItem {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+}
 
 const wizardSchema = z.object({
   // Step 1: Hall & Time
@@ -65,6 +72,9 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
   const [guestSearch, setGuestSearch] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [availabilityStatus, setAvailabilityStatus] = useState<{ available: boolean; suggestions?: any[] } | null>(null);
+  const [foodDescription, setFoodDescription] = useState("");
+  const [perPersonFoodPrice, setPerPersonFoodPrice] = useState(0);
+  const [serviceItems, setServiceItems] = useState<ServiceItem[]>([]);
 
   const form = useForm<WizardFormData>({
     resolver: zodResolver(wizardSchema),
@@ -187,7 +197,31 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
     }
   };
 
-  // Calculate quotation total (hall base price + taxes only)
+  // Service item management
+  const addServiceItem = () => {
+    setServiceItems([...serviceItems, {
+      id: Date.now().toString(),
+      name: "",
+      quantity: 1,
+      unitPrice: 0
+    }]);
+  };
+
+  const updateServiceItem = (id: string, field: keyof ServiceItem, value: any) => {
+    setServiceItems(serviceItems.map(item => 
+      item.id === id ? { ...item, [field]: value } : item
+    ));
+  };
+
+  const removeServiceItem = (id: string) => {
+    setServiceItems(serviceItems.filter(item => item.id !== id));
+  };
+
+  const getServicesTotal = () => {
+    return serviceItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+  };
+
+  // Calculate quotation total (hall base price + food + services + taxes)
   const calculateTotal = () => {
     if (!selectedHall) return;
     
@@ -197,16 +231,24 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
       : (selectedHall.priceWalkin ? Number(selectedHall.priceWalkin) : 0);
     const basePrice = hourlyRate * watchedDuration;
     
+    // Add food cost
+    const foodCost = watchedNumberOfPeople * perPersonFoodPrice;
+    
+    // Add services cost
+    const servicesTotal = getServicesTotal();
+    
+    const subtotal = basePrice + foodCost + servicesTotal;
+    
     // Calculate taxes from database (VAT, service charge, luxury tax)
     let totalTax = 0;
     hotelTaxes.forEach((tax: any) => {
       if (tax.isActive) {
-        const taxAmount = basePrice * (Number(tax.percent) / 100);
+        const taxAmount = subtotal * (Number(tax.percent) / 100);
         totalTax += taxAmount;
       }
     });
     
-    const total = basePrice + totalTax;
+    const total = subtotal + totalTax;
     
     form.setValue("totalAmount", Number(total.toFixed(2)));
     
@@ -238,8 +280,29 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
     }
   };
 
+  // Recalculate when food or services change
+  useEffect(() => {
+    if (currentStep === 3) {
+      calculateTotal();
+    }
+  }, [perPersonFoodPrice, serviceItems, currentStep]);
+
   const createBookingMutation = useMutation({
     mutationFn: async (data: WizardFormData) => {
+      // Format food and services as description
+      const servicesDescription = serviceItems
+        .filter(item => item.name.trim())
+        .map(item => `${item.name} (${item.quantity} × ${formatCurrency(item.unitPrice)} = ${formatCurrency(item.quantity * item.unitPrice)})`)
+        .join(', ');
+      
+      const foodDescriptionText = perPersonFoodPrice > 0 
+        ? `Food: ${foodDescription || 'Not specified'} (${data.numberOfPeople} persons × ${formatCurrency(perPersonFoodPrice)} = ${formatCurrency(data.numberOfPeople * perPersonFoodPrice)})`
+        : '';
+      
+      const fullServicesDescription = [foodDescriptionText, servicesDescription]
+        .filter(s => s)
+        .join(' | ');
+
       const bookingData = {
         hallId: data.hallId,
         customerName: data.customerName,
@@ -260,6 +323,7 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
         balanceDue: data.balanceDue.toString(),
         paymentMethod: data.paymentMethod || undefined,
         specialRequests: data.specialRequests || undefined,
+        foodServices: fullServicesDescription || undefined,
         status: "quotation"
       };
 
@@ -270,6 +334,9 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
       form.reset();
       setCurrentStep(1);
       setAvailabilityStatus(null);
+      setFoodDescription("");
+      setPerPersonFoodPrice(0);
+      setServiceItems([]);
       onSuccess();
       onOpenChange(false);
     },
@@ -647,14 +714,119 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
 
             {currentStep === 3 && (
               <>
-                <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md p-4 mb-4">
-                  <p className="text-sm text-amber-800 dark:text-amber-200">
-                    <strong>Note:</strong> This is a preliminary quotation based on hall rental only. Services, food buffet, and final guest count will be customized during final billing after the event.
-                  </p>
+                <Separator className="my-4" />
+                
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg">Food Buffet (Per Person)</h3>
+                  
+                  <div>
+                    <label className="text-sm font-medium">Food Items Description</label>
+                    <Textarea
+                      value={foodDescription}
+                      onChange={(e) => setFoodDescription(e.target.value)}
+                      placeholder="E.g., Chicken curry, Dal, Vegetable curry, Rice, Naan, Mixed salad, Dessert..."
+                      rows={3}
+                      data-testid="textarea-food-description"
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">Describe what food items are included in the buffet</p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium">Price Per Person</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={perPersonFoodPrice}
+                      onChange={(e) => setPerPersonFoodPrice(parseFloat(e.target.value) || 0)}
+                      data-testid="input-per-person-price"
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Total food cost: {formatCurrency(watchedNumberOfPeople * perPersonFoodPrice)}
+                    </p>
+                  </div>
                 </div>
 
+                <Separator className="my-4" />
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-lg">Additional Services</h3>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addServiceItem}
+                      data-testid="button-add-service"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Service
+                    </Button>
+                  </div>
+                  
+                  {serviceItems.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No additional services added. Click "Add Service" to include decoration, sound system, etc.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {serviceItems.map((item) => (
+                        <Card key={item.id} className="p-3">
+                          <div className="grid grid-cols-12 gap-2 items-end">
+                            <div className="col-span-5">
+                              <label className="text-xs text-muted-foreground">Service Name</label>
+                              <Input
+                                placeholder="E.g., Decoration, Sound System"
+                                value={item.name}
+                                onChange={(e) => updateServiceItem(item.id, 'name', e.target.value)}
+                                data-testid={`input-service-name-${item.id}`}
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="text-xs text-muted-foreground">Qty</label>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={item.quantity}
+                                onChange={(e) => updateServiceItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                                data-testid={`input-service-qty-${item.id}`}
+                              />
+                            </div>
+                            <div className="col-span-3">
+                              <label className="text-xs text-muted-foreground">Unit Price</label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={item.unitPrice}
+                                onChange={(e) => updateServiceItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                data-testid={`input-service-price-${item.id}`}
+                              />
+                            </div>
+                            <div className="col-span-2 flex items-center gap-2">
+                              <div className="text-sm font-medium">
+                                {formatCurrency(item.quantity * item.unitPrice)}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeServiceItem(item.id)}
+                                data-testid={`button-remove-service-${item.id}`}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Separator className="my-4" />
+
                 <Card className="p-4 bg-muted">
-                  <div className="space-y-3">
+                  <h3 className="font-semibold mb-3">Quotation Breakdown</h3>
+                  <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Hall Base Price ({watchedDuration}h):</span>
                       <span className="font-medium">
@@ -664,6 +836,18 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
                         ) * watchedDuration)}
                       </span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        Food ({watchedNumberOfPeople} × {formatCurrency(perPersonFoodPrice)}):
+                      </span>
+                      <span className="font-medium">{formatCurrency(watchedNumberOfPeople * perPersonFoodPrice)}</span>
+                    </div>
+                    {serviceItems.length > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Additional Services:</span>
+                        <span className="font-medium">{formatCurrency(getServicesTotal())}</span>
+                      </div>
+                    )}
                     <Separator />
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Subtotal:</span>
@@ -671,15 +855,15 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
                         {formatCurrency((form.watch("isInHouseGuest")
                           ? (selectedHall?.priceInhouse ? Number(selectedHall.priceInhouse) : 0)
                           : (selectedHall?.priceWalkin ? Number(selectedHall.priceWalkin) : 0)
-                        ) * watchedDuration)}
+                        ) * watchedDuration + watchedNumberOfPeople * perPersonFoodPrice + getServicesTotal())}
                       </span>
                     </div>
                     {hotelTaxes.filter((tax: any) => tax.isActive).map((tax: any) => {
-                      const basePrice = (form.watch("isInHouseGuest")
+                      const subtotal = (form.watch("isInHouseGuest")
                         ? (selectedHall?.priceInhouse ? Number(selectedHall.priceInhouse) : 0)
                         : (selectedHall?.priceWalkin ? Number(selectedHall.priceWalkin) : 0)
-                      ) * watchedDuration;
-                      const taxAmount = basePrice * (Number(tax.percent) / 100);
+                      ) * watchedDuration + watchedNumberOfPeople * perPersonFoodPrice + getServicesTotal();
+                      const taxAmount = subtotal * (Number(tax.percent) / 100);
                       
                       return (
                         <div key={tax.id} className="flex justify-between">
