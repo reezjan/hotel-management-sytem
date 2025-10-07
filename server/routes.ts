@@ -3720,8 +3720,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           where: and(
             eq(hallBookings.hallId, hallId),
             eq(hallBookings.hotelId, user.hotelId),
-            sql`${hallBookings.bookingStartTime} < ${dayEnd}`,
-            sql`${hallBookings.bookingEndTime} > ${dayStart}`
+            sql`${hallBookings.bookingStartTime} < ${dayEnd.toISOString()}`,
+            sql`${hallBookings.bookingEndTime} > ${dayStart.toISOString()}`
           ),
           orderBy: [asc(hallBookings.bookingStartTime)]
         });

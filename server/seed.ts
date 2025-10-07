@@ -1,5 +1,5 @@
 import { db } from './db';
-import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables } from '@shared/schema';
+import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls } from '@shared/schema';
 import { hashPassword } from './auth';
 import { eq } from 'drizzle-orm';
 
@@ -438,6 +438,31 @@ async function seed() {
       }
     }
 
+    // Create halls
+    console.log('\n🏛️  Creating halls...');
+    const hallData = [
+      { name: 'Grand Ballroom', capacity: 200, priceInhouse: '15000', priceWalkin: '20000', hourlyRate: '5000' },
+      { name: 'Conference Hall A', capacity: 50, priceInhouse: '8000', priceWalkin: '10000', hourlyRate: '3000' },
+      { name: 'Conference Hall B', capacity: 50, priceInhouse: '8000', priceWalkin: '10000', hourlyRate: '3000' },
+      { name: 'Banquet Hall', capacity: 150, priceInhouse: '12000', priceWalkin: '15000', hourlyRate: '4000' },
+      { name: 'Meeting Room 1', capacity: 20, priceInhouse: '3000', priceWalkin: '4000', hourlyRate: '1500' },
+      { name: 'Meeting Room 2', capacity: 20, priceInhouse: '3000', priceWalkin: '4000', hourlyRate: '1500' },
+      { name: 'Executive Lounge', capacity: 30, priceInhouse: '5000', priceWalkin: '6500', hourlyRate: '2000' }
+    ];
+
+    for (const hall of hallData) {
+      const existing = await db.select().from(halls).where(eq(halls.name, hall.name));
+      if (existing.length === 0) {
+        await db.insert(halls).values({
+          hotelId: testHotel.id,
+          ...hall
+        });
+        console.log(`  ✓ Created hall: ${hall.name} (Capacity: ${hall.capacity})`);
+      } else {
+        console.log(`  → Hall already exists: ${hall.name}`);
+      }
+    }
+
     console.log('\n✅ Database seeded successfully!');
     console.log('\n📝 Summary:');
     console.log('  - Hotel: Test Hotel');
@@ -447,6 +472,7 @@ async function seed() {
     console.log('  - Discount Code: DISCOUNT1000 (Rs. 1000 off)');
     console.log('  - Menu Items: 13 items across 5 categories');
     console.log('  - Restaurant Tables: 10 tables (2-12 seating capacity)');
+    console.log('  - Halls: 7 halls (20-200 capacity)');
     process.exit(0);
   } catch (error) {
     console.error('❌ Seeding failed:', error);

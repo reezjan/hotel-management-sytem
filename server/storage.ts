@@ -1951,8 +1951,8 @@ export class DatabaseStorage implements IStorage {
     const conditions = [
       eq(hallBookings.hallId, hallId),
       sql`${hallBookings.status} != 'cancelled'`,
-      sql`${hallBookings.bookingStartTime} < ${endTime}`,
-      sql`${hallBookings.bookingEndTime} > ${startTime}`
+      sql`${hallBookings.bookingStartTime} < ${endTime.toISOString()}`,
+      sql`${hallBookings.bookingEndTime} > ${startTime.toISOString()}`
     ];
 
     if (excludeBookingId) {
