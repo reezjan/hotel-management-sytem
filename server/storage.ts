@@ -176,6 +176,7 @@ export interface IStorage {
   // Transaction operations
   getTransactionsByHotel(hotelId: string): Promise<Transaction[]>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
+  updateTransaction(id: string, transaction: Partial<InsertTransaction>): Promise<Transaction>;
   deleteTransaction(id: string): Promise<void>;
   
   // Maintenance operations
@@ -700,6 +701,15 @@ export class DatabaseStorage implements IStorage {
     const [transaction] = await db
       .insert(transactions)
       .values(transactionData)
+      .returning();
+    return transaction;
+  }
+
+  async updateTransaction(id: string, transactionData: Partial<InsertTransaction>): Promise<Transaction> {
+    const [transaction] = await db
+      .update(transactions)
+      .set(transactionData)
+      .where(eq(transactions.id, id))
       .returning();
     return transaction;
   }

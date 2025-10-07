@@ -2085,6 +2085,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/transactions/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const { id } = req.params;
+      const updateData = req.body;
+      const updatedTransaction = await storage.updateTransaction(id, updateData);
+      res.json(updatedTransaction);
+    } catch (error) {
+      console.error("Transaction update error:", error);
+      res.status(400).json({ message: "Failed to update transaction", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   app.delete("/api/transactions/:id", async (req, res) => {
     try {
       const { id } = req.params;

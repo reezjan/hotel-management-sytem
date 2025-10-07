@@ -158,6 +158,7 @@ async function seed() {
     const cashierRole = await db.select().from(roles).where(eq(roles.name, 'cashier'));
     const housekeepingSupervisorRole = await db.select().from(roles).where(eq(roles.name, 'housekeeping_supervisor'));
     const housekeepingStaffRole = await db.select().from(roles).where(eq(roles.name, 'housekeeping_staff'));
+    const financeRole = await db.select().from(roles).where(eq(roles.name, 'finance'));
 
     // Create test users
     console.log('\n👥 Creating test users...');
@@ -228,6 +229,12 @@ async function seed() {
         password: 'hkstaff',
         roleId: housekeepingStaffRole[0].id,
         email: 'hkstaff@testhotel.local'
+      },
+      {
+        username: 'finance',
+        password: 'finance',
+        roleId: financeRole[0].id,
+        email: 'finance@testhotel.local'
       }
     ];
 
