@@ -30,20 +30,16 @@ const wizardSchema = z.object({
   startTime: z.string().min(1, "Start time is required"),
   endTime: z.string().min(1, "End time is required"),
   duration: z.number().min(1, "Duration must be at least 1 hour"),
+  isInHouseGuest: z.boolean().default(false),
   
   // Step 2: Customer Info
   customerName: z.string().min(1, "Customer name is required"),
   customerPhone: z.string().min(1, "Phone is required"),
   customerEmail: z.string().email().optional().or(z.literal("")),
   guestId: z.string().optional(),
-  isInHouseGuest: z.boolean().default(false),
-  numberOfPeople: z.number().min(1, "Number of people is required"),
+  numberOfPeople: z.number().min(1, "Estimated number of people is required"),
   
-  // Step 3: Services
-  selectedPackages: z.array(z.string()).default([]),
-  customServices: z.array(z.any()).default([]),
-  
-  // Step 4: Payment (auto-calculated)
+  // Step 3: Payment (quotation only)
   totalAmount: z.number(),
   advancePaid: z.number().min(0, "Advance cannot be negative"),
   balanceDue: z.number(),
@@ -78,13 +74,11 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
       startTime: "",
       endTime: "",
       duration: 1,
+      isInHouseGuest: false,
       customerName: "",
       customerPhone: "",
       customerEmail: "",
-      isInHouseGuest: false,
       numberOfPeople: 1,
-      selectedPackages: [],
-      customServices: [],
       totalAmount: 0,
       advancePaid: 0,
       balanceDue: 0,
@@ -98,13 +92,14 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
     enabled: !!user?.hotelId && open
   });
 
-  const { data: servicePackages = [] } = useQuery<SelectServicePackage[]>({
-    queryKey: ["/api/service-packages"],
-    enabled: !!user?.hotelId && open && currentStep === 3
-  });
 
   const { data: hotelSettings } = useQuery({
     queryKey: ["/api/hotels/current"],
+    enabled: !!user?.hotelId && open
+  });
+
+  const { data: hotelTaxes = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/taxes"],
     enabled: !!user?.hotelId && open
   });
 
@@ -114,7 +109,6 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
   const watchedEndTime = form.watch("endTime");
   const watchedDuration = form.watch("duration");
   const watchedNumberOfPeople = form.watch("numberOfPeople");
-  const watchedSelectedPackages = form.watch("selectedPackages");
 
   const selectedHall = halls.find(h => h.id === watchedHallId);
   
@@ -167,12 +161,9 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
         endTime: watchedEndTime
       }) as any;
       
-      // Check if available is explicitly true
-      if (result && result.available === true) {
-        return true;
-      }
+      console.log("Availability API result:", result);
       
-      // If not available, show error and suggestions
+      // Check if available is explicitly false
       if (result && result.available === false) {
         setAvailabilityStatus(result as { available: boolean; suggestions?: any[] });
         toast({
@@ -182,8 +173,11 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
             : "No alternative slots available for this date",
           variant: "destructive"
         });
+        return false;
       }
-      return false;
+      
+      // If available is true or not explicitly false, allow proceeding
+      return true;
     } catch (error) {
       toast({
         title: "Error checking availability",
@@ -193,7 +187,7 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
     }
   };
 
-  // Smart price calculation
+  // Calculate quotation total (hall base price + taxes only)
   const calculateTotal = () => {
     if (!selectedHall) return;
     
@@ -203,21 +197,16 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
       : (selectedHall.priceWalkin ? Number(selectedHall.priceWalkin) : 0);
     const basePrice = hourlyRate * watchedDuration;
     
-    // Add service packages
-    let servicesCost = 0;
-    watchedSelectedPackages.forEach(pkgId => {
-      const pkg = servicePackages.find(p => p.id === pkgId);
-      if (pkg) {
-        servicesCost += Number(pkg.basePrice || 0);
+    // Calculate taxes from database (VAT, service charge, luxury tax)
+    let totalTax = 0;
+    hotelTaxes.forEach((tax: any) => {
+      if (tax.isActive) {
+        const taxAmount = basePrice * (Number(tax.percent) / 100);
+        totalTax += taxAmount;
       }
     });
     
-    const subtotal = basePrice + servicesCost;
-    
-    // Get tax rate from hotel settings
-    const taxRate = (hotelSettings as any)?.settings?.taxRate || 0.13; // Default 13%
-    const tax = subtotal * taxRate;
-    const total = subtotal + tax;
+    const total = basePrice + totalTax;
     
     form.setValue("totalAmount", Number(total.toFixed(2)));
     
@@ -266,7 +255,6 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
           ? (selectedHall?.priceInhouse ? Number(selectedHall.priceInhouse) * data.duration : 0)
           : (selectedHall?.priceWalkin ? Number(selectedHall.priceWalkin) * data.duration : 0)
         ).toFixed(2),
-        servicePackages: data.selectedPackages,
         totalAmount: data.totalAmount.toString(),
         advancePaid: data.advancePaid.toString(),
         balanceDue: data.balanceDue.toString(),
@@ -326,13 +314,10 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
           });
           return;
         }
+        calculateTotal();
         setCurrentStep(3);
         break;
       case 3:
-        calculateTotal();
-        setCurrentStep(4);
-        break;
-      case 4:
         form.handleSubmit((data) => createBookingMutation.mutate(data))();
         break;
     }
@@ -347,8 +332,7 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
   const steps = [
     { number: 1, title: "Hall & Time", icon: CalendarIcon },
     { number: 2, title: "Customer Info", icon: Users },
-    { number: 3, title: "Services", icon: Package },
-    { number: 4, title: "Payment", icon: DollarSign }
+    { number: 3, title: "Quotation", icon: DollarSign }
   ];
 
   return (
@@ -663,53 +647,16 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
 
             {currentStep === 3 && (
               <>
-                <div>
-                  <h3 className="font-medium mb-4">Service Packages</h3>
-                  {servicePackages.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No service packages available</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4">
-                      {servicePackages.map((pkg) => (
-                        <Card
-                          key={pkg.id}
-                          className={cn(
-                            "p-4 cursor-pointer transition-colors",
-                            watchedSelectedPackages.includes(pkg.id) && "border-primary bg-primary/5"
-                          )}
-                          onClick={() => {
-                            const current = watchedSelectedPackages;
-                            if (current.includes(pkg.id)) {
-                              form.setValue("selectedPackages", current.filter(id => id !== pkg.id));
-                            } else {
-                              form.setValue("selectedPackages", [...current, pkg.id]);
-                            }
-                            calculateTotal();
-                          }}
-                          data-testid={`card-package-${pkg.id}`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <h4 className="font-medium">{pkg.name}</h4>
-                              <p className="text-sm text-muted-foreground mt-1">{pkg.description}</p>
-                            </div>
-                            <Badge variant={watchedSelectedPackages.includes(pkg.id) ? "default" : "outline"}>
-                              {formatCurrency(Number(pkg.basePrice || 0))}
-                            </Badge>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
+                <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md p-4 mb-4">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    <strong>Note:</strong> This is a preliminary quotation based on hall rental only. Services, food buffet, and final guest count will be customized during final billing after the event.
+                  </p>
                 </div>
-              </>
-            )}
 
-            {currentStep === 4 && (
-              <>
                 <Card className="p-4 bg-muted">
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Base Price:</span>
+                      <span className="text-sm text-muted-foreground">Hall Base Price ({watchedDuration}h):</span>
                       <span className="font-medium">
                         {formatCurrency((form.watch("isInHouseGuest")
                           ? (selectedHall?.priceInhouse ? Number(selectedHall.priceInhouse) : 0)
@@ -717,20 +664,37 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
                         ) * watchedDuration)}
                       </span>
                     </div>
-                    {watchedSelectedPackages.length > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Service Packages:</span>
-                        <span className="font-medium">
-                          {formatCurrency(watchedSelectedPackages.reduce((sum, pkgId) => {
-                            const pkg = servicePackages.find(p => p.id === pkgId);
-                            return sum + Number(pkg?.basePrice || 0);
-                          }, 0))}
-                        </span>
-                      </div>
-                    )}
+                    <Separator />
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Subtotal:</span>
+                      <span className="font-medium">
+                        {formatCurrency((form.watch("isInHouseGuest")
+                          ? (selectedHall?.priceInhouse ? Number(selectedHall.priceInhouse) : 0)
+                          : (selectedHall?.priceWalkin ? Number(selectedHall.priceWalkin) : 0)
+                        ) * watchedDuration)}
+                      </span>
+                    </div>
+                    {hotelTaxes.filter((tax: any) => tax.isActive).map((tax: any) => {
+                      const basePrice = (form.watch("isInHouseGuest")
+                        ? (selectedHall?.priceInhouse ? Number(selectedHall.priceInhouse) : 0)
+                        : (selectedHall?.priceWalkin ? Number(selectedHall.priceWalkin) : 0)
+                      ) * watchedDuration;
+                      const taxAmount = basePrice * (Number(tax.percent) / 100);
+                      
+                      return (
+                        <div key={tax.id} className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">
+                            {tax.taxType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())} ({tax.percent}%):
+                          </span>
+                          <span className="font-medium">
+                            {formatCurrency(taxAmount)}
+                          </span>
+                        </div>
+                      );
+                    })}
                     <Separator />
                     <div className="flex justify-between text-lg font-bold">
-                      <span>Total Amount:</span>
+                      <span>Quotation Amount:</span>
                       <span>{formatCurrency(form.getValues("totalAmount"))}</span>
                     </div>
                   </div>
