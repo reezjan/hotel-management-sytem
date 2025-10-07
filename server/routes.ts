@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { db } from "./db";
 import { users, roles } from "@shared/schema";
-import { eq, and, isNull, asc, sql } from "drizzle-orm";
+import { eq, and, isNull, asc, sql, ne } from "drizzle-orm";
 import {
   insertUserSchema,
   insertHotelSchema,
@@ -3703,8 +3703,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Hall not found" });
       }
       
-      const start = new Date(`${date}T${startTime}`);
-      const end = new Date(`${date}T${endTime}`);
+      const start = new Date(`${date}T${startTime}:00`);
+      const end = new Date(`${date}T${endTime}:00`);
       
       const isAvailable = await storage.checkHallAvailability(hallId, start, end);
       
@@ -3720,6 +3720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           where: and(
             eq(hallBookings.hallId, hallId),
             eq(hallBookings.hotelId, user.hotelId),
+            ne(hallBookings.status, 'cancelled'),
             sql`${hallBookings.bookingStartTime} < ${dayEnd.toISOString()}`,
             sql`${hallBookings.bookingEndTime} > ${dayStart.toISOString()}`
           ),
