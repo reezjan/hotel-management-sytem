@@ -96,6 +96,7 @@ export function FinalBillingModal({ open, onOpenChange, booking, onSuccess }: Fi
         actualNumberOfPeople: data.actualNumberOfPeople,
         totalAmount: finalTotal.toFixed(2),
         balanceDue: balanceDue.toFixed(2),
+        paymentMethod: data.finalPaymentMethod,
         status: "completed"
       };
 

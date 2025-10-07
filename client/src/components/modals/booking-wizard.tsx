@@ -488,7 +488,7 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
                             <SelectValue placeholder="Choose a hall" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="max-h-[300px] overflow-y-auto">
                           {halls.map((hall) => (
                             <SelectItem key={hall.id} value={hall.id}>
                               {hall.name} - Capacity: {hall.capacity}
