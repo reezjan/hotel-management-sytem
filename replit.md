@@ -3,6 +3,30 @@
 ## Overview
 This project is a comprehensive hotel management system designed to streamline hotel operations. It features role-based dashboards for various staff members, including super admin, owner, manager, front desk, housekeeping, restaurant/bar management, security, and finance. The system aims to provide an efficient and integrated platform for managing all aspects of a hotel's daily operations, from guest services to inventory and financial reporting.
 
+## Recent Changes (October 7, 2025)
+
+### Hall Bookings - Dynamic Pricing with Manual Override
+Implemented dynamic pricing functionality for hall bookings with manual override capability:
+
+**Frontend Enhancements:**
+- Added `numberOfPeople` and `hallBasePrice` fields to booking forms (both create and edit)
+- Implemented auto-population of hall base price when a hall is selected
+- Added dynamic balance calculation that updates automatically when total or advance payment changes
+- Balance due field is read-only and auto-calculated in both forms
+- Front desk can manually override the total amount for custom pricing scenarios
+
+**Schema Updates:**
+- `hallBookings` table already includes `numberOfPeople` (integer) and `hallBasePrice` (numeric) columns
+- Updated Zod insert schema to properly validate and transform these fields
+- All fields properly persist to PostgreSQL database
+
+**User Flow:**
+1. Front desk selects a hall → base price auto-populates
+2. Enters number of people → can be used for pricing calculations
+3. Total amount is editable by front desk (manual override capability)
+4. Advance payment entry → balance due automatically recalculates
+5. Balance due is always read-only and auto-calculated (total - advance)
+
 ## User Preferences
 I prefer detailed explanations and an iterative development approach. Please ask before making major changes. Do not make changes to the `shared/` folder unless absolutely necessary and with prior approval. Do not modify the core authentication logic in `server/auth.ts` without explicit instruction.
 

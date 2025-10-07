@@ -504,6 +504,10 @@ export const hallBookings = pgTable("hall_bookings", {
   isInHouseGuest: boolean("is_in_house_guest").default(false),
   bookingStartTime: timestamp("booking_start_time", { withTimezone: true }).notNull(),
   bookingEndTime: timestamp("booking_end_time", { withTimezone: true }).notNull(),
+  numberOfPeople: integer("number_of_people"),
+  hallBasePrice: numeric("hall_base_price", { precision: 12, scale: 2 }),
+  foodServices: jsonb("food_services").default('[]'),
+  otherServices: jsonb("other_services").default('[]'),
   totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
   advancePaid: numeric("advance_paid", { precision: 12, scale: 2 }).default('0'),
   balanceDue: numeric("balance_due", { precision: 12, scale: 2 }).notNull(),
@@ -824,6 +828,8 @@ export const insertHallBookingSchema = createInsertSchema(hallBookings).omit({
 }).extend({
   bookingStartTime: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val)),
   bookingEndTime: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val)),
+  numberOfPeople: z.union([z.string(), z.number()]).transform((val) => Number(val)),
+  hallBasePrice: z.union([z.string(), z.number()]).transform((val) => String(val)),
   totalAmount: z.union([z.string(), z.number()]).transform((val) => String(val)),
   advancePaid: z.union([z.string(), z.number()]).transform((val) => String(val)),
   balanceDue: z.union([z.string(), z.number()]).transform((val) => String(val))
