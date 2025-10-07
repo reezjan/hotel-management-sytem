@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -118,6 +118,11 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
 
   const selectedHall = halls.find(h => h.id === watchedHallId);
   
+  // Clear availability status when key fields change
+  useEffect(() => {
+    setAvailabilityStatus(null);
+  }, [watchedHallId, watchedDate, watchedStartTime, watchedEndTime]);
+  
   // Calculate duration when start/end time changes
   const calculateDuration = (start: string, end: string) => {
     if (!start || !end) return 0;
@@ -148,8 +153,8 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
   };
 
   // Check availability
-  const checkAvailability = async () => {
-    if (!watchedHallId || !watchedDate || !watchedStartTime || !watchedEndTime) return;
+  const checkAvailability = async (): Promise<boolean> => {
+    if (!watchedHallId || !watchedDate || !watchedStartTime || !watchedEndTime) return true;
     
     try {
       const result = await apiRequest("POST", "/api/halls/check-availability-quick", {
@@ -170,11 +175,14 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
           variant: "destructive"
         });
       }
+      
+      return result.available;
     } catch (error) {
       toast({
         title: "Error checking availability",
         variant: "destructive"
       });
+      return false;
     }
   };
 
@@ -286,8 +294,8 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
       case 1:
         isValid = await form.trigger(["hallId", "date", "startTime", "endTime", "duration"]);
         if (isValid) {
-          await checkAvailability();
-          if (availabilityStatus?.available !== false) {
+          const isAvailable = await checkAvailability();
+          if (isAvailable) {
             setCurrentStep(2);
           }
         }
