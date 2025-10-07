@@ -17,12 +17,17 @@ export function HallQuotation({ booking, open, onOpenChange }: HallQuotationProp
   const printRef = useRef<HTMLDivElement>(null);
 
   const { data: hall } = useQuery<Hall>({
-    queryKey: ["/api/halls", booking?.hallId],
+    queryKey: [`/api/halls/${booking?.hallId}`],
     enabled: !!booking?.hallId
   });
 
   const { data: hotel } = useQuery<Hotel>({
-    queryKey: ["/api/hotels", booking?.hotelId],
+    queryKey: [`/api/hotels/${booking?.hotelId}`],
+    enabled: !!booking?.hotelId
+  });
+
+  const { data: hotelTaxes } = useQuery<any[]>({
+    queryKey: [`/api/hotels/${booking?.hotelId}/taxes`],
     enabled: !!booking?.hotelId
   });
 
@@ -266,56 +271,61 @@ export function HallQuotation({ booking, open, onOpenChange }: HallQuotationProp
     }, 250);
   };
 
-  // Parse food and services from the text format stored in foodServices field
-  const foodServicesText = booking.foodServices as any;
-  let parsedFoodServices: any[] = [];
-  let parsedOtherServices: any[] = [];
+  // Parse food and services from the JSONB fields or text format
+  let foodServices: any[] = [];
+  let otherServices: any[] = [];
+  let servicePackages: any[] = [];
   
-  // Try to parse the foodServices field which contains food and services as text
-  if (typeof foodServicesText === 'string' && foodServicesText) {
-    const parts = foodServicesText.split(' | ');
-    
-    // Extract food service (first part usually contains "Food:")
-    const foodPart = parts.find((p: string) => p.includes('Food:'));
-    if (foodPart) {
-      const match = foodPart.match(/Food: (.+?) \((\d+) persons × ₹([\d,]+(?:\.\d+)?) = ₹([\d,]+(?:\.\d+)?)\)/);
-      if (match) {
-        parsedFoodServices.push({
-          name: 'Food Buffet',
-          description: match[1],
-          quantity: parseInt(match[2]),
-          pricePerPerson: parseFloat(match[3].replace(/,/g, '')),
-          total: parseFloat(match[4].replace(/,/g, ''))
-        });
-      }
+  // Handle food services - can be array or text string
+  if (Array.isArray(booking.foodServices)) {
+    foodServices = booking.foodServices;
+  } else if (typeof booking.foodServices === 'string' && booking.foodServices) {
+    // Parse text format: "Food: Items (690 persons × ₹800.00 = ₹552,000.00)"
+    const match = booking.foodServices.match(/Food:\s*(.+?)\s*\((\d+)\s*persons\s*×\s*[₹रु]?([\d,]+(?:\.\d+)?)\s*=\s*[₹रु]?([\d,]+(?:\.\d+)?)\)/);
+    if (match) {
+      foodServices = [{
+        name: 'Food & Beverage',
+        description: match[1].trim(),
+        numberOfPersons: parseInt(match[2]),
+        pricePerPerson: parseFloat(match[3].replace(/,/g, '')),
+        totalPrice: parseFloat(match[4].replace(/,/g, ''))
+      }];
     }
-    
-    // Extract other services (remaining parts)
-    const serviceParts = parts.filter((p: string) => !p.includes('Food:'));
-    serviceParts.forEach((servicePart: string) => {
-      const match = servicePart.match(/(.+?) \((\d+) × ₹([\d,]+(?:\.\d+)?) = ₹([\d,]+(?:\.\d+)?)\)/);
-      if (match) {
-        parsedOtherServices.push({
-          name: match[1],
-          quantity: parseInt(match[2]),
-          price: parseFloat(match[3].replace(/,/g, '')),
-          total: parseFloat(match[4].replace(/,/g, ''))
-        });
-      }
-    });
   }
   
-  // Use parsed services or fallback to empty arrays
-  const foodServices = parsedFoodServices.length > 0 ? parsedFoodServices : [];
-  const otherServices = parsedOtherServices.length > 0 ? parsedOtherServices : [];
+  // Handle other services
+  if (Array.isArray(booking.otherServices)) {
+    otherServices = booking.otherServices;
+  }
+  
+  // Handle service packages
+  if (Array.isArray(booking.servicePackages)) {
+    servicePackages = booking.servicePackages;
+  }
   
   const hallPrice = parseFloat(booking.hallBasePrice || "0");
-  const foodTotal = foodServices.reduce((sum: number, item: any) => sum + (item.total || 0), 0);
-  const servicesTotal = otherServices.reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+  const foodTotal = foodServices.reduce((sum: number, item: any) => sum + (parseFloat(item.totalPrice || item.total || "0")), 0);
+  const servicesTotal = otherServices.reduce((sum: number, item: any) => sum + (parseFloat(item.totalPrice || item.total || "0")), 0);
+  const packagesTotal = servicePackages.reduce((sum: number, item: any) => sum + (parseFloat(item.totalPrice || item.total || "0")), 0);
 
-  const subtotal = hallPrice + foodTotal + servicesTotal;
-  const tax = subtotal * 0.13; // 13% VAT
-  const total = parseFloat(booking.totalAmount || "0");
+  const subtotal = hallPrice + foodTotal + servicesTotal + packagesTotal;
+  
+  // Get taxes from hotel taxes
+  const activeTaxes = hotelTaxes?.filter((tax: any) => tax.isActive) || [];
+  const vatTax = activeTaxes.find((tax: any) => tax.taxType === 'vat');
+  const serviceTax = activeTaxes.find((tax: any) => tax.taxType === 'service_charge');
+  const luxuryTax = activeTaxes.find((tax: any) => tax.taxType === 'luxury_tax');
+  
+  const vatAmount = vatTax ? subtotal * (parseFloat(vatTax.percent || "0") / 100) : 0;
+  const serviceTaxAmount = serviceTax ? subtotal * (parseFloat(serviceTax.percent || "0") / 100) : 0;
+  const luxuryTaxAmount = luxuryTax ? subtotal * (parseFloat(luxuryTax.percent || "0") / 100) : 0;
+  const totalTax = vatAmount + serviceTaxAmount + luxuryTaxAmount;
+  
+  // Calculate total from subtotal + taxes (this is the accurate total)
+  const calculatedTotal = subtotal + totalTax;
+  
+  // Use booking.totalAmount if available, otherwise use calculated total
+  const total = parseFloat(booking.totalAmount || "0") || calculatedTotal;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -445,39 +455,96 @@ export function HallQuotation({ booking, open, onOpenChange }: HallQuotationProp
                 <tbody>
                   <tr>
                     <td>1</td>
-                    <td><strong>Hall Rental</strong><br/>{hall?.name || "Hall"}</td>
-                    <td className="text-right">1</td>
-                    <td className="text-right">{formatCurrency(hallPrice)}</td>
+                    <td>
+                      <strong>Hall Rental</strong><br/>
+                      {hall?.name || "Hall"}
+                      {booking.duration && (
+                        <span style={{ fontSize: "8px", color: "#666", display: "block", marginTop: "2px" }}>
+                          ({booking.duration} hours @ {formatCurrency(hallPrice / parseFloat(booking.duration))} per hour)
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-right">{booking.duration ? `${booking.duration} hrs` : '1'}</td>
+                    <td className="text-right">
+                      {booking.duration ? formatCurrency(hallPrice / parseFloat(booking.duration)) : formatCurrency(hallPrice)}
+                    </td>
                     <td className="text-right">{formatCurrency(hallPrice)}</td>
                   </tr>
                   
-                  {foodServices.length > 0 && foodServices.map((item: any, index: number) => (
-                    <tr key={`food-${index}`}>
-                      <td>{index + 2}</td>
-                      <td>
-                        <strong>{item.name || "Food Service"}</strong>
-                        {item.description && <br/>}
-                        {item.description && <span style={{ fontSize: "8px", color: "#666" }}>{item.description}</span>}
-                      </td>
-                      <td className="text-right">{item.quantity} persons</td>
-                      <td className="text-right">{formatCurrency(item.pricePerPerson || 0)}</td>
-                      <td className="text-right">{formatCurrency(item.total || 0)}</td>
-                    </tr>
-                  ))}
+                  {foodServices.length > 0 && foodServices.map((item: any, index: number) => {
+                    const persons = item.quantity || item.numberOfPersons || 0;
+                    const pricePerPerson = parseFloat(item.pricePerPerson || item.price || "0");
+                    const total = parseFloat(item.totalPrice || item.total || "0");
+                    
+                    return (
+                      <tr key={`food-${index}`}>
+                        <td>{index + 2}</td>
+                        <td>
+                          <strong>{item.itemName || item.name || "Food & Beverage"}</strong>
+                          {item.description && <br/>}
+                          {item.description && <span style={{ fontSize: "8px", color: "#666" }}>{item.description}</span>}
+                          {persons > 0 && pricePerPerson > 0 && (
+                            <span style={{ fontSize: "8px", color: "#666", display: "block", marginTop: "2px" }}>
+                              ({persons} persons × {formatCurrency(pricePerPerson)} per person)
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-right">{persons > 0 ? `${persons} pax` : '1'}</td>
+                        <td className="text-right">{formatCurrency(pricePerPerson)}</td>
+                        <td className="text-right">{formatCurrency(total)}</td>
+                      </tr>
+                    );
+                  })}
                   
-                  {otherServices.length > 0 && otherServices.map((item: any, index: number) => (
-                    <tr key={`service-${index}`}>
-                      <td>{index + 2 + foodServices.length}</td>
-                      <td>
-                        <strong>{item.name || "Additional Service"}</strong>
-                        {item.description && <br/>}
-                        {item.description && <span style={{ fontSize: "8px", color: "#666" }}>{item.description}</span>}
-                      </td>
-                      <td className="text-right">{item.quantity || 1}</td>
-                      <td className="text-right">{formatCurrency(item.price || 0)}</td>
-                      <td className="text-right">{formatCurrency(item.total || 0)}</td>
-                    </tr>
-                  ))}
+                  {otherServices.length > 0 && otherServices.map((item: any, index: number) => {
+                    const qty = item.quantity || 1;
+                    const price = parseFloat(item.price || "0");
+                    const total = parseFloat(item.totalPrice || item.total || "0");
+                    
+                    return (
+                      <tr key={`service-${index}`}>
+                        <td>{index + 2 + foodServices.length}</td>
+                        <td>
+                          <strong>{item.serviceName || item.name || "Additional Service"}</strong>
+                          {item.description && <br/>}
+                          {item.description && <span style={{ fontSize: "8px", color: "#666" }}>{item.description}</span>}
+                          {qty > 1 && price > 0 && (
+                            <span style={{ fontSize: "8px", color: "#666", display: "block", marginTop: "2px" }}>
+                              ({qty} × {formatCurrency(price)} per unit)
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-right">{qty}</td>
+                        <td className="text-right">{formatCurrency(price)}</td>
+                        <td className="text-right">{formatCurrency(total)}</td>
+                      </tr>
+                    );
+                  })}
+                  
+                  {servicePackages.length > 0 && servicePackages.map((item: any, index: number) => {
+                    const qty = item.quantity || 1;
+                    const price = parseFloat(item.price || "0");
+                    const total = parseFloat(item.totalPrice || item.total || "0");
+                    
+                    return (
+                      <tr key={`package-${index}`}>
+                        <td>{index + 2 + foodServices.length + otherServices.length}</td>
+                        <td>
+                          <strong>{item.packageName || item.name || "Service Package"}</strong>
+                          {item.description && <br/>}
+                          {item.description && <span style={{ fontSize: "8px", color: "#666" }}>{item.description}</span>}
+                          {qty > 1 && price > 0 && (
+                            <span style={{ fontSize: "8px", color: "#666", display: "block", marginTop: "2px" }}>
+                              ({qty} × {formatCurrency(price)} per package)
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-right">{qty}</td>
+                        <td className="text-right">{formatCurrency(price)}</td>
+                        <td className="text-right">{formatCurrency(total)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
@@ -485,16 +552,41 @@ export function HallQuotation({ booking, open, onOpenChange }: HallQuotationProp
               <table className="summary-table">
                 <tbody>
                   <tr className="summary-row">
-                    <td>Subtotal:</td>
-                    <td className="text-right">{formatCurrency(subtotal)}</td>
+                    <td><strong>Subtotal (Services):</strong></td>
+                    <td className="text-right"><strong>{formatCurrency(subtotal)}</strong></td>
                   </tr>
-                  <tr className="summary-row">
-                    <td>Tax (13% VAT):</td>
-                    <td className="text-right">{formatCurrency(tax)}</td>
-                  </tr>
-                  <tr className="total-row">
-                    <td>Total Amount:</td>
-                    <td className="text-right">{formatCurrency(total)}</td>
+                  <tr style={{ height: '8px' }}><td colSpan={2}></td></tr>
+                  {vatTax && (
+                    <tr className="summary-row">
+                      <td style={{ paddingLeft: '12px' }}>VAT ({vatTax.percent}%):</td>
+                      <td className="text-right">{formatCurrency(vatAmount)}</td>
+                    </tr>
+                  )}
+                  {serviceTax && (
+                    <tr className="summary-row">
+                      <td style={{ paddingLeft: '12px' }}>Service Charge ({serviceTax.percent}%):</td>
+                      <td className="text-right">{formatCurrency(serviceTaxAmount)}</td>
+                    </tr>
+                  )}
+                  {luxuryTax && (
+                    <tr className="summary-row">
+                      <td style={{ paddingLeft: '12px' }}>Luxury Tax ({luxuryTax.percent}%):</td>
+                      <td className="text-right">{formatCurrency(luxuryTaxAmount)}</td>
+                    </tr>
+                  )}
+                  {totalTax > 0 && (
+                    <>
+                      <tr style={{ height: '4px' }}><td colSpan={2}></td></tr>
+                      <tr className="summary-row" style={{ borderTop: '1px solid #ddd' }}>
+                        <td><strong>Total Taxes:</strong></td>
+                        <td className="text-right"><strong>{formatCurrency(totalTax)}</strong></td>
+                      </tr>
+                    </>
+                  )}
+                  <tr style={{ height: '8px' }}><td colSpan={2}></td></tr>
+                  <tr className="total-row" style={{ fontSize: '12px' }}>
+                    <td><strong>GRAND TOTAL:</strong></td>
+                    <td className="text-right"><strong>{formatCurrency(total)}</strong></td>
                   </tr>
                   {parseFloat(booking.advancePaid || "0") > 0 && (
                     <>
