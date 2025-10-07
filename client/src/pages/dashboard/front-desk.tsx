@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +32,8 @@ import {
   Calendar as CalendarIcon,
   Wrench,
   Search,
-  Utensils
+  Utensils,
+  Building2
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +46,7 @@ export default function FrontDeskDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
   const [isCheckOutModalOpen, setIsCheckOutModalOpen] = useState(false);
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
@@ -1074,6 +1077,15 @@ export default function FrontDeskDashboard() {
               >
                 <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
                 <span className="text-xs sm:text-sm">Cash Deposit</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
+                onClick={() => setLocation('/hall-bookings')}
+                data-testid="button-hall-bookings"
+              >
+                <Building2 className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
+                <span className="text-xs sm:text-sm">Hall Bookings</span>
               </Button>
               <Button 
                 variant="outline" 

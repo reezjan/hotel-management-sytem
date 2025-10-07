@@ -5,7 +5,7 @@ import { StatsCard } from "@/components/dashboard/stats-card";
 import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, CreditCard, Tag, DoorOpen, Receipt, TrendingUp, BarChart3 } from "lucide-react";
+import { Users, CreditCard, Tag, DoorOpen, Receipt, TrendingUp, BarChart3, Building2 } from "lucide-react";
 
 export default function ManagerDashboard() {
   const [, setLocation] = useLocation();
@@ -149,6 +149,10 @@ export default function ManagerDashboard() {
               <Button variant="outline" className="h-20 flex flex-col" data-testid="button-amenities" onClick={() => setLocation("/manager/amenities")}>
                 <Receipt className="h-6 w-6 mb-2" />
                 <span className="text-sm">Amenities</span>
+              </Button>
+              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-hall-bookings" onClick={() => setLocation("/hall-bookings")}>
+                <Building2 className="h-6 w-6 mb-2" />
+                <span className="text-sm">Hall Bookings</span>
               </Button>
               <Button variant="outline" className="h-20 flex flex-col" data-testid="button-transactions" onClick={() => setLocation("/manager/transactions")}>
                 <BarChart3 className="h-6 w-6 mb-2" />

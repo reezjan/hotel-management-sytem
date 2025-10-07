@@ -55,7 +55,7 @@ export default function HallBookings() {
   const [cancelReason, setCancelReason] = useState("");
 
   const { data: halls = [] } = useQuery<Hall[]>({
-    queryKey: ["/api/hotels", user?.hotelId, "halls"],
+    queryKey: ["/api/halls"],
     enabled: !!user?.hotelId
   });
 

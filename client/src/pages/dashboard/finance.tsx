@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { DataTable } from "@/components/tables/data-table";
@@ -12,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
-import { DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Smartphone, Building, CheckCircle, XCircle, Landmark } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Smartphone, Building, CheckCircle, XCircle, Landmark, Building2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +24,7 @@ export default function FinanceDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const [isBankDepositModalOpen, setIsBankDepositModalOpen] = useState(false);
   const [isVendorPaymentModalOpen, setIsVendorPaymentModalOpen] = useState(false);
@@ -574,6 +576,15 @@ export default function FinanceDashboard() {
                 <CreditCard className="h-6 w-6 mb-2" />
                 <span className="text-sm">Vendor Payment</span>
               </Button>
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                onClick={() => setLocation("/hall-bookings")}
+                data-testid="button-hall-bookings"
+              >
+                <Building2 className="h-6 w-6 mb-2" />
+                <span className="text-sm">Hall Bookings</span>
+              </Button>
               <Button variant="outline" className="h-20 flex flex-col" data-testid="button-expense-report">
                 <Receipt className="h-6 w-6 mb-2" />
                 <span className="text-sm">Expense Report</span>
@@ -581,10 +592,6 @@ export default function FinanceDashboard() {
               <Button variant="outline" className="h-20 flex flex-col" data-testid="button-financial-report">
                 <TrendingUp className="h-6 w-6 mb-2" />
                 <span className="text-sm">Financial Report</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-budget-planning">
-                <DollarSign className="h-6 w-6 mb-2" />
-                <span className="text-sm">Budget Planning</span>
               </Button>
             </div>
           </CardContent>

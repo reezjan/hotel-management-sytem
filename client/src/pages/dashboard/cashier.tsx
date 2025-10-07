@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
-import { Receipt, ShoppingCart, Plus, Minus, CreditCard, DollarSign, Smartphone, Printer, Wrench, Banknote, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { Receipt, ShoppingCart, Plus, Minus, CreditCard, DollarSign, Smartphone, Printer, Wrench, Banknote, AlertCircle, CheckCircle2, Clock, Building2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -22,6 +23,7 @@ export default function CashierDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   
   const [currentOrder, setCurrentOrder] = useState<any[]>([]);
   const [isBillingModalOpen, setIsBillingModalOpen] = useState(false);
@@ -618,6 +620,15 @@ export default function CashierDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start h-16"
+                  onClick={() => setLocation('/hall-bookings')}
+                  data-testid="button-hall-bookings"
+                >
+                  <Building2 className="h-5 w-5 mr-3" />
+                  View Hall Bookings
+                </Button>
                 <Button 
                   variant="outline" 
                   className="w-full justify-start h-16"
