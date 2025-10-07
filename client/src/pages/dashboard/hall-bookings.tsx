@@ -309,6 +309,18 @@ export default function HallBookings() {
     );
   };
 
+  const formatPaymentMethod = (method: string | null | undefined) => {
+    if (!method) return "N/A";
+    const methodMap: Record<string, string> = {
+      cash: "Cash",
+      cheque: "Cheque",
+      pos: "POS/Card",
+      fonepay: "Fonepay",
+      bank_transfer: "Bank Transfer"
+    };
+    return methodMap[method] || method;
+  };
+
   const pendingBookings = bookings.filter(b => b.status === "pending");
   const confirmedBookings = bookings.filter(b => b.status === "confirmed");
   const cancelledBookings = bookings.filter(b => b.status === "cancelled");
@@ -507,7 +519,7 @@ export default function HallBookings() {
                         <div>
                           <p className="text-muted-foreground">Payment Method</p>
                           <p className="font-medium" data-testid={`text-payment-method-${booking.id}`}>
-                            {booking.paymentMethod || "N/A"}
+                            {formatPaymentMethod(booking.paymentMethod)}
                           </p>
                         </div>
                       </div>
