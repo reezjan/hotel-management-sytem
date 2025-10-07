@@ -3674,6 +3674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.customServices !== undefined) updateData.customServices = req.body.customServices;
       if (req.body.totalAmount !== undefined) updateData.totalAmount = req.body.totalAmount;
       if (req.body.balanceDue !== undefined) updateData.balanceDue = req.body.balanceDue;
+      if (req.body.paymentMethod !== undefined) updateData.paymentMethod = req.body.paymentMethod;
       if (req.body.status !== undefined) updateData.status = req.body.status;
       if (req.body.status === 'completed') updateData.finalizedBy = user.id;
       if (req.body.status === 'completed') updateData.finalizedAt = new Date();
