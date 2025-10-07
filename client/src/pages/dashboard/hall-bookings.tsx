@@ -26,7 +26,8 @@ import {
   Building2,
   Edit,
   Trash2,
-  Eye
+  Eye,
+  FileText
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +40,7 @@ import type { SelectHallBooking, Hall } from "@shared/schema";
 import { z } from "zod";
 import { BookingWizard } from "@/components/modals/booking-wizard";
 import { FinalBillingModal } from "@/components/modals/final-billing-modal";
+import { HallQuotation } from "@/components/print/hall-quotation";
 
 const bookingFormSchema = insertHallBookingSchema.omit({ 
   hotelId: true, 
@@ -58,6 +60,8 @@ export default function HallBookings() {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [isFinalBillingOpen, setIsFinalBillingOpen] = useState(false);
+  const [isPrintQuotationOpen, setIsPrintQuotationOpen] = useState(false);
+  const [quotationBooking, setQuotationBooking] = useState<SelectHallBooking | null>(null);
 
   const { data: halls = [] } = useQuery<Hall[]>({
     queryKey: ["/api/halls"],
@@ -321,8 +325,8 @@ export default function HallBookings() {
     return methodMap[method] || method;
   };
 
-  const pendingBookings = bookings.filter(b => b.status === "pending");
-  const confirmedBookings = bookings.filter(b => b.status === "confirmed");
+  const pendingBookings = bookings.filter(b => b.status === "pending" || b.status === "quotation");
+  const confirmedBookings = bookings.filter(b => b.status === "confirmed" || b.status === "deposit_pending" || b.status === "in_progress" || b.status === "completed");
   const cancelledBookings = bookings.filter(b => b.status === "cancelled");
 
   // Role-based permissions
@@ -414,6 +418,18 @@ export default function HallBookings() {
                           </div>
                         </div>
                         <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              setQuotationBooking(booking);
+                              setIsPrintQuotationOpen(true);
+                            }}
+                            data-testid={`button-print-quotation-${booking.id}`}
+                          >
+                            <FileText className="w-4 h-4 mr-1" />
+                            Quotation
+                          </Button>
                           <Link href={`/dashboard/bookings/${booking.id}`}>
                             <Button 
                               size="sm" 
@@ -561,6 +577,14 @@ export default function HallBookings() {
             queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "hall-bookings"] });
           }}
         />
+
+        {quotationBooking && (
+          <HallQuotation
+            booking={quotationBooking}
+            open={isPrintQuotationOpen}
+            onOpenChange={setIsPrintQuotationOpen}
+          />
+        )}
 
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
