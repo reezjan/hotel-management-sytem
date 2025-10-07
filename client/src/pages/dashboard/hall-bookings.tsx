@@ -38,6 +38,7 @@ import { insertHallBookingSchema } from "@shared/schema";
 import type { SelectHallBooking, Hall } from "@shared/schema";
 import { z } from "zod";
 import { BookingWizard } from "@/components/modals/booking-wizard";
+import { FinalBillingModal } from "@/components/modals/final-billing-modal";
 
 const bookingFormSchema = insertHallBookingSchema.omit({ 
   hotelId: true, 
@@ -56,6 +57,7 @@ export default function HallBookings() {
   const [selectedBooking, setSelectedBooking] = useState<SelectHallBooking | null>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [isFinalBillingOpen, setIsFinalBillingOpen] = useState(false);
 
   const { data: halls = [] } = useQuery<Hall[]>({
     queryKey: ["/api/halls"],
@@ -410,6 +412,20 @@ export default function HallBookings() {
                               View
                             </Button>
                           </Link>
+                          {(booking.status === "quotation" || booking.status === "confirmed") && canManage && (
+                            <Button 
+                              size="sm" 
+                              variant="default"
+                              onClick={() => {
+                                setSelectedBooking(booking);
+                                setIsFinalBillingOpen(true);
+                              }}
+                              data-testid={`button-finalize-${booking.id}`}
+                            >
+                              <DollarSign className="w-4 h-4 mr-1" />
+                              Finalize Billing
+                            </Button>
+                          )}
                           {booking.status === "pending" && canManage && (
                             <>
                               <Button 
@@ -520,6 +536,15 @@ export default function HallBookings() {
         <BookingWizard
           open={isWizardOpen}
           onOpenChange={setIsWizardOpen}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "hall-bookings"] });
+          }}
+        />
+
+        <FinalBillingModal
+          open={isFinalBillingOpen}
+          onOpenChange={setIsFinalBillingOpen}
+          booking={selectedBooking}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "hall-bookings"] });
           }}
