@@ -256,6 +256,17 @@ export default function FinanceDashboard() {
   const vendorPayments = transactions.filter(t => t.txnType === 'vendor_payment');
   const totalVendorPayments = vendorPayments.reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
+  // Bank balance tracking: POS + Fonepay revenue goes to bank
+  // When cash is deposited to bank, it's deducted from cash and added to bank
+  const bankDeposits = transactions.filter(t => t.txnType === 'bank_deposit');
+  const totalBankDeposits = bankDeposits.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  
+  // Bank Balance = POS Revenue + Fonepay Revenue + Cash Deposits to Bank
+  const bankBalance = posRevenue + fonepayRevenue + totalBankDeposits;
+  
+  // Cash Balance = Cash Revenue - Cash Deposits to Bank
+  const cashBalance = cashRevenue - totalBankDeposits;
+
   const maintenanceColumns = [
     { key: "description", label: "Request", sortable: true },
     { key: "department", label: "Department", sortable: true },
@@ -446,6 +457,69 @@ export default function FinanceDashboard() {
           />
         </div>
 
+        {/* Bank Balance Tracking */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Bank Balance & Cash Flow</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Bank balance includes POS + Fonepay revenue. Cash deposits to bank are deducted from cash.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Bank Balance */}
+              <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950 dark:to-indigo-950 rounded-lg border-2 border-blue-200 dark:border-blue-800" data-testid="balance-bank">
+                <div className="flex items-center justify-between mb-4">
+                  <Landmark className="h-12 w-12 text-blue-600 dark:text-blue-400" />
+                  <div className="text-right">
+                    <p className="text-sm text-muted-foreground">Bank Balance</p>
+                    <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(bankBalance)}</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pt-4 border-t border-blue-200 dark:border-blue-800">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">POS Revenue:</span>
+                    <span className="font-medium">{formatCurrency(posRevenue)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Fonepay Revenue:</span>
+                    <span className="font-medium">{formatCurrency(fonepayRevenue)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Cash Deposits:</span>
+                    <span className="font-medium">{formatCurrency(totalBankDeposits)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cash Balance */}
+              <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950 dark:to-emerald-950 rounded-lg border-2 border-green-200 dark:border-green-800" data-testid="balance-cash">
+                <div className="flex items-center justify-between mb-4">
+                  <Receipt className="h-12 w-12 text-green-600 dark:text-green-400" />
+                  <div className="text-right">
+                    <p className="text-sm text-muted-foreground">Cash on Hand</p>
+                    <p className="text-3xl font-bold text-green-600 dark:text-green-400">{formatCurrency(cashBalance)}</p>
+                  </div>
+                </div>
+                <div className="space-y-2 pt-4 border-t border-green-200 dark:border-green-800">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Cash Revenue:</span>
+                    <span className="font-medium">{formatCurrency(cashRevenue)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Deposited to Bank:</span>
+                    <span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(totalBankDeposits)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Deposits Count:</span>
+                    <span className="font-medium">{bankDeposits.length}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Payment Method Breakdown */}
         <Card>
           <CardHeader>
@@ -453,22 +527,22 @@ export default function FinanceDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center p-6 bg-green-50 rounded-lg" data-testid="revenue-cash">
-                <Receipt className="h-12 w-12 mx-auto mb-4 text-green-600" />
+              <div className="text-center p-6 bg-green-50 dark:bg-green-950 rounded-lg" data-testid="revenue-cash">
+                <Receipt className="h-12 w-12 mx-auto mb-4 text-green-600 dark:text-green-400" />
                 <h3 className="text-lg font-semibold text-foreground">Cash Revenue</h3>
-                <p className="text-2xl font-bold text-green-600">{formatCurrency(cashRevenue)}</p>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(cashRevenue)}</p>
                 <p className="text-sm text-muted-foreground">{allCashTransactions.length} total transactions</p>
               </div>
-              <div className="text-center p-6 bg-blue-50 rounded-lg" data-testid="revenue-pos">
-                <CreditCard className="h-12 w-12 mx-auto mb-4 text-blue-600" />
+              <div className="text-center p-6 bg-blue-50 dark:bg-blue-950 rounded-lg" data-testid="revenue-pos">
+                <CreditCard className="h-12 w-12 mx-auto mb-4 text-blue-600 dark:text-blue-400" />
                 <h3 className="text-lg font-semibold text-foreground">POS Revenue</h3>
-                <p className="text-2xl font-bold text-blue-600">{formatCurrency(posRevenue)}</p>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(posRevenue)}</p>
                 <p className="text-sm text-muted-foreground">{allPosTransactions.length} total transactions</p>
               </div>
-              <div className="text-center p-6 bg-purple-50 rounded-lg" data-testid="revenue-fonepay">
-                <Smartphone className="h-12 w-12 mx-auto mb-4 text-purple-600" />
+              <div className="text-center p-6 bg-purple-50 dark:bg-purple-950 rounded-lg" data-testid="revenue-fonepay">
+                <Smartphone className="h-12 w-12 mx-auto mb-4 text-purple-600 dark:text-purple-400" />
                 <h3 className="text-lg font-semibold text-foreground">Fonepay Revenue</h3>
-                <p className="text-2xl font-bold text-purple-600">{formatCurrency(fonepayRevenue)}</p>
+                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{formatCurrency(fonepayRevenue)}</p>
                 <p className="text-sm text-muted-foreground">{allFonepayTransactions.length} total transactions</p>
               </div>
             </div>
@@ -491,7 +565,12 @@ export default function FinanceDashboard() {
                 <Landmark className="h-6 w-6 mb-2" />
                 <span className="text-sm">Deposit to Bank</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-vendor-payment">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                onClick={() => setIsVendorPaymentModalOpen(true)}
+                data-testid="button-vendor-payment"
+              >
                 <CreditCard className="h-6 w-6 mb-2" />
                 <span className="text-sm">Vendor Payment</span>
               </Button>

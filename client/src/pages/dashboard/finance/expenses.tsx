@@ -36,6 +36,8 @@ export default function FinanceExpensesPage() {
       vendorName: "",
       amount: "",
       paymentMethod: "cash",
+      chequeNumber: "",
+      bankName: "",
       reference: ""
     }
   });
@@ -51,13 +53,40 @@ export default function FinanceExpensesPage() {
 
   const createVendorPaymentMutation = useMutation({
     mutationFn: async (data: any) => {
+      // Validate amount
+      const amount = parseFloat(data.amount);
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error("Please enter a valid amount");
+      }
+
+      // Validate cheque details if payment method is cheque
+      if (data.paymentMethod === "cheque") {
+        if (!data.chequeNumber || data.chequeNumber.trim() === "") {
+          throw new Error("Cheque number is required");
+        }
+        if (!data.bankName || data.bankName.trim() === "") {
+          throw new Error("Bank name is required for cheque payment");
+        }
+      }
+
+      const details: any = {
+        vendorName: data.vendorName,
+        notes: data.reference || ""
+      };
+
+      if (data.paymentMethod === "cheque") {
+        details.chequeNumber = data.chequeNumber.trim();
+        details.bankName = data.bankName.trim();
+      }
+
       await apiRequest("POST", "/api/transactions", {
         hotelId: user?.hotelId,
         txnType: "vendor_payment",
-        amount: parseFloat(data.amount),
+        amount: amount.toFixed(2),
         paymentMethod: data.paymentMethod,
         purpose: `Vendor Payment - ${data.vendorName}`,
         reference: data.reference,
+        details,
         createdBy: user?.id
       });
     },
@@ -66,15 +95,27 @@ export default function FinanceExpensesPage() {
       toast({ title: "Vendor payment recorded successfully" });
       vendorPaymentForm.reset();
       setIsVendorPaymentModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to process vendor payment", 
+        variant: "destructive" 
+      });
     }
   });
 
   const createExpenseMutation = useMutation({
     mutationFn: async (data: any) => {
+      const amount = parseFloat(data.amount);
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error("Please enter a valid amount");
+      }
+
       await apiRequest("POST", "/api/transactions", {
         hotelId: user?.hotelId,
         txnType: "cash_out",
-        amount: parseFloat(data.amount),
+        amount: amount.toFixed(2),
         paymentMethod: data.paymentMethod,
         purpose: `${data.category} - ${data.description}`,
         reference: data.category,
@@ -86,6 +127,13 @@ export default function FinanceExpensesPage() {
       toast({ title: "Expense recorded successfully" });
       expenseForm.reset();
       setIsExpenseModalOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to record expense", 
+        variant: "destructive" 
+      });
     }
   });
 
@@ -286,6 +334,7 @@ export default function FinanceExpensesPage() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="cheque">Cheque</SelectItem>
                           <SelectItem value="pos">POS</SelectItem>
                           <SelectItem value="fonepay">Fonepay</SelectItem>
                         </SelectContent>
@@ -293,6 +342,36 @@ export default function FinanceExpensesPage() {
                     </FormItem>
                   )}
                 />
+
+                {vendorPaymentForm.watch("paymentMethod") === "cheque" && (
+                  <>
+                    <FormField
+                      control={vendorPaymentForm.control}
+                      name="chequeNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cheque Number *</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Enter cheque number" data-testid="input-cheque-number" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={vendorPaymentForm.control}
+                      name="bankName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Bank Name *</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Which bank cheque issued from" data-testid="input-cheque-bank" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </>
+                )}
 
                 <FormField
                   control={vendorPaymentForm.control}
