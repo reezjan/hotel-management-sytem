@@ -5,27 +5,45 @@ This project is a comprehensive hotel management system designed to streamline h
 
 ## Recent Changes (October 7, 2025)
 
-### Hall Bookings - Dynamic Pricing with Manual Override
-Implemented dynamic pricing functionality for hall bookings with manual override capability:
+### Restaurant Billing System - Comprehensive Cashier Functionality
+Implemented a complete restaurant billing system with advanced features for cashier operations:
 
-**Frontend Enhancements:**
-- Added `numberOfPeople` and `hallBasePrice` fields to booking forms (both create and edit)
-- Implemented auto-population of hall base price when a hall is selected
-- Added dynamic balance calculation that updates automatically when total or advance payment changes
-- Balance due field is read-only and auto-calculated in both forms
-- Front desk can manually override the total amount for custom pricing scenarios
+**Database Schema:**
+- Added `restaurantBills` table to store all bill information (bill number, tables, orders, amounts, taxes, discounts, tips, split details)
+- Added `billPayments` table to track multiple payments per bill with transaction references
+- Proper relationships with cascade delete on bill payments
+- Support for bill amendments with audit trail (amendedBy, amendedAt, amendmentNote)
 
-**Schema Updates:**
-- `hallBookings` table already includes `numberOfPeople` (integer) and `hallBasePrice` (numeric) columns
-- Updated Zod insert schema to properly validate and transform these fields
-- All fields properly persist to PostgreSQL database
+**Backend Implementation:**
+- Bill API routes: GET and POST `/api/hotels/current/bills`, PUT for amendments, GET by ID
+- Atomic bill creation: Creates bill, payments, and financial transactions in one operation
+- Automatic bill number generation (BILL-XXXXXXXX format)
+- Updates KOT order status to 'served' when bill is finalized
+- Date filtering and status filtering for bill history
+
+**Frontend Features:**
+1. **Multi-Table Selection**: Checkbox-based selection of multiple tables for combined billing
+2. **Order Display**: Shows all approved/ready items from selected tables grouped by table
+3. **Cascading Tax Calculation**: VAT → Service Tax → Luxury Tax applied in sequence
+4. **Voucher/Discount**: Apply promotional codes with validation
+5. **Tip/Gratuity**: Support for percentage or flat amount tips
+6. **Split Bill Options**:
+   - Equal split by number of people
+   - Custom split with named amounts
+7. **Multiple Payment Methods**: Add multiple partial payments (Cash, Card/POS, Fonepay) with references
+8. **Payment Tracking**: Real-time calculation of total paid and remaining balance
+9. **Bill Amendment**: Manager/Owner can amend bills with mandatory notes for audit trail
+10. **Bill History**: Tabbed interface with date filtering and status filtering
+11. **Professional Receipt Printing**: Formatted bill with all details, breakdown, and payment information
 
 **User Flow:**
-1. Front desk selects a hall → base price auto-populates
-2. Enters number of people → can be used for pricing calculations
-3. Total amount is editable by front desk (manual override capability)
-4. Advance payment entry → balance due automatically recalculates
-5. Balance due is always read-only and auto-calculated (total - advance)
+1. Cashier selects one or more tables with active orders
+2. Reviews order items and calculates bill with taxes
+3. Optionally applies voucher, adds tip, or sets split mode
+4. Adds one or more payments until bill is fully paid
+5. Processes bill → Creates bill record, payment records, and financial transactions
+6. Can preview/print bill at any time
+7. Manager can amend bills later with notes for corrections
 
 ## User Preferences
 I prefer detailed explanations and an iterative development approach. Please ask before making major changes. Do not make changes to the `shared/` folder unless absolutely necessary and with prior approval. Do not modify the core authentication logic in `server/auth.ts` without explicit instruction.

@@ -33,6 +33,8 @@ import {
   stockRequests,
   hallBookings,
   bookingPayments,
+  restaurantBills,
+  billPayments,
   type User,
   type UserWithRole,
   type InsertUser,
@@ -85,7 +87,11 @@ import {
   type StockRequest,
   type InsertStockRequest,
   type SelectHallBooking,
-  type InsertHallBooking
+  type InsertHallBooking,
+  type SelectRestaurantBill,
+  type InsertRestaurantBill,
+  type SelectBillPayment,
+  type InsertBillPayment
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, desc, asc, sql } from "drizzle-orm";
@@ -287,6 +293,14 @@ export interface IStorage {
   cancelHallBooking(id: string, cancelledBy: string, reason: string): Promise<SelectHallBooking>;
   checkHallAvailability(hallId: string, startTime: Date, endTime: Date, excludeBookingId?: string): Promise<boolean>;
   createBookingPayment(payment: any): Promise<any>;
+  
+  // Restaurant bill operations
+  getRestaurantBillsByHotel(hotelId: string, filters?: { startDate?: Date; endDate?: Date; status?: string }): Promise<any[]>;
+  getRestaurantBill(id: string): Promise<any | undefined>;
+  createRestaurantBill(bill: any): Promise<any>;
+  updateRestaurantBill(id: string, bill: Partial<any>): Promise<any>;
+  getBillPayments(billId: string): Promise<any[]>;
+  createBillPayment(payment: any): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2041,6 +2055,67 @@ export class DatabaseStorage implements IStorage {
   async createBookingPayment(paymentData: any): Promise<any> {
     const [payment] = await db
       .insert(bookingPayments)
+      .values(paymentData)
+      .returning();
+    return payment;
+  }
+
+  async getRestaurantBillsByHotel(hotelId: string, filters?: { startDate?: Date; endDate?: Date; status?: string }): Promise<any[]> {
+    const conditions = [eq(restaurantBills.hotelId, hotelId)];
+    
+    if (filters?.startDate) {
+      conditions.push(sql`${restaurantBills.createdAt} >= ${filters.startDate.toISOString()}`);
+    }
+    if (filters?.endDate) {
+      conditions.push(sql`${restaurantBills.createdAt} <= ${filters.endDate.toISOString()}`);
+    }
+    if (filters?.status) {
+      conditions.push(eq(restaurantBills.status, filters.status));
+    }
+    
+    return await db
+      .select()
+      .from(restaurantBills)
+      .where(and(...conditions))
+      .orderBy(desc(restaurantBills.createdAt));
+  }
+
+  async getRestaurantBill(id: string): Promise<any | undefined> {
+    const [bill] = await db
+      .select()
+      .from(restaurantBills)
+      .where(eq(restaurantBills.id, id));
+    return bill || undefined;
+  }
+
+  async createRestaurantBill(billData: any): Promise<any> {
+    const [bill] = await db
+      .insert(restaurantBills)
+      .values(billData)
+      .returning();
+    return bill;
+  }
+
+  async updateRestaurantBill(id: string, billData: Partial<any>): Promise<any> {
+    const [bill] = await db
+      .update(restaurantBills)
+      .set(billData)
+      .where(eq(restaurantBills.id, id))
+      .returning();
+    return bill;
+  }
+
+  async getBillPayments(billId: string): Promise<any[]> {
+    return await db
+      .select()
+      .from(billPayments)
+      .where(eq(billPayments.billId, billId))
+      .orderBy(asc(billPayments.createdAt));
+  }
+
+  async createBillPayment(paymentData: any): Promise<any> {
+    const [payment] = await db
+      .insert(billPayments)
       .values(paymentData)
       .returning();
     return payment;

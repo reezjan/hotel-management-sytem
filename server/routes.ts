@@ -2322,6 +2322,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Restaurant Bill routes
+  app.get("/api/hotels/current/bills", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const { startDate, endDate, status } = req.query;
+      const filters: any = {};
+      
+      if (startDate) {
+        filters.startDate = new Date(startDate as string);
+      }
+      if (endDate) {
+        filters.endDate = new Date(endDate as string);
+      }
+      if (status) {
+        filters.status = status as string;
+      }
+
+      const bills = await storage.getRestaurantBillsByHotel(user.hotelId, filters);
+      res.json(bills);
+    } catch (error) {
+      console.error("Bill fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch bills" });
+    }
+  });
+
+  app.get("/api/hotels/current/bills/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      
+      const bill = await storage.getRestaurantBill(id);
+      if (!bill) {
+        return res.status(404).json({ message: "Bill not found" });
+      }
+      
+      if (bill.hotelId !== user.hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const payments = await storage.getBillPayments(id);
+      res.json({ ...bill, payments });
+    } catch (error) {
+      console.error("Bill fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch bill" });
+    }
+  });
+
+  app.post("/api/hotels/current/bills", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const { payments, ...billData } = req.body;
+
+      // Generate bill number
+      const timestamp = Date.now();
+      const billNumber = `BILL-${timestamp.toString().slice(-8)}`;
+
+      // Create bill with server-side fields
+      const bill = await storage.createRestaurantBill({
+        ...billData,
+        billNumber,
+        hotelId: user.hotelId,
+        createdBy: user.id,
+        finalizedAt: billData.status === 'final' ? new Date() : null
+      });
+
+      // Create payments and transactions
+      const createdPayments = [];
+      for (const payment of payments) {
+        // Create transaction for this payment
+        const transaction = await storage.createTransaction({
+          hotelId: user.hotelId,
+          txnType: payment.paymentMethod === 'cash' ? 'cash_in' : 
+                   payment.paymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
+          amount: payment.amount,
+          paymentMethod: payment.paymentMethod,
+          purpose: 'restaurant_sale',
+          reference: `Bill: ${billNumber}`,
+          createdBy: user.id
+        });
+
+        // Create bill payment
+        const billPayment = await storage.createBillPayment({
+          billId: bill.id,
+          hotelId: user.hotelId,
+          amount: payment.amount,
+          paymentMethod: payment.paymentMethod,
+          transactionId: transaction.id,
+          reference: payment.reference,
+          receivedBy: user.id
+        });
+
+        createdPayments.push(billPayment);
+      }
+
+      // Update order statuses to served if bill is finalized
+      if (billData.status === 'final' && billData.orderIds) {
+        for (const orderId of billData.orderIds) {
+          await storage.updateKotOrder(orderId, { status: 'served' });
+        }
+      }
+
+      res.status(201).json({ ...bill, payments: createdPayments });
+    } catch (error) {
+      console.error("Bill creation error:", error);
+      res.status(400).json({ message: "Failed to create bill", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  app.put("/api/hotels/current/bills/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const { id } = req.params;
+      
+      const existingBill = await storage.getRestaurantBill(id);
+      if (!existingBill) {
+        return res.status(404).json({ message: "Bill not found" });
+      }
+      
+      if (existingBill.hotelId !== user.hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const updateData: any = {
+        ...req.body,
+        amendedBy: user.id,
+        amendedAt: new Date()
+      };
+
+      const updatedBill = await storage.updateRestaurantBill(id, updateData);
+      res.json(updatedBill);
+    } catch (error) {
+      console.error("Bill update error:", error);
+      res.status(400).json({ message: "Failed to update bill" });
+    }
+  });
+
   // Wastage routes
   app.post("/api/hotels/current/wastages", async (req, res) => {
     try {

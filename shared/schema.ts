@@ -556,6 +556,53 @@ export const bookingPayments = pgTable("booking_payments", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
+// Restaurant Bills Table
+export const restaurantBills = pgTable("restaurant_bills", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  billNumber: text("bill_number").notNull(),
+  tableIds: text("table_ids").array().notNull(),
+  orderIds: text("order_ids").array().notNull(),
+  subtotal: numeric("subtotal", { precision: 14, scale: 2 }).notNull(),
+  taxBreakdown: jsonb("tax_breakdown").default('{}'),
+  totalTax: numeric("total_tax", { precision: 14, scale: 2 }).default('0'),
+  discount: numeric("discount", { precision: 14, scale: 2 }).default('0'),
+  voucherId: uuid("voucher_id").references(() => vouchers.id),
+  voucherCode: text("voucher_code"),
+  tipType: text("tip_type"),
+  tipValue: numeric("tip_value", { precision: 12, scale: 2 }).default('0'),
+  tipAmount: numeric("tip_amount", { precision: 12, scale: 2 }).default('0'),
+  serviceCharge: numeric("service_charge", { precision: 12, scale: 2 }).default('0'),
+  grandTotal: numeric("grand_total", { precision: 14, scale: 2 }).notNull(),
+  splitMode: text("split_mode"),
+  splitDetails: jsonb("split_details"),
+  items: jsonb("items").default('[]'),
+  status: text("status").default('draft').notNull(),
+  amendmentNote: text("amendment_note"),
+  originalBillId: uuid("original_bill_id"),
+  createdBy: uuid("created_by").references(() => users.id),
+  amendedBy: uuid("amended_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  amendedAt: timestamp("amended_at", { withTimezone: true }),
+  finalizedAt: timestamp("finalized_at", { withTimezone: true })
+});
+
+// Bill Payments Table
+export const billPayments = pgTable("bill_payments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  billId: uuid("bill_id").references(() => restaurantBills.id, { onDelete: "cascade" }),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  transactionId: uuid("transaction_id").references(() => transactions.id),
+  reference: text("reference"),
+  receivedBy: uuid("received_by").references(() => users.id),
+  isVoided: boolean("is_voided").default(false),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: uuid("voided_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
 // Relations
 export const hotelRelations = relations(hotels, ({ many }) => ({
   users: many(users),
@@ -582,7 +629,9 @@ export const hotelRelations = relations(hotels, ({ many }) => ({
   stockRequests: many(stockRequests),
   hallBookings: many(hallBookings),
   servicePackages: many(servicePackages),
-  bookingPayments: many(bookingPayments)
+  bookingPayments: many(bookingPayments),
+  restaurantBills: many(restaurantBills),
+  billPayments: many(billPayments)
 }));
 
 export const userRelations = relations(users, ({ one, many }) => ({
@@ -714,6 +763,33 @@ export const bookingPaymentRelations = relations(bookingPayments, ({ one }) => (
   }),
   recordedBy: one(users, {
     fields: [bookingPayments.recordedBy],
+    references: [users.id]
+  })
+}));
+
+export const restaurantBillRelations = relations(restaurantBills, ({ one, many }) => ({
+  hotel: one(hotels, {
+    fields: [restaurantBills.hotelId],
+    references: [hotels.id]
+  }),
+  createdBy: one(users, {
+    fields: [restaurantBills.createdBy],
+    references: [users.id]
+  }),
+  payments: many(billPayments)
+}));
+
+export const billPaymentRelations = relations(billPayments, ({ one }) => ({
+  bill: one(restaurantBills, {
+    fields: [billPayments.billId],
+    references: [restaurantBills.id]
+  }),
+  hotel: one(hotels, {
+    fields: [billPayments.hotelId],
+    references: [hotels.id]
+  }),
+  receivedBy: one(users, {
+    fields: [billPayments.receivedBy],
     references: [users.id]
   })
 }));
@@ -975,3 +1051,32 @@ export type Guest = typeof guests.$inferSelect;
 export type InsertGuest = z.infer<typeof insertGuestSchema>;
 export type StockRequest = typeof stockRequests.$inferSelect;
 export type InsertStockRequest = z.infer<typeof insertStockRequestSchema>;
+
+export const insertRestaurantBillSchema = createInsertSchema(restaurantBills).omit({
+  id: true,
+  createdAt: true,
+  amendedAt: true,
+  finalizedAt: true
+}).extend({
+  subtotal: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  totalTax: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  discount: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  tipValue: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  tipAmount: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  serviceCharge: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  grandTotal: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
+export type InsertRestaurantBill = z.infer<typeof insertRestaurantBillSchema>;
+export type SelectRestaurantBill = typeof restaurantBills.$inferSelect;
+
+export const insertBillPaymentSchema = createInsertSchema(billPayments).omit({
+  id: true,
+  createdAt: true,
+  voidedAt: true
+}).extend({
+  amount: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
+export type InsertBillPayment = z.infer<typeof insertBillPaymentSchema>;
+export type SelectBillPayment = typeof billPayments.$inferSelect;
