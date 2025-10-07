@@ -156,6 +156,9 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
   const checkAvailability = async (): Promise<boolean> => {
     if (!watchedHallId || !watchedDate || !watchedStartTime || !watchedEndTime) return true;
     
+    // Clear any previous status first
+    setAvailabilityStatus(null);
+    
     try {
       const result = await apiRequest("POST", "/api/halls/check-availability-quick", {
         hallId: watchedHallId,
@@ -164,9 +167,14 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
         endTime: watchedEndTime
       }) as any;
       
-      setAvailabilityStatus(result as { available: boolean; suggestions?: any[] });
+      // Check if available is explicitly true
+      if (result && result.available === true) {
+        return true;
+      }
       
-      if (!result.available) {
+      // If not available, show error and suggestions
+      if (result && result.available === false) {
+        setAvailabilityStatus(result as { available: boolean; suggestions?: any[] });
         toast({
           title: "Hall Not Available",
           description: result.suggestions?.length 
@@ -175,8 +183,7 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
           variant: "destructive"
         });
       }
-      
-      return result.available;
+      return false;
     } catch (error) {
       toast({
         title: "Error checking availability",
@@ -293,18 +300,33 @@ export function BookingWizard({ open, onOpenChange, onSuccess }: BookingWizardPr
     switch (currentStep) {
       case 1:
         isValid = await form.trigger(["hallId", "date", "startTime", "endTime", "duration"]);
-        if (isValid) {
-          const isAvailable = await checkAvailability();
-          if (isAvailable) {
-            setCurrentStep(2);
-          }
+        console.log("Step 1 validation:", isValid, form.formState.errors);
+        if (!isValid) {
+          toast({
+            title: "Validation Error",
+            description: "Please fill in all required fields correctly",
+            variant: "destructive"
+          });
+          return;
+        }
+        const isAvailable = await checkAvailability();
+        console.log("Availability check:", isAvailable);
+        if (isAvailable) {
+          setCurrentStep(2);
         }
         break;
       case 2:
         isValid = await form.trigger(["customerName", "customerPhone", "customerEmail", "numberOfPeople"]);
-        if (isValid) {
-          setCurrentStep(3);
+        console.log("Step 2 validation:", isValid, form.formState.errors);
+        if (!isValid) {
+          toast({
+            title: "Validation Error",
+            description: "Please fill in all customer information",
+            variant: "destructive"
+          });
+          return;
         }
+        setCurrentStep(3);
         break;
       case 3:
         calculateTotal();
