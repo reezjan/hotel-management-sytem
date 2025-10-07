@@ -1,20 +1,26 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Smartphone, Building } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Smartphone, Building, CheckCircle, XCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { Transaction, MaintenanceRequest, Vendor } from "@shared/schema";
 
 export default function FinanceDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery<Transaction[]>({
     queryKey: ["/api/hotels/current/transactions"],
-    enabled: !!user?.hotelId
+    enabled: !!user?.hotelId,
+    refetchInterval: 5000 // Refresh every 5 seconds for real-time updates
   });
 
   const { data: maintenanceRequests = [], isLoading: maintenanceLoading } = useQuery<MaintenanceRequest[]>({
@@ -25,6 +31,54 @@ export default function FinanceDashboard() {
   const { data: vendors = [], isLoading: vendorsLoading } = useQuery<Vendor[]>({
     queryKey: ["/api/hotels/current/vendors"],
     enabled: !!user?.hotelId
+  });
+
+  // Filter cash deposit requests (cash_out transactions with purpose containing "Cash Deposit Request")
+  const cashDepositRequests = transactions.filter(t => 
+    t.txnType === 'cash_out' && 
+    t.purpose?.includes('Cash Deposit Request')
+  );
+
+  const pendingCashDeposits = cashDepositRequests.filter(t => !t.reference?.includes('APPROVED') && !t.reference?.includes('REJECTED'));
+
+  const approveCashDepositMutation = useMutation({
+    mutationFn: async (transactionId: string) => {
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) throw new Error("Transaction not found");
+      
+      const currentDetails = transaction.details as Record<string, any> || {};
+      await apiRequest("PUT", `/api/transactions/${transactionId}`, {
+        reference: `${transaction.reference || ''} - APPROVED by ${user?.username}`,
+        details: { ...currentDetails, approvedBy: user?.username, approvedAt: new Date().toISOString() }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      toast({ title: "Cash deposit request approved successfully" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to approve cash deposit request", variant: "destructive" });
+    }
+  });
+
+  const rejectCashDepositMutation = useMutation({
+    mutationFn: async (transactionId: string) => {
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) throw new Error("Transaction not found");
+      
+      const currentDetails = transaction.details as Record<string, any> || {};
+      await apiRequest("PUT", `/api/transactions/${transactionId}`, {
+        reference: `${transaction.reference || ''} - REJECTED by ${user?.username}`,
+        details: { ...currentDetails, rejectedBy: user?.username, rejectedAt: new Date().toISOString() }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      toast({ title: "Cash deposit request rejected" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to reject cash deposit request", variant: "destructive" });
+    }
   });
 
   // Calculate financial totals - separate revenue (income) from expenses
@@ -54,6 +108,9 @@ export default function FinanceDashboard() {
   const totalRevenue = revenueTransactions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
   const totalExpenses = expenseTransactions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
   const netRevenue = totalRevenue - totalExpenses;
+  
+  // Calculate profit margin
+  const profitMargin = totalRevenue > 0 ? ((netRevenue / totalRevenue) * 100) : 0;
 
   // For display purposes - all transactions by payment method (including expenses)
   const allCashTransactions = transactions.filter(t => t.paymentMethod === 'cash');
@@ -200,26 +257,26 @@ export default function FinanceDashboard() {
             value={formatCurrency(totalRevenue)}
             icon={<DollarSign />}
             iconColor="text-green-500"
-            trend={{ value: 12.5, label: "this month", isPositive: true }}
+            trend={{ value: revenueTransactions.length, label: "transactions", isPositive: true }}
           />
           <StatsCard
             title="Net Revenue"
             value={formatCurrency(netRevenue)}
             icon={<TrendingUp />}
             iconColor="text-blue-500"
-            trend={{ value: 8.3, label: "after expenses", isPositive: true }}
+            trend={{ value: Number(profitMargin.toFixed(1)), label: "profit margin", isPositive: profitMargin > 0 }}
           />
           <StatsCard
             title="Total Expenses"
             value={formatCurrency(totalExpenses)}
             icon={<TrendingDown />}
             iconColor="text-red-500"
-            trend={{ value: 15.2, label: "this month", isPositive: false }}
+            trend={{ value: expenseTransactions.length, label: "transactions", isPositive: false }}
           />
           <StatsCard
-            title="Pending Requests"
-            value={maintenanceRequests.filter(r => r.status === 'open').length}
-            icon={<Building />}
+            title="Pending Cash Deposits"
+            value={pendingCashDeposits.length}
+            icon={<Receipt />}
             iconColor="text-orange-500"
           />
         </div>
@@ -348,6 +405,62 @@ export default function FinanceDashboard() {
           </CardContent>
         </Card>
 
+        {/* Cash Deposit Requests */}
+        {pendingCashDeposits.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Pending Cash Deposit Requests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {pendingCashDeposits.map((request) => (
+                  <div key={request.id} className="flex items-center justify-between p-4 border-2 border-orange-200 rounded-lg bg-orange-50">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Receipt className="h-4 w-4 text-orange-600" />
+                        <h4 className="font-semibold text-foreground">{request.purpose}</h4>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{request.reference}</p>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="outline" className="text-orange-700 border-orange-300">
+                          {formatCurrency(Number(request.amount))}
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {new Date(request.createdAt || '').toLocaleDateString()}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-green-600 border-green-600 hover:bg-green-50"
+                        onClick={() => approveCashDepositMutation.mutate(request.id)}
+                        disabled={approveCashDepositMutation.isPending}
+                        data-testid={`button-approve-${request.id}`}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 border-red-600 hover:bg-red-50"
+                        onClick={() => rejectCashDepositMutation.mutate(request.id)}
+                        disabled={rejectCashDepositMutation.isPending}
+                        data-testid={`button-reject-${request.id}`}
+                      >
+                        <XCircle className="h-4 w-4 mr-1" />
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Cash Flow Analysis */}
         <Card>
           <CardHeader>
@@ -365,7 +478,7 @@ export default function FinanceDashboard() {
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
-                  <p className="text-sm text-green-700">+12.5% this month</p>
+                  <p className="text-sm text-green-700">{revenueTransactions.length} transactions</p>
                 </div>
               </div>
 
@@ -379,7 +492,7 @@ export default function FinanceDashboard() {
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold text-red-600">{formatCurrency(totalExpenses)}</p>
-                  <p className="text-sm text-red-700">+8.2% this month</p>
+                  <p className="text-sm text-red-700">{expenseTransactions.length} transactions</p>
                 </div>
               </div>
 
@@ -393,7 +506,7 @@ export default function FinanceDashboard() {
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold text-blue-600">{formatCurrency(netRevenue)}</p>
-                  <p className="text-sm text-blue-700">+15.8% this month</p>
+                  <p className="text-sm text-blue-700">Profit margin: {totalRevenue > 0 ? ((netRevenue / totalRevenue) * 100).toFixed(1) : 0}%</p>
                 </div>
               </div>
             </div>
