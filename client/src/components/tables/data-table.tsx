@@ -22,6 +22,7 @@ interface DataTableProps {
     label: string;
     action: (row: any) => void;
     variant?: "default" | "destructive" | "outline" | "secondary";
+    show?: (row: any) => boolean;
   }[];
   onAdd?: () => void;
   addButtonLabel?: string;
@@ -241,18 +242,22 @@ export function DataTable({
                     {actions.length > 0 && (
                       <td className="p-3 md:p-4">
                         <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
-                          {actions.map((action, actionIndex) => (
-                            <Button
-                              key={actionIndex}
-                              variant={action.variant || "outline"}
-                              size="sm"
-                              onClick={() => action.action(row)}
-                              data-testid={`table-action-${action.label.toLowerCase().replace(/\s+/g, '-')}-${index}`}
-                              className="text-xs whitespace-nowrap"
-                            >
-                              {action.label}
-                            </Button>
-                          ))}
+                          {actions.map((action, actionIndex) => {
+                            const shouldShow = action.show ? action.show(row) : true;
+                            if (!shouldShow) return null;
+                            return (
+                              <Button
+                                key={actionIndex}
+                                variant={action.variant || "outline"}
+                                size="sm"
+                                onClick={() => action.action(row)}
+                                data-testid={`table-action-${action.label.toLowerCase().replace(/\s+/g, '-')}-${index}`}
+                                className="text-xs whitespace-nowrap"
+                              >
+                                {action.label}
+                              </Button>
+                            );
+                          })}
                         </div>
                       </td>
                     )}
