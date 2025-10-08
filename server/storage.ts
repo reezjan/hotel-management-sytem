@@ -594,6 +594,222 @@ export class DatabaseStorage implements IStorage {
     return reservations;
   }
 
+  async checkRoomAvailability(
+    hotelId: string,
+    roomId: string,
+    checkInDate: Date,
+    checkOutDate: Date,
+    excludeReservationId?: string
+  ): Promise<boolean> {
+    const { and, or, lte, gte, ne } = await import('drizzle-orm');
+    
+    // Check for overlapping reservations
+    const conditions = [
+      eq(roomReservations.hotelId, hotelId),
+      eq(roomReservations.roomId, roomId),
+      or(
+        eq(roomReservations.status, 'pending'),
+        eq(roomReservations.status, 'confirmed'),
+        eq(roomReservations.status, 'checked-in')
+      ),
+      or(
+        // New reservation starts during existing reservation
+        and(
+          lte(roomReservations.checkInDate, checkInDate),
+          gte(roomReservations.checkOutDate, checkInDate)
+        ),
+        // New reservation ends during existing reservation
+        and(
+          lte(roomReservations.checkInDate, checkOutDate),
+          gte(roomReservations.checkOutDate, checkOutDate)
+        ),
+        // New reservation completely encompasses existing reservation
+        and(
+          gte(roomReservations.checkInDate, checkInDate),
+          lte(roomReservations.checkOutDate, checkOutDate)
+        )
+      )
+    ];
+
+    if (excludeReservationId) {
+      conditions.push(ne(roomReservations.id, excludeReservationId));
+    }
+
+    const overlappingReservations = await db
+      .select()
+      .from(roomReservations)
+      .where(and(...conditions));
+
+    return overlappingReservations.length === 0;
+  }
+
+  async getReservationsByDateRange(
+    hotelId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<RoomReservation[]> {
+    const { and, or, lte, gte } = await import('drizzle-orm');
+
+    const reservations = await db
+      .select()
+      .from(roomReservations)
+      .where(
+        and(
+          eq(roomReservations.hotelId, hotelId),
+          or(
+            and(
+              lte(roomReservations.checkInDate, endDate),
+              gte(roomReservations.checkOutDate, startDate)
+            )
+          )
+        )
+      );
+    return reservations;
+  }
+
+  async checkInGuest(reservationId: string): Promise<RoomReservation> {
+    const { and } = await import('drizzle-orm');
+    
+    // Get the reservation
+    const [reservation] = await db
+      .select()
+      .from(roomReservations)
+      .where(eq(roomReservations.id, reservationId));
+
+    if (!reservation) {
+      throw new Error('Reservation not found');
+    }
+
+    if (reservation.status === 'checked-in') {
+      throw new Error('Guest is already checked in');
+    }
+
+    if (reservation.status === 'checked-out') {
+      throw new Error('This reservation is already completed');
+    }
+
+    if (reservation.status === 'cancelled') {
+      throw new Error('This reservation has been cancelled');
+    }
+
+    // Update room status
+    await db
+      .update(rooms)
+      .set({
+        status: 'occupied',
+        isOccupied: true,
+        currentReservationId: reservationId,
+        occupantDetails: {
+          name: reservation.guestName,
+          email: reservation.guestEmail,
+          phone: reservation.guestPhone,
+          checkInDate: reservation.checkInDate,
+          checkOutDate: reservation.checkOutDate,
+          numberOfPersons: reservation.numberOfPersons,
+          reservationId: reservationId
+        },
+        updatedAt: new Date()
+      })
+      .where(eq(rooms.id, reservation.roomId));
+
+    // Update guest if guestId exists
+    if (reservation.guestId) {
+      await db
+        .update(guests)
+        .set({
+          currentReservationId: reservationId,
+          updatedAt: new Date()
+        })
+        .where(eq(guests.id, reservation.guestId));
+    }
+
+    // Update reservation status
+    const [updatedReservation] = await db
+      .update(roomReservations)
+      .set({
+        status: 'checked-in',
+        updatedAt: new Date()
+      })
+      .where(eq(roomReservations.id, reservationId))
+      .returning();
+
+    return updatedReservation;
+  }
+
+  async checkOutGuest(reservationId: string): Promise<RoomReservation> {
+    // Get the reservation
+    const [reservation] = await db
+      .select()
+      .from(roomReservations)
+      .where(eq(roomReservations.id, reservationId));
+
+    if (!reservation) {
+      throw new Error('Reservation not found');
+    }
+
+    if (reservation.status === 'checked-out') {
+      throw new Error('Guest is already checked out');
+    }
+
+    if (reservation.status !== 'checked-in') {
+      throw new Error('Guest must be checked in before checkout');
+    }
+
+    // Get room details for cleaning queue
+    const [room] = await db
+      .select()
+      .from(rooms)
+      .where(eq(rooms.id, reservation.roomId));
+
+    // Update room status
+    await db
+      .update(rooms)
+      .set({
+        status: 'available',
+        isOccupied: false,
+        currentReservationId: null,
+        occupantDetails: null,
+        updatedAt: new Date()
+      })
+      .where(eq(rooms.id, reservation.roomId));
+
+    // Update guest if guestId exists
+    if (reservation.guestId) {
+      await db
+        .update(guests)
+        .set({
+          currentReservationId: null,
+          updatedAt: new Date()
+        })
+        .where(eq(guests.id, reservation.guestId));
+    }
+
+    // Add room to cleaning queue
+    await db
+      .insert(roomCleaningQueue)
+      .values({
+        hotelId: reservation.hotelId,
+        roomId: reservation.roomId,
+        roomNumber: room?.roomNumber || 'Unknown',
+        guestName: reservation.guestName,
+        guestId: reservation.guestId,
+        checkoutAt: new Date(),
+        status: 'pending'
+      });
+
+    // Update reservation status
+    const [updatedReservation] = await db
+      .update(roomReservations)
+      .set({
+        status: 'checked-out',
+        updatedAt: new Date()
+      })
+      .where(eq(roomReservations.id, reservationId))
+      .returning();
+
+    return updatedReservation;
+  }
+
   // Menu operations
   async getMenuItemsByHotel(hotelId: string): Promise<MenuItem[]> {
     const items = await db

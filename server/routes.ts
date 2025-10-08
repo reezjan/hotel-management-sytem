@@ -1975,7 +1975,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/reservations", async (req, res) => {
     try {
       const reservationData = insertRoomReservationSchema.parse(req.body);
+      
+      // Check room availability before creating reservation
+      const isAvailable = await storage.checkRoomAvailability(
+        reservationData.hotelId!,
+        reservationData.roomId,
+        new Date(reservationData.checkInDate),
+        new Date(reservationData.checkOutDate)
+      );
+
+      if (!isAvailable) {
+        return res.status(409).json({ 
+          message: "Room is not available for the selected dates. Please choose different dates or another room." 
+        });
+      }
+
       const reservation = await storage.createRoomReservation(reservationData);
+      
+      // Update room status to reserved
+      await storage.updateRoom(reservationData.roomId, {
+        status: 'reserved',
+        currentReservationId: reservation.id
+      });
+
       res.status(201).json(reservation);
     } catch (error) {
       console.error("Reservation creation error:", error);
@@ -1983,6 +2005,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Failed to create reservation", 
         error: error instanceof Error ? error.message : "Unknown error" 
       });
+    }
+  });
+
+  app.post("/api/reservations/:id/check-in", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const reservation = await storage.checkInGuest(id);
+      res.json(reservation);
+    } catch (error) {
+      console.error("Check-in error:", error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : "Failed to check in guest" 
+      });
+    }
+  });
+
+  app.post("/api/reservations/:id/check-out", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const reservation = await storage.checkOutGuest(id);
+      res.json(reservation);
+    } catch (error) {
+      console.error("Check-out error:", error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : "Failed to check out guest" 
+      });
+    }
+  });
+
+  app.get("/api/rooms/availability", async (req, res) => {
+    try {
+      const { hotelId, roomId, checkIn, checkOut } = req.query;
+      
+      if (!hotelId || !roomId || !checkIn || !checkOut) {
+        return res.status(400).json({ message: "Missing required parameters" });
+      }
+
+      const isAvailable = await storage.checkRoomAvailability(
+        hotelId as string,
+        roomId as string,
+        new Date(checkIn as string),
+        new Date(checkOut as string)
+      );
+
+      res.json({ available: isAvailable });
+    } catch (error) {
+      console.error("Availability check error:", error);
+      res.status(500).json({ message: "Failed to check availability" });
+    }
+  });
+
+  app.get("/api/reservations/date-range", async (req, res) => {
+    try {
+      const { hotelId, startDate, endDate } = req.query;
+      
+      if (!hotelId || !startDate || !endDate) {
+        return res.status(400).json({ message: "Missing required parameters" });
+      }
+
+      const reservations = await storage.getReservationsByDateRange(
+        hotelId as string,
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+
+      res.json(reservations);
+    } catch (error) {
+      console.error("Get reservations error:", error);
+      res.status(500).json({ message: "Failed to get reservations" });
     }
   });
 

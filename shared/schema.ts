@@ -107,6 +107,7 @@ export const guests = pgTable("guests", {
   nationality: text("nationality"),
   dateOfBirth: timestamp("date_of_birth", { withTimezone: true }),
   notes: text("notes"),
+  currentReservationId: uuid("current_reservation_id"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -129,6 +130,8 @@ export const rooms = pgTable("rooms", {
   hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
   roomNumber: text("room_number"),
   roomTypeId: integer("room_type_id").references(() => roomTypes.id),
+  status: text("status").default('available'),
+  currentReservationId: uuid("current_reservation_id"),
   isOccupied: boolean("is_occupied").default(false),
   occupantDetails: jsonb("occupant_details"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -479,6 +482,7 @@ export const mealPlans = pgTable("meal_plans", {
 export const roomReservations = pgTable("room_reservations", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  guestId: uuid("guest_id").references(() => guests.id),
   guestName: text("guest_name").notNull(),
   guestEmail: text("guest_email"),
   guestPhone: text("guest_phone").notNull(),
@@ -491,7 +495,7 @@ export const roomReservations = pgTable("room_reservations", {
   mealPlanPrice: numeric("meal_plan_price", { precision: 12, scale: 2 }),
   totalPrice: numeric("total_price", { precision: 12, scale: 2 }),
   specialRequests: text("special_requests"),
-  status: text("status").default('confirmed'),
+  status: text("status").default('pending'),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
@@ -970,7 +974,8 @@ export const insertGuestSchema = createInsertSchema(guests).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
-  deletedAt: true
+  deletedAt: true,
+  currentReservationId: true
 });
 
 export const insertStockRequestSchema = createInsertSchema(stockRequests).omit({

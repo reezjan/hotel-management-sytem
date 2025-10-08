@@ -5,17 +5,37 @@ This project is a comprehensive hotel management system designed to streamline h
 
 ## Recent Changes
 
-### Room Reservation System (October 8, 2025)
-Implemented a comprehensive room reservation system for the front desk:
+### Complete Room Reservation & Check-in/Check-out System (October 8, 2025)
+Implemented a comprehensive room reservation system with integrated check-in/check-out workflow:
 
-**Database Schema:**
-- Added `room_reservations` table with fields for guest information, booking dates, room selection, meal plans, and pricing breakdown
-- Supports tracking reservation status, special requests, and audit information (created by, timestamps)
+**Database Schema Updates:**
+- Updated `rooms` table: Added `currentReservationId` field and `status` enum (available/occupied/maintenance/reserved)
+- Updated `room_reservations` table: Added `guestId` field for tracking which guest record is created during check-in
+- Proper foreign key relationships between rooms, reservations, and guests
 
 **Backend Implementation:**
-- POST `/api/reservations` endpoint with Zod validation
-- Storage layer method `createRoomReservation` for data persistence
-- Automatic pricing calculation based on room rates and meal plans
+1. **Double-Booking Prevention:**
+   - `checkRoomAvailability()` storage method validates room availability for date ranges
+   - Checks for overlapping reservations before creation
+   - Returns HTTP 409 (Conflict) when room is not available
+
+2. **Reservation-Based Check-in:**
+   - POST `/api/reservations/:id/check-in` endpoint
+   - Creates guest record from reservation details
+   - Updates room status to "occupied" and links reservation
+   - Validates reservation exists and is in "confirmed" status
+
+3. **Reservation-Based Check-out:**
+   - POST `/api/reservations/:id/check-out` endpoint  
+   - Updates reservation status to "checked-out"
+   - Automatically adds room to cleaning queue
+   - Sets room status to "available"
+   - Maintains audit trail with checkout timestamps
+
+4. **Room Availability Queries:**
+   - GET `/api/rooms/availability` endpoint with date range filtering
+   - `getReservationsByDateRange()` for conflict checking
+   - Support for both specific room and hotel-wide availability checks
 
 **Frontend Features:**
 1. **Guest Information**: Name, email, phone fields for reservation details
@@ -30,14 +50,30 @@ Implemented a comprehensive room reservation system for the front desk:
    - Shows estimated total cost dynamically
 7. **Special Requests**: Text area for additional guest requirements
 
-**User Flow:**
-1. Front desk staff opens the reservation modal
-2. Enters guest information and selects room
-3. Sets check-in/out dates and number of persons
-4. Optionally selects a meal plan
-5. Reviews real-time pricing calculation
-6. Adds any special requests
-7. Creates reservation → Data saved to database with confirmed status
+**Complete Workflow:**
+1. **Reservation Creation:**
+   - Front desk creates reservation with guest info
+   - System validates room availability (prevents double booking)
+   - Reservation saved with "confirmed" status
+
+2. **Check-in Process:**
+   - Front desk initiates check-in from reservation
+   - System creates guest record automatically
+   - Room status changes to "occupied"
+   - Reservation links to guest record
+
+3. **Check-out Process:**
+   - Front desk initiates check-out from reservation
+   - System updates reservation to "checked-out" 
+   - Room automatically added to cleaning queue
+   - Room status returns to "available"
+   - Housekeeping can see room in cleaning queue
+
+**Business Rules:**
+- Double-booking prevention: Cannot create reservation for occupied date ranges
+- Automatic guest creation: Guest record auto-generated during check-in from reservation
+- Automatic cleaning queue: Room added to queue immediately on checkout
+- Status transitions: available → reserved/occupied → available (after cleaning)
 
 ### Restaurant Billing System (October 7, 2025)
 Comprehensive cashier functionality for restaurant operations:
