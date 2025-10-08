@@ -2802,6 +2802,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdPayments.push(billPayment);
       }
 
+      // Check if bill is fully paid and lock it
+      if (createdPayments.length > 0) {
+        const totalPaid = createdPayments
+          .filter((p: any) => !p.isVoided)
+          .reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+        
+        const grandTotal = Number(bill.grandTotal);
+        
+        // If fully paid, lock the bill
+        if (totalPaid >= grandTotal) {
+          await storage.updateRestaurantBill(bill.id, {
+            status: 'paid',
+            finalizedAt: new Date()
+          });
+          
+          // Update the bill object to reflect the change
+          bill.status = 'paid';
+          bill.finalizedAt = new Date();
+        }
+      }
+
       // Update order statuses to served if bill is finalized
       if (billData.status === 'final' && billData.orderIds) {
         for (const orderId of billData.orderIds) {
@@ -2828,6 +2849,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (existingBill.hotelId !== user.hotelId) {
         return res.status(403).json({ message: "Access denied" });
+      }
+
+      // CRITICAL: Prevent modifying paid bills
+      if (existingBill.status === 'paid' || existingBill.status === 'finalized') {
+        const isManager = ['manager', 'owner', 'super_admin'].includes(user.role?.name || '');
+        
+        if (!isManager) {
+          return res.status(403).json({ 
+            message: "Cannot modify paid bills. Contact your manager for amendments." 
+          });
+        }
+        
+        // Even managers must provide amendment reason
+        if (!req.body.amendmentNote || req.body.amendmentNote.trim().length < 10) {
+          return res.status(400).json({ 
+            message: "Amendments to paid bills require detailed notes (minimum 10 characters)" 
+          });
+        }
+        
+        // Create audit log for amendment
+        await storage.createAuditLog({
+          hotelId: user.hotelId,
+          entity: 'restaurant_bill',
+          entityId: id,
+          action: 'amendment',
+          changedBy: user.id,
+          payload: {
+            originalStatus: existingBill.status,
+            changes: req.body,
+            amendmentNote: req.body.amendmentNote,
+            originalBillData: {
+              grandTotal: existingBill.grandTotal,
+              status: existingBill.status,
+              items: existingBill.items
+            }
+          }
+        });
       }
 
       const updateData: any = {
@@ -3003,6 +3061,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { code } = req.body;
       const currentUser = req.user as any;
       
+      if (!code || typeof code !== 'string') {
+        return res.json({ valid: false, message: "Voucher code required" });
+      }
+      
       // Find voucher by code
       const voucherList = await db
         .select()
@@ -3018,10 +3080,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Verify hotel ownership
       if (voucher.hotelId !== currentUser.hotelId) {
-        return res.json({ valid: false, message: "Voucher not valid for this hotel" });
+        return res.json({ valid: false, message: "Voucher not found" });
       }
 
-      // Check if voucher is still valid (date range)
+      // Check date validity
       const now = new Date();
       if (voucher.validFrom && new Date(voucher.validFrom) > now) {
         return res.json({ valid: false, message: "Voucher not yet valid" });
@@ -3030,17 +3092,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ valid: false, message: "Voucher has expired" });
       }
 
-      // Check if voucher has reached max uses
-      if (voucher.maxUses && (voucher.usedCount || 0) >= voucher.maxUses) {
-        return res.json({ valid: false, message: "Voucher usage limit reached" });
+      // CRITICAL: Check usage limit ATOMICALLY
+      if (voucher.maxUses) {
+        const currentUsage = Number(voucher.usedCount || 0);
+        if (currentUsage >= Number(voucher.maxUses)) {
+          return res.json({ valid: false, message: "Voucher usage limit reached" });
+        }
       }
 
-      // Voucher is valid
-      console.log("Voucher validation successful:", JSON.stringify({ valid: true, voucher }, null, 2));
-      res.json({ valid: true, voucher });
+      // Return voucher details (but don't increment yet - that happens on redemption)
+      res.json({
+        valid: true,
+        voucher: {
+          id: voucher.id,
+          code: voucher.code,
+          discountType: voucher.discountType,
+          discountAmount: voucher.discountAmount,
+          usedCount: voucher.usedCount,
+          maxUses: voucher.maxUses
+        }
+      });
     } catch (error) {
       console.error("Voucher validation error:", error);
-      res.status(400).json({ message: "Failed to validate voucher" });
+      res.status(500).json({ valid: false, message: "Error validating voucher" });
     }
   });
 
@@ -3052,58 +3126,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { voucherId } = req.body;
       const currentUser = req.user as any;
-      const now = new Date().toISOString();
       
-      // Atomic conditional update - increment usedCount only if all constraints are met
-      const result = await db
-        .update(vouchers)
-        .set({ usedCount: sql`COALESCE(${vouchers.usedCount}, 0) + 1` })
-        .where(and(
-          eq(vouchers.id, voucherId),
-          eq(vouchers.hotelId, currentUser.hotelId),
-          sql`(${vouchers.validFrom} IS NULL OR ${vouchers.validFrom} <= ${now})`,
-          sql`(${vouchers.validUntil} IS NULL OR ${vouchers.validUntil} >= ${now})`,
-          sql`(${vouchers.maxUses} IS NULL OR COALESCE(${vouchers.usedCount}, 0) < ${vouchers.maxUses})`
-        ))
-        .returning();
-
-      if (result.length === 0) {
-        // Find out why it failed for better error message
-        const voucherCheck = await db
+      // CRITICAL: Use database transaction for atomic operation with row locking
+      const result = await db.transaction(async (tx) => {
+        // Lock the voucher row for update (prevents concurrent redemption)
+        const [voucher] = await tx
           .select()
           .from(vouchers)
           .where(eq(vouchers.id, voucherId))
-          .limit(1);
-          
-        if (!voucherCheck.length) {
-          return res.status(404).json({ message: "Voucher not found" });
+          .for('update');
+        
+        if (!voucher) {
+          throw new Error("Voucher not found");
         }
         
-        const voucher = voucherCheck[0];
-        
+        // Verify hotel ownership
         if (voucher.hotelId !== currentUser.hotelId) {
-          return res.status(403).json({ message: "Voucher not valid for this hotel" });
+          throw new Error("Voucher not found");
         }
         
-        if (voucher.validFrom && new Date(voucher.validFrom) > new Date(now)) {
-          return res.status(400).json({ message: "Voucher not yet valid" });
+        // Check date validity
+        const now = new Date();
+        if (voucher.validFrom && new Date(voucher.validFrom) > now) {
+          throw new Error("Voucher not yet valid");
+        }
+        if (voucher.validUntil && new Date(voucher.validUntil) < now) {
+          throw new Error("Voucher has expired");
         }
         
-        if (voucher.validUntil && new Date(voucher.validUntil) < new Date(now)) {
-          return res.status(400).json({ message: "Voucher has expired" });
+        // Check usage limit
+        const currentUsage = Number(voucher.usedCount || 0);
+        if (voucher.maxUses && currentUsage >= Number(voucher.maxUses)) {
+          throw new Error("Voucher usage limit reached");
         }
         
-        if (voucher.maxUses && (voucher.usedCount || 0) >= voucher.maxUses) {
-          return res.status(400).json({ message: "Voucher usage limit reached" });
-        }
+        // CRITICAL: Atomically increment usage counter
+        const [updated] = await tx
+          .update(vouchers)
+          .set({ 
+            usedCount: sql`${vouchers.usedCount} + 1`
+          })
+          .where(eq(vouchers.id, voucherId))
+          .returning();
         
-        return res.status(400).json({ message: "Voucher redemption failed" });
-      }
+        return updated;
+      });
 
-      res.json({ success: true, voucher: result[0] });
-    } catch (error) {
+      res.json({ success: true, voucher: result });
+    } catch (error: any) {
       console.error("Voucher redemption error:", error);
-      res.status(400).json({ message: "Failed to redeem voucher" });
+      res.status(400).json({ message: error.message || "Failed to redeem voucher" });
     }
   });
 

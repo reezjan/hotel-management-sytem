@@ -38,6 +38,7 @@ import {
   bookingPayments,
   restaurantBills,
   billPayments,
+  auditLogs,
   type User,
   type UserWithRole,
   type InsertUser,
@@ -346,6 +347,9 @@ export interface IStorage {
   getAttendanceByUser(userId: string, startDate?: Date, endDate?: Date): Promise<any[]>;
   getAttendanceByHotel(hotelId: string, date: Date): Promise<any[]>;
   canClockIn(userId: string): Promise<{ canClockIn: boolean; reason?: string }>;
+  
+  // Audit log operations
+  createAuditLog(log: { hotelId: string; entity: string; entityId: string; action: string; changedBy: string; payload: any }): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2952,6 +2956,22 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { canClockIn: true };
+  }
+
+  async createAuditLog(log: { hotelId: string; entity: string; entityId: string; action: string; changedBy: string; payload: any }): Promise<any> {
+    const [auditLog] = await db
+      .insert(auditLogs)
+      .values({
+        hotelId: log.hotelId,
+        entity: log.entity,
+        entityId: log.entityId,
+        action: log.action,
+        changedBy: log.changedBy,
+        payload: log.payload
+      })
+      .returning();
+    
+    return auditLog;
   }
 }
 
