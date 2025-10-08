@@ -4,7 +4,8 @@ import { setupVite, serveStatic, log } from "./vite";
 import cron from "node-cron";
 import { storage } from "./storage";
 import { db } from "./db";
-import { kotOrders, type KotOrder } from "@shared/schema";
+import { kotOrders, type KotOrder, users } from "@shared/schema";
+import { and, eq, isNull } from "drizzle-orm";
 
 // Set timezone to Nepal
 process.env.TZ = 'Asia/Kathmandu';
@@ -91,6 +92,40 @@ app.use((req, res, next) => {
   });
   
   log('KOT order status sync cron job scheduled (every 5 minutes)');
+
+  // Set up annual leave balance reset cron job - runs on January 1st at midnight
+  cron.schedule('0 0 1 1 *', async () => {
+    try {
+      log('Running annual leave balance reset...');
+      
+      const newYear = new Date().getFullYear();
+      
+      // Get all active users
+      const activeUsers = await db
+        .select()
+        .from(users)
+        .where(and(
+          eq(users.isActive, true),
+          isNull(users.deletedAt)
+        ));
+      
+      let resetCount = 0;
+      
+      // Initialize leave balances for each user for the new year
+      for (const user of activeUsers) {
+        if (user.hotelId) {
+          await storage.initializeLeaveBalances(user.id, user.hotelId, newYear);
+          resetCount++;
+        }
+      }
+      
+      log(`Leave balances reset completed for ${resetCount} users for year ${newYear}`);
+    } catch (error) {
+      console.error('Error in annual leave balance reset cron job:', error);
+    }
+  });
+  
+  log('Annual leave balance reset cron job scheduled (every January 1st)');
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.

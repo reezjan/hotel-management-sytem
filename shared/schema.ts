@@ -410,8 +410,38 @@ export const leaveRequests = pgTable("leave_requests", {
   reason: text("reason"),
   status: text("status").default('pending'), // pending, approved, rejected
   managerNotes: text("manager_notes"),
+  approvalDate: timestamp("approval_date", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+});
+
+// Leave Balances Table
+export const leaveBalances = pgTable("leave_balances", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  userId: uuid("user_id").references(() => users.id),
+  leaveType: text("leave_type").notNull(),
+  totalDays: numeric("total_days", { precision: 5, scale: 1 }).notNull(),
+  usedDays: numeric("used_days", { precision: 5, scale: 1 }).default('0'),
+  remainingDays: numeric("remaining_days", { precision: 5, scale: 1 }).notNull(),
+  year: integer("year").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+}, (table) => ({
+  uniqueUserLeaveType: unique().on(table.userId, table.leaveType, table.year)
+}));
+
+// Notifications Table
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  userId: uuid("user_id").references(() => users.id),
+  type: text("type").notNull(), // leave_approved, leave_rejected, etc.
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  relatedId: uuid("related_id"), // ID of related entity (e.g., leave request ID)
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
 // Hotel Taxes Table
@@ -947,10 +977,26 @@ export const insertServiceSchema = createInsertSchema(services).omit({
 export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
   id: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
+  approvalDate: true
 }).extend({
   startDate: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val)),
   endDate: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val))
+});
+
+export const insertLeaveBalanceSchema = createInsertSchema(leaveBalances).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+}).extend({
+  totalDays: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  usedDays: z.union([z.string(), z.number()]).transform((val) => String(val)).optional(),
+  remainingDays: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true
 });
 
 export const insertWastageSchema = createInsertSchema(wastages).omit({
@@ -1103,6 +1149,10 @@ export type Payment = typeof payments.$inferSelect;
 export type Attendance = typeof attendance.$inferSelect;
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+export type LeaveBalance = typeof leaveBalances.$inferSelect;
+export type InsertLeaveBalance = z.infer<typeof insertLeaveBalanceSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Wastage = typeof wastages.$inferSelect;
 export type InsertWastage = z.infer<typeof insertWastageSchema>;
 export type MealPlan = typeof mealPlans.$inferSelect;

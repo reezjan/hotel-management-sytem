@@ -27,6 +27,8 @@ import {
   pools,
   services,
   leaveRequests,
+  leaveBalances,
+  notifications,
   wastages,
   mealPlans,
   mealVouchers,
@@ -100,7 +102,7 @@ import {
   roomReservations
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, isNull, desc, asc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, or, not, isNull, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -263,9 +265,25 @@ export interface IStorage {
   getLeaveRequestsByUser(userId: string): Promise<LeaveRequest[]>;
   getLeaveRequestsForManager(hotelId: string): Promise<LeaveRequest[]>;
   getPendingLeaveRequestsForManager(hotelId: string): Promise<LeaveRequest[]>;
+  getPendingLeaveRequestsForApprover(approverRole: string, hotelId: string): Promise<LeaveRequest[]>;
   createLeaveRequest(request: InsertLeaveRequest): Promise<LeaveRequest>;
-  updateLeaveRequest(id: string, request: Partial<InsertLeaveRequest>): Promise<LeaveRequest>;
+  updateLeaveRequest(id: string, request: Partial<any>): Promise<LeaveRequest>;
   getLeaveRequest(id: string): Promise<LeaveRequest | undefined>;
+  getOverlappingLeaves(userId: string, startDate: Date, endDate: Date, excludeId?: string): Promise<LeaveRequest[]>;
+  
+  // Leave balance operations
+  getLeaveBalancesByUser(userId: string, year?: number): Promise<any[]>;
+  getLeaveBalance(userId: string, leaveType: string, year: number): Promise<any | undefined>;
+  createLeaveBalance(balance: any): Promise<any>;
+  updateLeaveBalance(id: string, balance: any): Promise<any>;
+  initializeLeaveBalances(userId: string, hotelId: string, year: number): Promise<void>;
+  
+  // Notification operations
+  getNotificationsByUser(userId: string): Promise<any[]>;
+  getUnreadNotificationsByUser(userId: string): Promise<any[]>;
+  createNotification(notification: any): Promise<any>;
+  markNotificationAsRead(id: string): Promise<any>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
   
   // Meal plan operations
   getMealPlansByHotel(hotelId: string): Promise<MealPlan[]>;
@@ -1922,6 +1940,63 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(leaveRequests.createdAt));
   }
 
+  async getPendingLeaveRequestsForApprover(approverRole: string, hotelId: string): Promise<LeaveRequest[]> {
+    // Define role hierarchy: which roles each approver can approve
+    const approvalMapping: Record<string, string[]> = {
+      'restaurant_bar_manager': ['cashier', 'waiter', 'barista', 'bartender', 'kitchen_staff'],
+      'housekeeping_supervisor': ['housekeeping_staff'],
+      'security_head': ['security_guard', 'surveillance_officer'],
+      'manager': ['restaurant_bar_manager', 'housekeeping_supervisor', 'security_head', 'storekeeper', 'front_desk'],
+      'owner': ['manager']
+    };
+
+    const rolesCanApprove = approvalMapping[approverRole] || [];
+    
+    if (rolesCanApprove.length === 0) {
+      return [];
+    }
+
+    // First, get all users with the subordinate roles
+    const subordinateUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .innerJoin(roles, eq(users.roleId, roles.id))
+      .where(and(
+        eq(users.hotelId, hotelId),
+        inArray(roles.name, rolesCanApprove)
+      ));
+
+    const subordinateUserIds = subordinateUsers.map(u => u.id);
+
+    if (subordinateUserIds.length === 0) {
+      return [];
+    }
+
+    // Get all pending leave requests from those subordinate users
+    const allRequests = await db
+      .select({
+        leaveRequest: leaveRequests,
+        user: users,
+        role: roles
+      })
+      .from(leaveRequests)
+      .innerJoin(users, eq(leaveRequests.requestedBy, users.id))
+      .innerJoin(roles, eq(users.roleId, roles.id))
+      .where(and(
+        eq(leaveRequests.hotelId, hotelId),
+        eq(leaveRequests.status, 'pending'),
+        inArray(leaveRequests.requestedBy, subordinateUserIds)
+      ))
+      .orderBy(desc(leaveRequests.createdAt));
+
+    // Return just the leave requests with user info attached
+    return allRequests.map(r => ({
+      ...r.leaveRequest,
+      requestedByUser: r.user,
+      requestedByRole: r.role
+    })) as any;
+  }
+
   async createLeaveRequest(request: InsertLeaveRequest): Promise<LeaveRequest> {
     const [leaveRequest] = await db
       .insert(leaveRequests)
@@ -1945,6 +2020,145 @@ export class DatabaseStorage implements IStorage {
       .from(leaveRequests)
       .where(eq(leaveRequests.id, id));
     return leaveRequest || undefined;
+  }
+
+  async getOverlappingLeaves(userId: string, startDate: Date, endDate: Date, excludeId?: string): Promise<LeaveRequest[]> {
+    const conditions = [
+      eq(leaveRequests.requestedBy, userId),
+      eq(leaveRequests.status, 'approved'),
+      or(
+        and(
+          lte(leaveRequests.startDate, startDate),
+          gte(leaveRequests.endDate, startDate)
+        ),
+        and(
+          lte(leaveRequests.startDate, endDate),
+          gte(leaveRequests.endDate, endDate)
+        ),
+        and(
+          gte(leaveRequests.startDate, startDate),
+          lte(leaveRequests.endDate, endDate)
+        )
+      )
+    ];
+
+    if (excludeId) {
+      conditions.push(not(eq(leaveRequests.id, excludeId)));
+    }
+
+    return await db
+      .select()
+      .from(leaveRequests)
+      .where(and(...conditions));
+  }
+
+  // Leave balance operations
+  async getLeaveBalancesByUser(userId: string, year?: number): Promise<any[]> {
+    const currentYear = year || new Date().getFullYear();
+    return await db
+      .select()
+      .from(leaveBalances)
+      .where(and(
+        eq(leaveBalances.userId, userId),
+        eq(leaveBalances.year, currentYear)
+      ));
+  }
+
+  async getLeaveBalance(userId: string, leaveType: string, year: number): Promise<any | undefined> {
+    const [balance] = await db
+      .select()
+      .from(leaveBalances)
+      .where(and(
+        eq(leaveBalances.userId, userId),
+        eq(leaveBalances.leaveType, leaveType),
+        eq(leaveBalances.year, year)
+      ));
+    return balance || undefined;
+  }
+
+  async createLeaveBalance(balance: any): Promise<any> {
+    const [leaveBalance] = await db
+      .insert(leaveBalances)
+      .values(balance)
+      .returning();
+    return leaveBalance;
+  }
+
+  async updateLeaveBalance(id: string, balance: any): Promise<any> {
+    const [leaveBalance] = await db
+      .update(leaveBalances)
+      .set({ ...balance, updatedAt: new Date() })
+      .where(eq(leaveBalances.id, id))
+      .returning();
+    return leaveBalance;
+  }
+
+  async initializeLeaveBalances(userId: string, hotelId: string, year: number): Promise<void> {
+    const leaveTypes = [
+      { type: 'sick', days: 10 },
+      { type: 'vacation', days: 15 },
+      { type: 'emergency', days: 5 }
+    ];
+
+    for (const { type, days } of leaveTypes) {
+      const existing = await this.getLeaveBalance(userId, type, year);
+      if (!existing) {
+        await this.createLeaveBalance({
+          hotelId,
+          userId,
+          leaveType: type,
+          totalDays: days.toString(),
+          usedDays: '0',
+          remainingDays: days.toString(),
+          year
+        });
+      }
+    }
+  }
+
+  // Notification operations
+  async getNotificationsByUser(userId: string): Promise<any[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(50);
+  }
+
+  async getUnreadNotificationsByUser(userId: string): Promise<any[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.isRead, false)
+      ))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(notification: any): Promise<any> {
+    const [newNotification] = await db
+      .insert(notifications)
+      .values(notification)
+      .returning();
+    return newNotification;
+  }
+
+  async markNotificationAsRead(id: string): Promise<any> {
+    const [notification] = await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id))
+      .returning();
+    return notification;
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
   }
 
   // Meal plan operations

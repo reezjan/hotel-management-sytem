@@ -3038,17 +3038,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
-      // Role-based authorization - only managers, owners, and super_admins can view pending approvals
+      // Role-based authorization - approvers include department heads, manager, and owner
       const userRole = user.role?.name || '';
-      const canViewApprovals = ['manager', 'owner', 'super_admin'].includes(userRole);
+      const canViewApprovals = [
+        'restaurant_bar_manager', 
+        'housekeeping_supervisor', 
+        'security_head', 
+        'manager', 
+        'owner'
+      ].includes(userRole);
       
       if (!canViewApprovals) {
-        return res.status(403).json({ message: "Only managers can view pending leave requests" });
+        return res.status(403).json({ message: "You don't have permission to view leave approvals" });
       }
       
-      const leaveRequests = await storage.getPendingLeaveRequestsForManager(user.hotelId);
+      const leaveRequests = await storage.getPendingLeaveRequestsForApprover(userRole, user.hotelId);
       res.json(leaveRequests);
     } catch (error) {
+      console.error("Failed to fetch pending leave requests:", error);
       res.status(500).json({ message: "Failed to fetch pending leave requests" });
     }
   });
@@ -3062,12 +3069,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
       const leaveRequestData = insertLeaveRequestSchema.parse({
         ...req.body,
         hotelId: user.hotelId,
         requestedBy: user.id,
         status: 'pending'
       });
+
+      const currentYear = new Date().getFullYear();
+      const startDate = new Date(leaveRequestData.startDate);
+      const endDate = new Date(leaveRequestData.endDate);
+      
+      // Calculate number of leave days
+      const leaveDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      
+      // Initialize leave balances if not exist
+      await storage.initializeLeaveBalances(user.id, user.hotelId, currentYear);
+      
+      // Check leave balance
+      const balance = await storage.getLeaveBalance(user.id, leaveRequestData.leaveType, currentYear);
+      if (!balance) {
+        return res.status(400).json({ message: "Leave balance not found for this leave type" });
+      }
+      
+      const remainingDays = parseFloat(balance.remainingDays);
+      if (leaveDays > remainingDays) {
+        return res.status(400).json({ 
+          message: `Insufficient leave balance. You have ${remainingDays} days remaining, but requested ${leaveDays} days.` 
+        });
+      }
+      
+      // Check for overlapping leaves
+      const overlapping = await storage.getOverlappingLeaves(user.id, startDate, endDate);
+      if (overlapping.length > 0) {
+        return res.status(400).json({ 
+          message: "You already have approved leave during this period. Please choose different dates." 
+        });
+      }
+      
       const leaveRequest = await storage.createLeaveRequest(leaveRequestData);
       res.status(201).json(leaveRequest);
     } catch (error) {
@@ -3076,7 +3116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/hotels/current/leave-requests/:id", async (req, res) => {
+  app.post("/api/leave-requests/:id/approve", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
@@ -3085,8 +3125,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+
+      // Only managers can approve leave requests
+      const userRole = user.role?.name || '';
+      const canApprove = ['manager', 'owner', 'super_admin'].includes(userRole);
+      
+      if (!canApprove) {
+        return res.status(403).json({ message: "Only managers can approve leave requests" });
+      }
+
       const { id } = req.params;
-      const { status, managerNotes } = req.body;
+      const { managerNotes } = req.body;
       
       // Verify the leave request exists and belongs to this hotel
       const existingRequest = await storage.getLeaveRequest(id);
@@ -3094,28 +3143,197 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Leave request not found" });
       }
 
-      // Only managers can approve/reject leave requests
-      const userRole = user.role?.name || '';
-      const canApprove = ['manager', 'owner', 'super_admin'].includes(userRole);
-      
-      if (status && status !== 'pending' && !canApprove) {
-        return res.status(403).json({ message: "Only managers can approve or reject leave requests" });
+      if (existingRequest.status !== 'pending') {
+        return res.status(400).json({ message: "Leave request has already been processed" });
       }
 
-      const updateData: Partial<any> = {};
-      if (status) {
-        updateData.status = status;
-        updateData.approvedBy = user.id;
+      // Calculate leave days
+      const startDate = new Date(existingRequest.startDate);
+      const endDate = new Date(existingRequest.endDate);
+      const leaveDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      
+      const currentYear = new Date().getFullYear();
+      
+      if (!existingRequest.requestedBy) {
+        return res.status(400).json({ message: "Leave request missing user information" });
       }
-      if (managerNotes !== undefined) {
+      
+      // Get leave balance
+      const balance = await storage.getLeaveBalance(existingRequest.requestedBy, existingRequest.leaveType, currentYear);
+      if (!balance) {
+        return res.status(400).json({ message: "Leave balance not found" });
+      }
+
+      // Deduct from balance
+      const usedDays = parseFloat(balance.usedDays) + leaveDays;
+      const remainingDays = parseFloat(balance.remainingDays) - leaveDays;
+      
+      await storage.updateLeaveBalance(balance.id, {
+        usedDays: usedDays.toString(),
+        remainingDays: remainingDays.toString()
+      });
+
+      // Update leave request
+      const updateData: any = {
+        status: 'approved',
+        approvedBy: user.id,
+        approvalDate: new Date()
+      };
+      if (managerNotes) {
         updateData.managerNotes = managerNotes;
       }
-
       const leaveRequest = await storage.updateLeaveRequest(id, updateData);
+
+      // Create notification
+      await storage.createNotification({
+        hotelId: user.hotelId,
+        userId: existingRequest.requestedBy,
+        type: 'leave_approved',
+        title: 'Leave Request Approved',
+        message: `Your ${existingRequest.leaveType} leave request from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()} has been approved.`,
+        relatedId: id,
+        isRead: false
+      });
+
       res.json(leaveRequest);
     } catch (error) {
-      console.error("Leave request update error:", error);
-      res.status(400).json({ message: "Failed to update leave request" });
+      console.error("Leave request approval error:", error);
+      res.status(500).json({ message: "Failed to approve leave request" });
+    }
+  });
+
+  app.post("/api/leave-requests/:id/reject", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      // Only managers can reject leave requests
+      const userRole = user.role?.name || '';
+      const canReject = ['manager', 'owner', 'super_admin'].includes(userRole);
+      
+      if (!canReject) {
+        return res.status(403).json({ message: "Only managers can reject leave requests" });
+      }
+
+      const { id } = req.params;
+      const { managerNotes } = req.body;
+      
+      // Verify the leave request exists and belongs to this hotel
+      const existingRequest = await storage.getLeaveRequest(id);
+      if (!existingRequest || existingRequest.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Leave request not found" });
+      }
+
+      if (existingRequest.status !== 'pending') {
+        return res.status(400).json({ message: "Leave request has already been processed" });
+      }
+
+      // Update leave request
+      const updateData: any = {
+        status: 'rejected',
+        approvedBy: user.id,
+        approvalDate: new Date()
+      };
+      if (managerNotes) {
+        updateData.managerNotes = managerNotes;
+      }
+      const leaveRequest = await storage.updateLeaveRequest(id, updateData);
+
+      // Create notification
+      const startDate = new Date(existingRequest.startDate);
+      const endDate = new Date(existingRequest.endDate);
+      
+      await storage.createNotification({
+        hotelId: user.hotelId,
+        userId: existingRequest.requestedBy,
+        type: 'leave_rejected',
+        title: 'Leave Request Rejected',
+        message: `Your ${existingRequest.leaveType} leave request from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()} has been rejected.${managerNotes ? ' Reason: ' + managerNotes : ''}`,
+        relatedId: id,
+        isRead: false
+      });
+
+      res.json(leaveRequest);
+    } catch (error) {
+      console.error("Leave request rejection error:", error);
+      res.status(500).json({ message: "Failed to reject leave request" });
+    }
+  });
+
+  // Notification routes
+  app.get("/api/notifications", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const notifications = await storage.getNotificationsByUser(user.id);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.get("/api/notifications/unread", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const notifications = await storage.getUnreadNotificationsByUser(user.id);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch unread notifications" });
+    }
+  });
+
+  app.post("/api/notifications/:id/read", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const { id } = req.params;
+      const notification = await storage.markNotificationAsRead(id);
+      res.json(notification);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to mark notification as read" });
+    }
+  });
+
+  app.post("/api/notifications/read-all", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      await storage.markAllNotificationsAsRead(user.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to mark all notifications as read" });
+    }
+  });
+
+  // Leave balance routes
+  app.get("/api/leave-balances", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+      
+      // Initialize balances if not exist
+      await storage.initializeLeaveBalances(user.id, user.hotelId, year);
+      
+      const balances = await storage.getLeaveBalancesByUser(user.id, year);
+      res.json(balances);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch leave balances" });
     }
   });
 
