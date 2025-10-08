@@ -2200,7 +2200,10 @@ export class DatabaseStorage implements IStorage {
   async getOverlappingLeaves(userId: string, startDate: Date, endDate: Date, excludeId?: string): Promise<LeaveRequest[]> {
     const conditions = [
       eq(leaveRequests.requestedBy, userId),
-      eq(leaveRequests.status, 'approved'),
+      or(
+        eq(leaveRequests.status, 'approved'),
+        eq(leaveRequests.status, 'pending')
+      ),
       or(
         and(
           lte(leaveRequests.startDate, startDate),

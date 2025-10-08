@@ -3546,6 +3546,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentYear = new Date().getFullYear();
       const startDate = new Date(leaveRequestData.startDate);
       const endDate = new Date(leaveRequestData.endDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // CRITICAL: Prevent backdating leave requests
+      if (startDate < today) {
+        return res.status(400).json({ 
+          message: "Cannot request leave for past dates. Contact your manager for backdated leave." 
+        });
+      }
+      
+      // Prevent far future dates (max 2 years ahead)
+      const maxFutureDate = new Date(today);
+      maxFutureDate.setFullYear(today.getFullYear() + 2);
+      if (startDate > maxFutureDate || endDate > maxFutureDate) {
+        return res.status(400).json({ 
+          message: "Cannot request leave more than 2 years in advance" 
+        });
+      }
+      
+      // Validate date range
+      if (endDate < startDate) {
+        return res.status(400).json({ 
+          message: "End date must be after start date" 
+        });
+      }
       
       // Calculate number of leave days
       const leaveDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -3566,11 +3591,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Check for overlapping leaves
+      // CRITICAL: Check for overlapping leave
       const overlapping = await storage.getOverlappingLeaves(user.id, startDate, endDate);
       if (overlapping.length > 0) {
         return res.status(400).json({ 
-          message: "You already have approved leave during this period. Please choose different dates." 
+          message: "You have overlapping approved or pending leave for these dates" 
         });
       }
       
