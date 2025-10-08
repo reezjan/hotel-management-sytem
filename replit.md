@@ -3,9 +3,44 @@
 ## Overview
 This project is a comprehensive hotel management system designed to streamline hotel operations. It features role-based dashboards for various staff members, including super admin, owner, manager, front desk, housekeeping, restaurant/bar management, security, and finance. The system aims to provide an efficient and integrated platform for managing all aspects of a hotel's daily operations, from guest services to inventory and financial reporting.
 
-## Recent Changes (October 7, 2025)
+## Recent Changes
 
-### Restaurant Billing System - Comprehensive Cashier Functionality
+### Room Reservation System (October 8, 2025)
+Implemented a comprehensive room reservation system for the front desk:
+
+**Database Schema:**
+- Added `room_reservations` table with fields for guest information, booking dates, room selection, meal plans, and pricing breakdown
+- Supports tracking reservation status, special requests, and audit information (created by, timestamps)
+
+**Backend Implementation:**
+- POST `/api/reservations` endpoint with Zod validation
+- Storage layer method `createRoomReservation` for data persistence
+- Automatic pricing calculation based on room rates and meal plans
+
+**Frontend Features:**
+1. **Guest Information**: Name, email, phone fields for reservation details
+2. **Room Selection**: Dropdown to select from available rooms
+3. **Date Selection**: Check-in and check-out date pickers
+4. **Number of Persons**: Input field to specify guest count
+5. **Meal Plan Selection**: Optional dropdown showing meal plans with per-person pricing
+6. **Real-time Pricing Calculator**: 
+   - Displays room price per night
+   - Shows meal plan cost (price per person × number of persons)
+   - Calculates number of nights
+   - Shows estimated total cost dynamically
+7. **Special Requests**: Text area for additional guest requirements
+
+**User Flow:**
+1. Front desk staff opens the reservation modal
+2. Enters guest information and selects room
+3. Sets check-in/out dates and number of persons
+4. Optionally selects a meal plan
+5. Reviews real-time pricing calculation
+6. Adds any special requests
+7. Creates reservation → Data saved to database with confirmed status
+
+### Restaurant Billing System (October 7, 2025)
+Comprehensive cashier functionality for restaurant operations:
 Implemented a complete restaurant billing system with advanced features for cashier operations:
 
 **Database Schema:**

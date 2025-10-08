@@ -29,6 +29,7 @@ import {
   insertHallBookingSchema,
   insertServicePackageSchema,
   insertBookingPaymentSchema,
+  insertRoomReservationSchema,
   vouchers,
   guests,
   hallBookings,
@@ -1967,6 +1968,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(400).json({ message: "Failed to delete room" });
+    }
+  });
+
+  // Room Reservations routes
+  app.post("/api/reservations", async (req, res) => {
+    try {
+      const reservationData = insertRoomReservationSchema.parse(req.body);
+      const reservation = await storage.createRoomReservation(reservationData);
+      res.status(201).json(reservation);
+    } catch (error) {
+      console.error("Reservation creation error:", error);
+      res.status(400).json({ 
+        message: "Failed to create reservation", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
     }
   });
 

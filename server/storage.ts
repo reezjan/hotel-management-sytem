@@ -91,7 +91,10 @@ import {
   type SelectRestaurantBill,
   type InsertRestaurantBill,
   type SelectBillPayment,
-  type InsertBillPayment
+  type InsertBillPayment,
+  type RoomReservation,
+  type InsertRoomReservation,
+  roomReservations
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, desc, asc, sql } from "drizzle-orm";
@@ -132,6 +135,9 @@ export interface IStorage {
   createRoom(room: InsertRoom): Promise<Room>;
   updateRoom(id: string, room: Partial<InsertRoom>): Promise<Room>;
   deleteRoom(id: string): Promise<void>;
+
+  // Room reservation operations
+  createRoomReservation(reservation: InsertRoomReservation): Promise<RoomReservation>;
 
   // Room type operations
   getRoomTypesByHotel(hotelId: string): Promise<RoomType[]>;
@@ -568,6 +574,15 @@ export class DatabaseStorage implements IStorage {
       .update(rooms)
       .set({ deletedAt: new Date() })
       .where(eq(rooms.id, id));
+  }
+
+  // Room reservation operations
+  async createRoomReservation(reservationData: InsertRoomReservation): Promise<RoomReservation> {
+    const [reservation] = await db
+      .insert(roomReservations)
+      .values(reservationData)
+      .returning();
+    return reservation;
   }
 
   // Menu operations
