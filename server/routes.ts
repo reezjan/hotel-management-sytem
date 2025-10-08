@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth } from "./auth";
+import { setupAuth, requireActiveUser } from "./auth";
 import { db } from "./db";
 import { users, roles } from "@shared/schema";
 import { eq, and, isNull, asc, sql, ne } from "drizzle-orm";
@@ -1213,23 +1213,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/hotels/current/inventory-transactions", async (req, res) => {
+  app.post("/api/hotels/current/inventory-transactions", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
-      const transactionData = {
-        ...req.body,
-        hotelId: user.hotelId
+      
+      const transactionData = req.body;
+      const transactionType = transactionData.transactionType;
+      
+      // CRITICAL: Validate transaction type
+      const validTypes = ['receive', 'issue', 'return', 'adjustment', 'wastage'];
+      if (!validTypes.includes(transactionType)) {
+        return res.status(400).json({ message: "Invalid transaction type" });
+      }
+      
+      // CRITICAL: Validate quantity is present and numeric
+      const qtyBase = Number(transactionData.qtyBase);
+      if (isNaN(qtyBase) || transactionData.qtyBase === null || transactionData.qtyBase === undefined) {
+        return res.status(400).json({ message: "Valid quantity (qtyBase) is required" });
+      }
+      
+      // CRITICAL: For non-adjustment types, quantity must be POSITIVE
+      // (adjustment can be negative as it's a delta)
+      if (transactionType !== 'adjustment') {
+        if (qtyBase <= 0) {
+          return res.status(400).json({ 
+            message: `Quantity must be positive for ${transactionType} transactions` 
+          });
+        }
+      } else {
+        // For adjustment, prevent zero (pointless)
+        if (qtyBase === 0) {
+          return res.status(400).json({ 
+            message: "Adjustment quantity cannot be zero" 
+          });
+        }
+      }
+      
+      // CRITICAL: For 'receive' transactions, require purchase verification
+      if (transactionType === 'receive') {
+        // Only storekeeper or manager can receive inventory
+        const canReceive = ['storekeeper', 'manager', 'owner', 'super_admin'].includes(user.role?.name || '');
+        if (!canReceive) {
+          return res.status(403).json({ 
+            message: "Only storekeeper or manager can receive inventory" 
+          });
+        }
+        
+        // Require supplier reference or purchase order
+        const supplierName = transactionData.supplierName?.trim();
+        const referenceNumber = transactionData.referenceNumber?.trim();
+        if ((!supplierName || supplierName.length === 0) && (!referenceNumber || referenceNumber.length === 0)) {
+          return res.status(400).json({ 
+            message: "Supplier name or purchase reference required for receiving inventory" 
+          });
+        }
+      }
+      
+      // CRITICAL: For 'issue' or 'wastage', verify sufficient stock
+      if (transactionType === 'issue' || transactionType === 'wastage') {
+        const item = await storage.getInventoryItem(transactionData.itemId);
+        
+        if (!item) {
+          return res.status(404).json({ message: "Inventory item not found" });
+        }
+        
+        const currentStock = Number(item.baseStockQty || item.stockQty || 0);
+        const requestedQty = Number(transactionData.qtyBase || 0);
+        
+        if (requestedQty > currentStock) {
+          return res.status(400).json({ 
+            message: `Insufficient stock. Available: ${currentStock}, Requested: ${requestedQty}` 
+          });
+        }
+        
+        // Wastage requires notes explaining the reason
+        if (transactionType === 'wastage') {
+          const notes = transactionData.notes?.trim();
+          if (!notes || notes.length === 0) {
+            return res.status(400).json({ 
+              message: "Wastage requires detailed notes explaining the reason" 
+            });
+          }
+        }
+      }
+      
+      // CRITICAL: Large quantity adjustments require manager approval
+      if (transactionType === 'adjustment') {
+        const item = await storage.getInventoryItem(transactionData.itemId);
+        const currentStock = Number(item?.baseStockQty || item?.stockQty || 0);
+        // Adjustment is a DELTA (can be positive or negative)
+        const adjustmentDelta = Number(transactionData.qtyBase || 0);
+        const adjustmentMagnitude = Math.abs(adjustmentDelta);
+        
+        // If adjustment magnitude is more than 50% of current stock
+        if (adjustmentMagnitude > currentStock * 0.5) {
+          const isManager = ['manager', 'owner', 'super_admin'].includes(user.role?.name || '');
+          if (!isManager) {
+            return res.status(403).json({ 
+              message: "Large inventory adjustments require manager approval" 
+            });
+          }
+        }
+        
+        // Adjustments require notes
+        const notes = transactionData.notes?.trim();
+        if (!notes || notes.length === 0) {
+          return res.status(400).json({ 
+            message: "Inventory adjustments require detailed notes" 
+          });
+        }
+        
+        // Prevent adjustments that would result in negative stock
+        if (currentStock + adjustmentDelta < 0) {
+          return res.status(400).json({ 
+            message: `Adjustment would result in negative stock: Current ${currentStock}, Delta ${adjustmentDelta}` 
+          });
+        }
+      }
+      
+      const finalTransactionData = {
+        ...transactionData,
+        hotelId: user.hotelId,
+        createdBy: user.id,
+        recordedBy: user.id
       };
-      const transaction = await storage.createInventoryTransaction(transactionData);
+      
+      const transaction = await storage.createInventoryTransaction(finalTransactionData);
       res.status(201).json(transaction);
     } catch (error) {
-      res.status(400).json({ message: "Failed to create inventory transaction" });
+      console.error("Inventory transaction error:", error);
+      res.status(400).json({ message: "Failed to create inventory transaction", error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
 
@@ -1972,8 +2088,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/users/:id/duty", async (req, res) => {
     try {
+      // CRITICAL: Require authentication
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
       const { id } = req.params;
       const { isOnline } = req.body;
+      
+      // Users can only update their own duty status
+      if (currentUser.id !== id) {
+        return res.status(403).json({ message: "Cannot update another user's duty status" });
+      }
+      
+      // CRITICAL: Verify user is still active
+      const user = await storage.getUser(id);
+      if (!user || !user.isActive) {
+        return res.status(403).json({ 
+          message: "Your account has been deactivated. Contact your manager." 
+        });
+      }
+      
       await storage.updateUserOnlineStatus(id, isOnline);
       res.status(200).json({ success: true });
     } catch (error) {
@@ -2319,12 +2455,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/transactions", async (req, res) => {
+  app.post("/api/transactions", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const currentUser = req.user as any;
       if (!currentUser?.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
@@ -2344,12 +2476,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/transactions/:id", async (req, res) => {
+  app.put("/api/transactions/:id", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const { id } = req.params;
       const updateData = req.body;
       const updatedTransaction = await storage.updateTransaction(id, updateData);
@@ -2360,13 +2488,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/transactions/:id", async (req, res) => {
+  app.delete("/api/transactions/:id", requireActiveUser, async (req, res) => {
     try {
-      // CRITICAL: Require authentication
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const currentUser = req.user as any;
       const { id } = req.params;
       
@@ -2628,11 +2751,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/hotels/current/bills", async (req, res) => {
+  app.post("/api/hotels/current/bills", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
@@ -2696,11 +2816,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/hotels/current/bills/:id", async (req, res) => {
+  app.put("/api/hotels/current/bills/:id", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const user = req.user as any;
       const { id } = req.params;
       
@@ -4013,6 +4130,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid duty status" });
       }
       
+      // CRITICAL: Verify user is still active - prevent deactivated users from going online
+      if (!user.isActive) {
+        return res.status(403).json({ 
+          message: "Your account has been deactivated. Contact your manager." 
+        });
+      }
+      
       await storage.updateUserOnlineStatus(user.id, isOnline);
       res.json({ success: true, isOnline });
     } catch (error) {
@@ -4840,11 +4964,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bookings/:bookingId/payments", async (req, res) => {
+  app.post("/api/bookings/:bookingId/payments", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const user = req.user as any;
       const { bookingId } = req.params;
       
@@ -4895,19 +5016,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Attendance routes
-  app.post("/api/attendance/clock-in", async (req, res) => {
+  app.post("/api/attendance/clock-in", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-      
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
-      }
-
-      if (!user.isActive) {
-        return res.status(403).json({ message: "User is not active" });
       }
 
       const canClockInResult = await storage.canClockIn(user.id);
@@ -4938,12 +5051,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/attendance/clock-out", async (req, res) => {
+  app.post("/api/attendance/clock-out", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-      
       const user = req.user as any;
       
       const activeAttendance = await storage.getActiveAttendance(user.id);

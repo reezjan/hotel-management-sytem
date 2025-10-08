@@ -13,6 +13,22 @@ function sanitizeUser(user: SelectUser): Omit<SelectUser, 'passwordHash'> {
   return sanitizedUser;
 }
 
+// Middleware to ensure user is active
+export function requireActiveUser(req: any, res: any, next: any) {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  
+  const user = req.user as any;
+  if (!user.isActive) {
+    return res.status(403).json({ 
+      message: "Your account has been deactivated. Please contact your manager." 
+    });
+  }
+  
+  next();
+}
+
 declare global {
   namespace Express {
     interface User extends SelectUser {}
@@ -58,15 +74,24 @@ export function setupAuth(app: Express) {
       const user = await storage.getUserByUsername(username);
       if (!user || !(await comparePasswords(password, user.passwordHash))) {
         return done(null, false);
-      } else {
-        return done(null, user);
       }
+      
+      // CRITICAL: Block deactivated users from logging in
+      if (!user.isActive) {
+        return done(null, false, { message: "Your account has been deactivated. Please contact your manager." });
+      }
+      
+      return done(null, user);
     }),
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: string, done) => {
     const user = await storage.getUser(id);
+    // CRITICAL: Block deactivated users from using existing sessions
+    if (user && !user.isActive) {
+      return done(null, false);
+    }
     done(null, user);
   });
 

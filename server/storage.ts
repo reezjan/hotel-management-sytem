@@ -1864,11 +1864,113 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryTransaction(transactionData: any): Promise<any> {
-    const [transaction] = await db
-      .insert(inventoryTransactions)
-      .values(transactionData)
-      .returning();
-    return transaction;
+    // CRITICAL: Use database transaction with row-level locking to prevent race conditions
+    return await db.transaction(async (tx) => {
+      const transactionType = transactionData.transactionType;
+      
+      // For operations that reduce stock, acquire a row lock to prevent concurrent modifications
+      if (['issue', 'wastage'].includes(transactionType)) {
+        // SELECT FOR UPDATE locks the row until transaction completes
+        const [item] = await tx
+          .select()
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, transactionData.itemId))
+          .for('update')
+          .limit(1);
+        
+        if (!item) {
+          throw new Error('Inventory item not found');
+        }
+        
+        const currentStock = Number(item.baseStockQty || item.stockQty || 0);
+        const requestedQty = Number(transactionData.qtyBase || 0);
+        
+        // Double-check stock sufficiency within the transaction
+        if (requestedQty > currentStock) {
+          throw new Error(`Insufficient stock: Available ${currentStock}, Requested ${requestedQty}`);
+        }
+        
+        const newStock = currentStock - requestedQty;
+        
+        // Update inventory stock atomically within the same transaction
+        await tx
+          .update(inventoryItems)
+          .set({
+            baseStockQty: String(Math.max(0, newStock)),
+            stockQty: String(Math.max(0, newStock)),
+            updatedAt: new Date()
+          })
+          .where(eq(inventoryItems.id, transactionData.itemId));
+      }
+      
+      // For 'receive' and 'return' operations, lock and ADD to stock
+      if (['receive', 'return'].includes(transactionType)) {
+        const [item] = await tx
+          .select()
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, transactionData.itemId))
+          .for('update')
+          .limit(1);
+        
+        if (!item) {
+          throw new Error('Inventory item not found');
+        }
+        
+        const currentStock = Number(item.baseStockQty || item.stockQty || 0);
+        const addedQty = Number(transactionData.qtyBase || 0);
+        const newStock = currentStock + addedQty;
+        
+        await tx
+          .update(inventoryItems)
+          .set({
+            baseStockQty: String(newStock),
+            stockQty: String(newStock),
+            updatedAt: new Date()
+          })
+          .where(eq(inventoryItems.id, transactionData.itemId));
+      }
+      
+      // For 'adjustment' operations, lock and apply DELTA (positive or negative)
+      if (transactionType === 'adjustment') {
+        const [item] = await tx
+          .select()
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, transactionData.itemId))
+          .for('update')
+          .limit(1);
+        
+        if (!item) {
+          throw new Error('Inventory item not found');
+        }
+        
+        const currentStock = Number(item.baseStockQty || item.stockQty || 0);
+        // Adjustment is a DELTA - can be positive (add) or negative (subtract)
+        const adjustmentDelta = Number(transactionData.qtyBase || 0);
+        const newStock = currentStock + adjustmentDelta;
+        
+        // Prevent negative stock from adjustments
+        if (newStock < 0) {
+          throw new Error(`Adjustment would result in negative stock: Current ${currentStock}, Delta ${adjustmentDelta}`);
+        }
+        
+        await tx
+          .update(inventoryItems)
+          .set({
+            baseStockQty: String(newStock),
+            stockQty: String(newStock),
+            updatedAt: new Date()
+          })
+          .where(eq(inventoryItems.id, transactionData.itemId));
+      }
+      
+      // Insert the transaction record
+      const [transaction] = await tx
+        .insert(inventoryTransactions)
+        .values(transactionData)
+        .returning();
+      
+      return transaction;
+    });
   }
 
   async createKotOrderWithItems(kotData: any, items: any[]): Promise<KotOrder> {
