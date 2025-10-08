@@ -29,6 +29,7 @@ import {
   leaveRequests,
   wastages,
   mealPlans,
+  mealVouchers,
   guests,
   stockRequests,
   hallBookings,
@@ -82,6 +83,8 @@ import {
   type InsertWastage,
   type MealPlan,
   type InsertMealPlan,
+  type MealVoucher,
+  type InsertMealVoucher,
   type Guest,
   type InsertGuest,
   type StockRequest,
@@ -97,7 +100,7 @@ import {
   roomReservations
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, isNull, desc, asc, sql } from "drizzle-orm";
+import { eq, and, isNull, desc, asc, sql, gte, lte } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -270,6 +273,12 @@ export interface IStorage {
   createMealPlan(plan: InsertMealPlan): Promise<MealPlan>;
   updateMealPlan(id: string, plan: Partial<InsertMealPlan>): Promise<MealPlan>;
   deleteMealPlan(id: string, hotelId: string): Promise<boolean>;
+  
+  // Meal voucher operations
+  createMealVoucher(voucher: InsertMealVoucher): Promise<MealVoucher>;
+  getMealVouchers(hotelId: string, filters?: { status?: string; date?: Date }): Promise<MealVoucher[]>;
+  getMealVouchersByRoom(roomId: string): Promise<MealVoucher[]>;
+  redeemMealVoucher(id: string, redeemedBy: string, notes?: string): Promise<MealVoucher | null>;
   
   // Guest operations
   getGuestsByHotel(hotelId: string): Promise<Guest[]>;
@@ -1985,6 +1994,69 @@ export class DatabaseStorage implements IStorage {
       ))
       .returning();
     return result.length > 0;
+  }
+
+  // Meal voucher operations
+  async createMealVoucher(voucher: InsertMealVoucher): Promise<MealVoucher> {
+    const [created] = await db
+      .insert(mealVouchers)
+      .values(voucher)
+      .returning();
+    return created;
+  }
+
+  async getMealVouchers(hotelId: string, filters?: { status?: string; date?: Date }): Promise<MealVoucher[]> {
+    const conditions = [eq(mealVouchers.hotelId, hotelId)];
+    
+    if (filters?.status) {
+      conditions.push(eq(mealVouchers.status, filters.status));
+    }
+    
+    if (filters?.date) {
+      const startOfDay = new Date(filters.date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(filters.date);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      conditions.push(
+        and(
+          gte(mealVouchers.voucherDate, startOfDay),
+          lte(mealVouchers.voucherDate, endOfDay)
+        ) as any
+      );
+    }
+    
+    return await db
+      .select()
+      .from(mealVouchers)
+      .where(and(...conditions))
+      .orderBy(desc(mealVouchers.voucherDate));
+  }
+
+  async getMealVouchersByRoom(roomId: string): Promise<MealVoucher[]> {
+    return await db
+      .select()
+      .from(mealVouchers)
+      .where(eq(mealVouchers.roomId, roomId))
+      .orderBy(desc(mealVouchers.voucherDate));
+  }
+
+  async redeemMealVoucher(id: string, redeemedBy: string, notes?: string): Promise<MealVoucher | null> {
+    const [voucher] = await db
+      .update(mealVouchers)
+      .set({
+        status: 'used',
+        usedAt: new Date(),
+        redeemedBy,
+        notes
+      })
+      .where(and(
+        eq(mealVouchers.id, id),
+        eq(mealVouchers.status, 'unused')
+      ))
+      .returning();
+    
+    return voucher || null;
   }
 
   // Guest operations

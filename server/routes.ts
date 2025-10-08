@@ -3703,6 +3703,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Meal voucher routes
+  app.post("/api/meal-vouchers/generate", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const { roomId, guestName, mealPlanId, mealPlanType, numberOfPersons, checkInDate, checkOutDate, hotelId } = req.body;
+      
+      const checkIn = new Date(checkInDate);
+      const checkOut = new Date(checkOutDate);
+      const nights = Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 3600 * 24)));
+      
+      const vouchers = [];
+      for (let i = 0; i < nights; i++) {
+        const voucherDate = new Date(checkIn);
+        voucherDate.setDate(voucherDate.getDate() + i);
+        
+        const voucher = await storage.createMealVoucher({
+          hotelId,
+          roomId,
+          guestName,
+          mealPlanId: mealPlanId || null,
+          mealPlanType,
+          numberOfPersons,
+          voucherDate,
+          status: 'unused'
+        });
+        vouchers.push(voucher);
+      }
+      
+      res.json({ success: true, vouchers });
+    } catch (error) {
+      console.error("Meal voucher generation error:", error);
+      res.status(500).json({ message: "Failed to generate meal vouchers" });
+    }
+  });
+
+  app.get("/api/hotels/:hotelId/meal-vouchers", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const { hotelId } = req.params;
+      const { status, date } = req.query;
+      
+      const vouchers = await storage.getMealVouchers(hotelId, {
+        status: status as string,
+        date: date ? new Date(date as string) : undefined
+      });
+      
+      res.json(vouchers);
+    } catch (error) {
+      console.error("Get meal vouchers error:", error);
+      res.status(500).json({ message: "Failed to get meal vouchers" });
+    }
+  });
+
+  app.get("/api/meal-vouchers/room/:roomId", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const { roomId } = req.params;
+      const vouchers = await storage.getMealVouchersByRoom(roomId);
+      
+      res.json(vouchers);
+    } catch (error) {
+      console.error("Get room meal vouchers error:", error);
+      res.status(500).json({ message: "Failed to get room meal vouchers" });
+    }
+  });
+
+  app.post("/api/meal-vouchers/:id/redeem", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const user = req.user as any;
+      const { id } = req.params;
+      const { notes } = req.body;
+      
+      const voucher = await storage.redeemMealVoucher(id, user.id, notes);
+      
+      if (!voucher) {
+        return res.status(404).json({ message: "Voucher not found or already redeemed" });
+      }
+      
+      res.json({ success: true, voucher });
+    } catch (error) {
+      console.error("Meal voucher redemption error:", error);
+      res.status(500).json({ message: "Failed to redeem meal voucher" });
+    }
+  });
+
   // Hall booking routes
   app.get("/api/hotels/:hotelId/hall-bookings", async (req, res) => {
     try {

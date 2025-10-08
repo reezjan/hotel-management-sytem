@@ -478,6 +478,23 @@ export const mealPlans = pgTable("meal_plans", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
+// Meal Vouchers Table
+export const mealVouchers = pgTable("meal_vouchers", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id").references(() => rooms.id),
+  guestName: text("guest_name").notNull(),
+  mealPlanId: uuid("meal_plan_id").references(() => mealPlans.id),
+  mealPlanType: text("meal_plan_type").notNull(),
+  numberOfPersons: integer("number_of_persons").notNull(),
+  voucherDate: timestamp("voucher_date", { withTimezone: true }).notNull(),
+  status: text("status").default('unused'),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  redeemedBy: uuid("redeemed_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
 // Room Reservations Table
 export const roomReservations = pgTable("room_reservations", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -956,6 +973,13 @@ export const insertMealPlanSchema = createInsertSchema(mealPlans).omit({
   pricePerPerson: z.union([z.string(), z.number()]).transform((val) => String(val))
 });
 
+export const insertMealVoucherSchema = createInsertSchema(mealVouchers).omit({
+  id: true,
+  createdAt: true
+}).extend({
+  voucherDate: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val))
+});
+
 export const insertRoomReservationSchema = createInsertSchema(roomReservations).omit({
   id: true,
   createdAt: true,
@@ -1083,6 +1107,8 @@ export type Wastage = typeof wastages.$inferSelect;
 export type InsertWastage = z.infer<typeof insertWastageSchema>;
 export type MealPlan = typeof mealPlans.$inferSelect;
 export type InsertMealPlan = z.infer<typeof insertMealPlanSchema>;
+export type MealVoucher = typeof mealVouchers.$inferSelect;
+export type InsertMealVoucher = z.infer<typeof insertMealVoucherSchema>;
 export type RoomReservation = typeof roomReservations.$inferSelect;
 export type InsertRoomReservation = z.infer<typeof insertRoomReservationSchema>;
 export type Guest = typeof guests.$inferSelect;
