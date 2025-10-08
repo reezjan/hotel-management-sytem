@@ -30,6 +30,7 @@ import {
   CheckSquare,
   Plus,
   Calendar as CalendarIcon,
+  CalendarCheck,
   Wrench,
   Search,
   Utensils,
@@ -71,6 +72,7 @@ export default function FrontDeskDashboard() {
   const [newCheckoutDate, setNewCheckoutDate] = useState<Date | undefined>(undefined);
   const [guestSearchQuery, setGuestSearchQuery] = useState("");
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
+  const [isViewReservationsModalOpen, setIsViewReservationsModalOpen] = useState(false);
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
@@ -124,6 +126,11 @@ export default function FrontDeskDashboard() {
 
   const { data: transactions = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions"],
+    enabled: !!user?.hotelId
+  });
+
+  const { data: reservations = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/reservations"],
     enabled: !!user?.hotelId
   });
 
@@ -484,8 +491,8 @@ export default function FrontDeskDashboard() {
         guestEmail: data.guestEmail,
         guestPhone: data.guestPhone,
         roomId: data.roomId,
-        checkInDate: data.checkInDate,
-        checkOutDate: data.checkOutDate,
+        checkInDate: checkIn,
+        checkOutDate: checkOut,
         numberOfPersons: Number(data.numberOfPersons),
         mealPlanId: data.mealPlanId || null,
         roomPrice: String(roomPrice),
@@ -693,6 +700,47 @@ export default function FrontDeskDashboard() {
     setNewCheckoutDate(currentCheckoutDate);
     setIsExtendStayModalOpen(true);
   };
+
+  const handleCheckInFromReservation = (reservation: any) => {
+    const room = rooms.find(r => r.id === reservation.roomId);
+    setSelectedRoom(room);
+    setGuestType("walkin");
+    setOfficeName("");
+    
+    // Pre-fill form with reservation data
+    checkInForm.reset({
+      guestName: reservation.guestName || "",
+      guestEmail: reservation.guestEmail || "",
+      guestPhone: reservation.guestPhone || "",
+      idNumber: "",
+      nationality: "",
+      checkInDate: reservation.checkInDate ? new Date(reservation.checkInDate).toISOString().split('T')[0] : "",
+      checkOutDate: reservation.checkOutDate ? new Date(reservation.checkOutDate).toISOString().split('T')[0] : "",
+      roomId: reservation.roomId || "",
+      advancePayment: "",
+      mealPlanId: reservation.mealPlanId || "",
+      numberOfPersons: String(reservation.numberOfPersons || 1)
+    });
+    
+    setIsCheckInModalOpen(true);
+  };
+
+  // Filter today's and upcoming reservations
+  const todaysReservations = reservations.filter((res: any) => {
+    const checkInDate = new Date(res.checkInDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    checkInDate.setHours(0, 0, 0, 0);
+    return checkInDate.getTime() === today.getTime() && res.status === 'confirmed';
+  });
+
+  const upcomingReservations = reservations.filter((res: any) => {
+    const checkInDate = new Date(res.checkInDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    checkInDate.setHours(0, 0, 0, 0);
+    return checkInDate.getTime() > today.getTime() && res.status === 'confirmed';
+  }).slice(0, 5); // Show only next 5
 
   const onSubmitCheckIn = (data: any) => {
     if (!selectedPaymentMethod && data.advancePayment && Number(data.advancePayment) > 0) {
@@ -1072,6 +1120,15 @@ export default function FrontDeskDashboard() {
               <Button 
                 variant="outline" 
                 className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
+                onClick={() => setIsViewReservationsModalOpen(true)}
+                data-testid="button-view-reservations"
+              >
+                <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
+                <span className="text-xs sm:text-sm">View Reservations</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
                 onClick={() => setIsFoodOrderModalOpen(true)}
                 data-testid="button-food-order"
               >
@@ -1130,6 +1187,99 @@ export default function FrontDeskDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Today's Reservations */}
+        {todaysReservations.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarCheck className="h-5 w-5" />
+                Today's Expected Arrivals ({todaysReservations.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {todaysReservations.map((reservation: any) => {
+                  const room = rooms.find(r => r.id === reservation.roomId);
+                  return (
+                    <div 
+                      key={reservation.id} 
+                      className="flex items-center justify-between p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20"
+                      data-testid={`reservation-today-${reservation.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="font-semibold text-lg" data-testid="text-guest-name">{reservation.guestName}</div>
+                        <div className="text-sm text-muted-foreground space-y-1">
+                          <div className="flex items-center gap-4">
+                            <span className="flex items-center gap-1">
+                              <Smartphone className="h-3 w-3" />
+                              {reservation.guestPhone}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Bed className="h-3 w-3" />
+                              Room {room?.roomNumber || 'N/A'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span>{reservation.numberOfPersons} {reservation.numberOfPersons === 1 ? 'person' : 'persons'}</span>
+                            <span>Check-out: {new Date(reservation.checkOutDate).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={() => handleCheckInFromReservation(reservation)}
+                        size="sm"
+                        className="ml-4"
+                        data-testid="button-quick-checkin"
+                      >
+                        <UserCheck className="h-4 w-4 mr-1" />
+                        Quick Check-in
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Upcoming Reservations */}
+        {upcomingReservations.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5" />
+                Upcoming Reservations
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {upcomingReservations.map((reservation: any) => {
+                  const room = rooms.find(r => r.id === reservation.roomId);
+                  return (
+                    <div 
+                      key={reservation.id} 
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                      data-testid={`reservation-upcoming-${reservation.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="font-medium" data-testid="text-guest-name">{reservation.guestName}</div>
+                        <div className="text-sm text-muted-foreground">
+                          <span className="mr-4">Room {room?.roomNumber || 'N/A'}</span>
+                          <span className="mr-4">Check-in: {new Date(reservation.checkInDate).toLocaleDateString()}</span>
+                          <span>{reservation.numberOfPersons} {reservation.numberOfPersons === 1 ? 'person' : 'persons'}</span>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="ml-4">
+                        {Math.ceil((new Date(reservation.checkInDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Room Status Overview */}
         <Card>
@@ -2650,6 +2800,105 @@ export default function FrontDeskDashboard() {
                   Cancel
                 </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* View All Reservations Modal */}
+        <Dialog open={isViewReservationsModalOpen} onOpenChange={setIsViewReservationsModalOpen}>
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>All Reservations</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {reservations.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CalendarDays className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No reservations found</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {reservations
+                    .sort((a: any, b: any) => new Date(a.checkInDate).getTime() - new Date(b.checkInDate).getTime())
+                    .map((reservation: any) => {
+                      const room = rooms.find(r => r.id === reservation.roomId);
+                      const checkInDate = new Date(reservation.checkInDate);
+                      const checkOutDate = new Date(reservation.checkOutDate);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      checkInDate.setHours(0, 0, 0, 0);
+                      
+                      const isToday = checkInDate.getTime() === today.getTime();
+                      const isPast = checkInDate.getTime() < today.getTime();
+                      const isUpcoming = checkInDate.getTime() > today.getTime();
+
+                      return (
+                        <div 
+                          key={reservation.id}
+                          className={cn(
+                            "p-4 border rounded-lg",
+                            isToday && "bg-blue-50 dark:bg-blue-950/20 border-blue-200",
+                            isPast && "bg-gray-50 dark:bg-gray-900/20 opacity-60",
+                            isUpcoming && "bg-white dark:bg-gray-950"
+                          )}
+                          data-testid={`reservation-${reservation.id}`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h3 className="font-semibold text-lg" data-testid="text-guest-name">{reservation.guestName}</h3>
+                                {isToday && <Badge className="bg-blue-500">Today</Badge>}
+                                {isPast && <Badge variant="secondary">Past</Badge>}
+                                <Badge variant="outline">{reservation.status}</Badge>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <Smartphone className="h-3 w-3" />
+                                  {reservation.guestPhone}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Bed className="h-3 w-3" />
+                                  Room {room?.roomNumber || 'N/A'}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-3 w-3" />
+                                  {reservation.numberOfPersons} {reservation.numberOfPersons === 1 ? 'person' : 'persons'}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <CalendarIcon className="h-3 w-3" />
+                                  {checkInDate.toLocaleDateString()} - {checkOutDate.toLocaleDateString()}
+                                </div>
+                              </div>
+                              {reservation.specialRequests && (
+                                <div className="mt-2 text-sm">
+                                  <span className="font-medium">Special Requests:</span> {reservation.specialRequests}
+                                </div>
+                              )}
+                              <div className="mt-2 text-sm font-medium">
+                                Total: {formatCurrency(Number(reservation.totalPrice || 0))}
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              {isToday && (
+                                <Button 
+                                  size="sm"
+                                  onClick={() => {
+                                    handleCheckInFromReservation(reservation);
+                                    setIsViewReservationsModalOpen(false);
+                                  }}
+                                  data-testid="button-quick-checkin-modal"
+                                >
+                                  <UserCheck className="h-4 w-4 mr-1" />
+                                  Check-in
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
