@@ -231,6 +231,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Bed', label: 'Room Occupancy', id: 'occupancy' },
     { icon: 'Calculator', label: 'Tax Configuration', id: 'taxes' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
+    { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' },
     { icon: 'BarChart', label: 'Reports', id: 'reports' }
   ],
   [ROLES.MANAGER]: [
@@ -244,6 +245,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'DollarSign', label: 'Room Pricing', id: 'pricing' },
     { icon: 'Waves', label: 'Amenities', id: 'amenities' },
     { icon: 'UtensilsCrossed', label: 'Meal Plans', id: 'meal-plans' },
+    { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' },
     { icon: 'Receipt', label: 'Transactions', id: 'transactions' }
   ],
   [ROLES.CASHIER]: [
@@ -264,14 +266,16 @@ export const NAVIGATION_ITEMS = {
     { icon: 'DoorClosed', label: 'Room Cleaning Queue', id: 'cleaning-queue' },
     { icon: 'ClipboardList', label: 'Task Assignment', id: 'tasks' },
     { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
-    { icon: 'MapPin', label: 'Staff Tracking', id: 'tracking' }
+    { icon: 'MapPin', label: 'Staff Tracking', id: 'tracking' },
+    { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' }
   ],
   [ROLES.HOUSEKEEPING_STAFF]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'Clock', label: 'Duty Status', id: 'duty' },
     { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
     { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
-    { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
+    { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.RESTAURANT_BAR_MANAGER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
@@ -282,7 +286,8 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Menu', label: 'Menu Management', id: 'menu' },
     { icon: 'Table', label: 'Table Setup', id: 'tables' },
     { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
-    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' },
+    { icon: 'CheckCircle', label: 'Leave Approvals', id: 'leave-approvals' }
   ],
   [ROLES.WAITER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
@@ -291,23 +296,28 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Receipt', label: 'Billing', id: 'billing' },
     { icon: 'Search', label: 'Food Search', id: 'search' },
     { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
-    { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' }
+    { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.KITCHEN_STAFF]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.BARTENDER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.BARISTA]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.SECURITY_HEAD]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
+    { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' }
   ],
   [ROLES.SECURITY_GUARD]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
@@ -315,7 +325,8 @@ export const NAVIGATION_ITEMS = {
     { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
     { icon: 'Car', label: 'Vehicle Check', id: 'vehicles' },
     { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.SURVEILLANCE_OFFICER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
@@ -323,7 +334,8 @@ export const NAVIGATION_ITEMS = {
     { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
     { icon: 'Car', label: 'Vehicle Logs', id: 'vehicles' },
     { icon: 'Wrench', label: 'Maintenance Reports', id: 'maintenance' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.FINANCE]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
@@ -341,6 +353,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Edit', label: 'Inventory Management', id: 'management' },
     { icon: 'ClipboardCheck', label: 'Stock Requests', id: 'stock-requests' },
     { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
-    { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' }
+    { icon: 'CheckSquare', label: 'My Tasks', id: 'tasks' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ]
 };

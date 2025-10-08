@@ -36,6 +36,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'occupancy': '/owner/occupancy',
         'taxes': '/owner/taxes',
         'staff': '/owner/staff',
+        'leave-approvals': '/owner/leave-approvals',
         'reports': '/owner/reports'
       },
       'manager': {
@@ -49,6 +50,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'pricing': '/manager/room-pricing',
         'amenities': '/manager/amenities',
         'meal-plans': '/manager/meal-plans',
+        'leave-approvals': '/manager/leave-approvals',
         'transactions': '/manager/transactions'
       },
       'housekeeping_supervisor': {
@@ -58,7 +60,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'cleaning-queue': '/housekeeping-supervisor/cleaning-queue',
         'tasks': '/housekeeping-supervisor/task-assignment',
         'maintenance': '/housekeeping-supervisor/maintenance-requests',
-        'tracking': '/housekeeping-supervisor/staff-tracking'
+        'tracking': '/housekeeping-supervisor/staff-tracking',
+        'leave-approvals': '/housekeeping-supervisor/leave-approvals'
       },
       'restaurant_bar_manager': {
         'dashboard': '/restaurant-bar-manager',
@@ -69,11 +72,13 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'tasks': '/restaurant-bar-manager/task-assignment',
         'menu': '/restaurant-bar-manager/menu-management',
         'maintenance': '/restaurant-bar-manager/maintenance-requests',
-        'leave': '/restaurant-bar-manager/leave-requests'
+        'leave': '/restaurant-bar-manager/leave-requests',
+        'leave-approvals': '/restaurant-bar-manager/leave-approvals'
       },
       'security_head': {
         'dashboard': '/security-head',
-        'request-stock': '/security-head/request-stock'
+        'request-stock': '/security-head/request-stock',
+        'leave-approvals': '/security-head/leave-approvals'
       },
       'finance': {
         'dashboard': '/finance',
@@ -93,7 +98,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'billing': '/waiter/billing',
         'search': '/waiter/food-search',
         'request-stock': '/waiter/request-stock',
-        'maintenance': '/waiter/maintenance'
+        'maintenance': '/waiter/maintenance',
+        'leave': '/leave-requests'
       },
       'cashier': {
         'dashboard': '/cashier',
@@ -112,14 +118,16 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'tasks': '/surveillance-officer/my-tasks',
         'vehicles': '/surveillance-officer/vehicle-logs',
         'maintenance': '/surveillance-officer/maintenance-reports',
-        'request-stock': '/surveillance-officer/request-stock'
+        'request-stock': '/surveillance-officer/request-stock',
+        'leave': '/leave-requests'
       },
       'housekeeping_staff': {
         'dashboard': '/housekeeping-staff',
         'duty': '/housekeeping-staff/duty-status',
         'tasks': '/housekeeping-staff/my-tasks',
         'request-stock': '/housekeeping-staff/request-stock',
-        'maintenance': '/housekeeping-staff/maintenance-reports'
+        'maintenance': '/housekeeping-staff/maintenance-reports',
+        'leave': '/leave-requests'
       },
       'kitchen_staff': {
         'dashboard': '/kitchen-staff',
@@ -127,7 +135,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'tasks': '/my-tasks',
         'kot': '/kot-orders',
         'request-stock': '/kitchen-staff/request-stock',
-        'maintenance': '/maintenance-reports'
+        'maintenance': '/maintenance-reports',
+        'leave': '/leave-requests'
       },
       'bartender': {
         'dashboard': '/bartender',
@@ -135,7 +144,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'tasks': '/my-tasks',
         'kot': '/kot-orders',
         'request-stock': '/bartender/request-stock',
-        'maintenance': '/maintenance-reports'
+        'maintenance': '/maintenance-reports',
+        'leave': '/leave-requests'
       },
       'barista': {
         'dashboard': '/barista',
@@ -143,7 +153,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'tasks': '/my-tasks',
         'kot': '/kot-orders',
         'request-stock': '/barista/request-stock',
-        'maintenance': '/maintenance-reports'
+        'maintenance': '/maintenance-reports',
+        'leave': '/leave-requests'
       },
       'security_guard': {
         'dashboard': '/security-guard',
@@ -151,7 +162,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'tasks': '/my-tasks',
         'vehicles': '/vehicle-check',
         'maintenance': '/maintenance-reports',
-        'request-stock': '/security-guard/request-stock'
+        'request-stock': '/security-guard/request-stock',
+        'leave': '/leave-requests'
       },
       'storekeeper': {
         'dashboard': '/storekeeper',
@@ -160,7 +172,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'management': '/storekeeper/inventory-management',
         'stock-requests': '/storekeeper/stock-requests',
         'maintenance': '/storekeeper/maintenance-requests',
-        'tasks': '/storekeeper/my-tasks'
+        'tasks': '/storekeeper/my-tasks',
+        'leave': '/leave-requests'
       }
     };
 

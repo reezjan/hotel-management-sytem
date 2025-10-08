@@ -98,6 +98,7 @@ function Router() {
       <ProtectedRoute path="/owner/occupancy" component={OwnerRoomOccupancy} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/taxes" component={OwnerTaxConfiguration} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/staff" component={OwnerStaffManagement} allowedRoles={["owner"]} />
+      <ProtectedRoute path="/owner/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/reports" component={OwnerReports} allowedRoles={["owner"]} />
       
       <ProtectedRoute path="/manager" component={ManagerDashboard} allowedRoles={["manager"]} />
@@ -117,6 +118,7 @@ function Router() {
       <ProtectedRoute path="/housekeeping-supervisor/task-assignment" component={HousekeepingSupervisorTaskAssignment} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-supervisor/maintenance-requests" component={HousekeepingSupervisorMaintenanceRequests} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-supervisor/staff-tracking" component={HousekeepingSupervisorStaffTracking} allowedRoles={["housekeeping_supervisor"]} />
+      <ProtectedRoute path="/housekeeping-supervisor/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-staff" component={HousekeepingStaffDashboard} allowedRoles={["housekeeping_staff"]} />
       <ProtectedRoute path="/housekeeping-staff/duty-status" component={HousekeepingStaffDutyStatus} allowedRoles={["housekeeping_staff"]} />
       <ProtectedRoute path="/housekeeping-staff/my-tasks" component={HousekeepingStaffMyTasks} allowedRoles={["housekeeping_staff"]} />
@@ -130,6 +132,7 @@ function Router() {
       <ProtectedRoute path="/restaurant-bar-manager/stock-requests" component={DepartmentStockRequests} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/duty-tracking" component={RestaurantDutyTracking} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/leave-requests" component={RestaurantLeaveRequests} allowedRoles={["restaurant_bar_manager"]} />
+      <ProtectedRoute path="/restaurant-bar-manager/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/restaurant-bar-manager/maintenance-requests" component={RestaurantMaintenanceRequests} allowedRoles={["restaurant_bar_manager"]} />
       <ProtectedRoute path="/waiter" component={WaiterDashboard} allowedRoles={["waiter"]} />
       <ProtectedRoute path="/waiter/my-tasks" component={WaiterMyTasks} allowedRoles={["waiter"]} />
@@ -149,6 +152,7 @@ function Router() {
       <ProtectedRoute path="/cashier/table-billing" component={CashierTableBilling} allowedRoles={["cashier"]} />
       <ProtectedRoute path="/security-head" component={SecurityHeadDashboard} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-head/request-stock" component={RequestStock} allowedRoles={["security_head"]} />
+      <ProtectedRoute path="/security-head/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-guard" component={SecurityGuardDashboard} allowedRoles={["security_guard"]} />
       <ProtectedRoute path="/security-guard/request-stock" component={RequestStock} allowedRoles={["security_guard"]} />
       <ProtectedRoute path="/surveillance-officer" component={SurveillanceOfficerDashboard} allowedRoles={["surveillance_officer"]} />
@@ -183,6 +187,9 @@ function Router() {
       <ProtectedRoute path="/storekeeper/stock-requests" component={StorekeeperStockRequests} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/maintenance-requests" component={StorekeeperMaintenanceRequests} allowedRoles={["storekeeper"]} />
       <ProtectedRoute path="/storekeeper/my-tasks" component={StorekeeperMyTasks} allowedRoles={["storekeeper"]} />
+      
+      {/* Leave Requests - accessible to all staff members */}
+      <ProtectedRoute path="/leave-requests" component={RestaurantLeaveRequests} allowedRoles={["housekeeping_staff", "kitchen_staff", "bartender", "barista", "security_guard", "surveillance_officer", "waiter", "storekeeper", "restaurant_bar_manager"]} />
       
       {/* My Profile - accessible to all authenticated users */}
       <ProtectedRoute path="/my-profile" component={MyProfile} allowedRoles={["super_admin", "owner", "manager", "housekeeping_supervisor", "housekeeping_staff", "restaurant_bar_manager", "waiter", "kitchen_staff", "bartender", "barista", "security_head", "security_guard", "surveillance_officer", "finance", "front_desk", "cashier", "storekeeper"]} />
