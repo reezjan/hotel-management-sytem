@@ -2154,7 +2154,9 @@ export class DatabaseStorage implements IStorage {
     const leaveTypes = [
       { type: 'sick', days: 10 },
       { type: 'vacation', days: 15 },
-      { type: 'emergency', days: 5 }
+      { type: 'personal', days: 5 },
+      { type: 'emergency', days: 5 },
+      { type: 'family', days: 5 }
     ];
 
     for (const { type, days } of leaveTypes) {

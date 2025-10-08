@@ -3077,19 +3077,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate user role has a valid approver in the hierarchy
       const userRole = user.role?.name || '';
       const roleHierarchy: Record<string, string> = {
+        // Restaurant & Bar staff → Restaurant and Bar Manager
         'waiter': 'restaurant_bar_manager',
         'cashier': 'restaurant_bar_manager',
         'bartender': 'restaurant_bar_manager',
         'kitchen_staff': 'restaurant_bar_manager',
         'barista': 'restaurant_bar_manager',
+        // Housekeeping staff → Housekeeping Supervisor
         'housekeeping_staff': 'housekeeping_supervisor',
+        // Security staff → Security Head
+        'security_guard': 'security_head',
         'surveillance_officer': 'security_head',
+        // Department heads → Manager
         'restaurant_bar_manager': 'manager',
         'housekeeping_supervisor': 'manager',
         'security_head': 'manager',
+        // Other staff → Manager
         'finance': 'manager',
         'front_desk': 'manager',
         'storekeeper': 'manager',
+        // Manager → Owner
         'manager': 'owner'
       };
 
