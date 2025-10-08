@@ -391,11 +391,19 @@ export const attendance = pgTable("attendance", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   hotelId: uuid("hotel_id").references(() => hotels.id),
   userId: uuid("user_id").references(() => users.id),
-  status: text("status"),
-  clockIn: timestamp("clock_in", { withTimezone: true }),
-  clockOut: timestamp("clock_out", { withTimezone: true }),
-  source: text("source"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+  clockInTime: timestamp("clock_in_time", { withTimezone: true }).notNull(),
+  clockOutTime: timestamp("clock_out_time", { withTimezone: true }),
+  clockInLocation: text("clock_in_location"),
+  clockOutLocation: text("clock_out_location"),
+  clockInIp: text("clock_in_ip"),
+  clockOutIp: text("clock_out_ip"),
+  totalHours: numeric("total_hours", { precision: 10, scale: 2 }),
+  status: text("status").default('active').notNull(),
+  clockInSource: text("clock_in_source"),
+  clockOutSource: text("clock_out_source"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
 // Leave Requests Table
@@ -1146,6 +1154,13 @@ export type Service = typeof services.$inferSelect;
 export type InsertService = z.infer<typeof insertServiceSchema>;
 export type InventoryConsumption = typeof inventoryConsumptions.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
+export const insertAttendanceSchema = createInsertSchema(attendance).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
 export type Attendance = typeof attendance.$inferSelect;
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;

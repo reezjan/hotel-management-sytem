@@ -99,7 +99,9 @@ import {
   type InsertBillPayment,
   type RoomReservation,
   type InsertRoomReservation,
-  roomReservations
+  roomReservations,
+  type Attendance,
+  type InsertAttendance
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, not, isNull, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
@@ -336,6 +338,14 @@ export interface IStorage {
   updateRestaurantBill(id: string, bill: Partial<any>): Promise<any>;
   getBillPayments(billId: string): Promise<any[]>;
   createBillPayment(payment: any): Promise<any>;
+  
+  // Attendance operations
+  createAttendance(userId: string, hotelId: string, clockInTime: Date, location: string | null, ip: string | null, source: string | null): Promise<any>;
+  getActiveAttendance(userId: string): Promise<any | null>;
+  clockOut(attendanceId: string, clockOutTime: Date, location: string | null, ip: string | null, source: string | null): Promise<any>;
+  getAttendanceByUser(userId: string, startDate?: Date, endDate?: Date): Promise<any[]>;
+  getAttendanceByHotel(hotelId: string, date: Date): Promise<any[]>;
+  canClockIn(userId: string): Promise<{ canClockIn: boolean; reason?: string }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2704,6 +2714,137 @@ export class DatabaseStorage implements IStorage {
       .values(paymentData)
       .returning();
     return payment;
+  }
+
+  async createAttendance(userId: string, hotelId: string, clockInTime: Date, location: string | null, ip: string | null, source: string | null): Promise<Attendance> {
+    const [record] = await db
+      .insert(attendance)
+      .values({
+        userId,
+        hotelId,
+        clockInTime,
+        clockInLocation: location,
+        clockInIp: ip,
+        clockInSource: source,
+        status: 'active'
+      })
+      .returning();
+    return record;
+  }
+
+  async getActiveAttendance(userId: string): Promise<Attendance | null> {
+    const [record] = await db
+      .select()
+      .from(attendance)
+      .where(and(
+        eq(attendance.userId, userId),
+        eq(attendance.status, 'active')
+      ))
+      .orderBy(desc(attendance.clockInTime))
+      .limit(1);
+    return record || null;
+  }
+
+  async clockOut(attendanceId: string, clockOutTime: Date, location: string | null, ip: string | null, source: string | null): Promise<Attendance> {
+    const [record] = await db
+      .select()
+      .from(attendance)
+      .where(eq(attendance.id, attendanceId));
+
+    if (!record) {
+      throw new Error('Attendance record not found');
+    }
+
+    const clockInTime = new Date(record.clockInTime);
+    const totalHours = (clockOutTime.getTime() - clockInTime.getTime()) / (1000 * 60 * 60);
+
+    const [updated] = await db
+      .update(attendance)
+      .set({
+        clockOutTime,
+        clockOutLocation: location,
+        clockOutIp: ip,
+        clockOutSource: source,
+        totalHours: totalHours.toFixed(2),
+        status: 'completed',
+        updatedAt: new Date()
+      })
+      .where(eq(attendance.id, attendanceId))
+      .returning();
+    
+    return updated;
+  }
+
+  async getAttendanceByUser(userId: string, startDate?: Date, endDate?: Date): Promise<Attendance[]> {
+    const conditions = [eq(attendance.userId, userId)];
+    
+    if (startDate) {
+      conditions.push(gte(attendance.clockInTime, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(attendance.clockInTime, endDate));
+    }
+
+    return await db
+      .select()
+      .from(attendance)
+      .where(and(...conditions))
+      .orderBy(desc(attendance.clockInTime));
+  }
+
+  async getAttendanceByHotel(hotelId: string, date: Date): Promise<Attendance[]> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    return await db
+      .select()
+      .from(attendance)
+      .where(and(
+        eq(attendance.hotelId, hotelId),
+        gte(attendance.clockInTime, startOfDay),
+        lte(attendance.clockInTime, endOfDay)
+      ))
+      .orderBy(desc(attendance.clockInTime));
+  }
+
+  async canClockIn(userId: string): Promise<{ canClockIn: boolean; reason?: string }> {
+    const user = await this.getUser(userId);
+    
+    if (!user) {
+      return { canClockIn: false, reason: 'User not found' };
+    }
+
+    if (!user.isActive) {
+      return { canClockIn: false, reason: 'User is not active' };
+    }
+
+    const activeAttendance = await this.getActiveAttendance(userId);
+    
+    if (activeAttendance) {
+      return { canClockIn: false, reason: 'Already clocked in' };
+    }
+
+    const lastAttendance = await db
+      .select()
+      .from(attendance)
+      .where(eq(attendance.userId, userId))
+      .orderBy(desc(attendance.clockInTime))
+      .limit(1);
+
+    if (lastAttendance.length > 0 && lastAttendance[0].clockOutTime) {
+      const lastClockOut = new Date(lastAttendance[0].clockOutTime);
+      const now = new Date();
+      const minutesSinceLastClockOut = (now.getTime() - lastClockOut.getTime()) / (1000 * 60);
+      
+      if (minutesSinceLastClockOut < 1) {
+        return { canClockIn: false, reason: 'Must wait at least 1 minute after clocking out' };
+      }
+    }
+
+    return { canClockIn: true };
   }
 }
 

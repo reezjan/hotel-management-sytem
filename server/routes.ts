@@ -4752,6 +4752,172 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Attendance routes
+  app.post("/api/attendance/clock-in", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      if (!user.isActive) {
+        return res.status(403).json({ message: "User is not active" });
+      }
+
+      const canClockInResult = await storage.canClockIn(user.id);
+      if (!canClockInResult.canClockIn) {
+        return res.status(400).json({ message: canClockInResult.reason || "Cannot clock in" });
+      }
+
+      const { location } = req.body;
+      const ip = req.ip || req.socket.remoteAddress || null;
+      const source = req.body.source || 'web';
+      const clockInTime = new Date();
+
+      const attendanceRecord = await storage.createAttendance(
+        user.id,
+        user.hotelId,
+        clockInTime,
+        location || null,
+        ip,
+        source
+      );
+
+      await storage.updateUserOnlineStatus(user.id, true);
+
+      res.status(201).json(attendanceRecord);
+    } catch (error) {
+      console.error("Clock-in error:", error);
+      res.status(500).json({ message: "Failed to clock in" });
+    }
+  });
+
+  app.post("/api/attendance/clock-out", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const user = req.user as any;
+      
+      const activeAttendance = await storage.getActiveAttendance(user.id);
+      if (!activeAttendance) {
+        return res.status(400).json({ message: "No active clock-in found" });
+      }
+
+      const { location } = req.body;
+      const ip = req.ip || req.socket.remoteAddress || null;
+      const source = req.body.source || 'web';
+      const clockOutTime = new Date();
+
+      const clockInTime = new Date(activeAttendance.clockInTime);
+      if (clockOutTime <= clockInTime) {
+        return res.status(400).json({ message: "Clock-out time must be after clock-in time" });
+      }
+
+      const updatedRecord = await storage.clockOut(
+        activeAttendance.id,
+        clockOutTime,
+        location || null,
+        ip,
+        source
+      );
+
+      await storage.updateUserOnlineStatus(user.id, false);
+
+      res.json(updatedRecord);
+    } catch (error) {
+      console.error("Clock-out error:", error);
+      res.status(500).json({ message: "Failed to clock out" });
+    }
+  });
+
+  app.get("/api/attendance/history", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const user = req.user as any;
+      
+      const { startDate, endDate } = req.query;
+      
+      let start: Date | undefined;
+      let end: Date | undefined;
+      
+      if (startDate && typeof startDate === 'string') {
+        start = new Date(startDate);
+      }
+      if (endDate && typeof endDate === 'string') {
+        end = new Date(endDate);
+      }
+      
+      if (!start) {
+        const now = new Date();
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+      
+      const records = await storage.getAttendanceByUser(user.id, start, end);
+      res.json(records);
+    } catch (error) {
+      console.error("Get attendance history error:", error);
+      res.status(500).json({ message: "Failed to fetch attendance history" });
+    }
+  });
+
+  app.get("/api/attendance/daily", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const userRole = user.role?.name || '';
+      const managerRoles = ['super_admin', 'owner', 'manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head', 'finance'];
+      
+      if (!managerRoles.includes(userRole)) {
+        return res.status(403).json({ message: "Only managers can view hotel attendance" });
+      }
+
+      const { date } = req.query;
+      const queryDate = date && typeof date === 'string' ? new Date(date) : new Date();
+      
+      const records = await storage.getAttendanceByHotel(user.hotelId, queryDate);
+      res.json(records);
+    } catch (error) {
+      console.error("Get daily attendance error:", error);
+      res.status(500).json({ message: "Failed to fetch daily attendance" });
+    }
+  });
+
+  app.get("/api/attendance/status", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const user = req.user as any;
+      
+      const activeAttendance = await storage.getActiveAttendance(user.id);
+      
+      res.json({
+        isOnDuty: !!activeAttendance,
+        attendance: activeAttendance || null
+      });
+    } catch (error) {
+      console.error("Get attendance status error:", error);
+      res.status(500).json({ message: "Failed to fetch attendance status" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
