@@ -189,7 +189,7 @@ function Router() {
       <ProtectedRoute path="/storekeeper/my-tasks" component={StorekeeperMyTasks} allowedRoles={["storekeeper"]} />
       
       {/* Leave Requests - accessible to all staff members */}
-      <ProtectedRoute path="/leave-requests" component={RestaurantLeaveRequests} allowedRoles={["housekeeping_staff", "kitchen_staff", "bartender", "barista", "security_guard", "surveillance_officer", "waiter", "storekeeper", "restaurant_bar_manager"]} />
+      <ProtectedRoute path="/leave-requests" component={RestaurantLeaveRequests} allowedRoles={["housekeeping_staff", "kitchen_staff", "bartender", "barista", "security_guard", "surveillance_officer", "waiter", "storekeeper", "restaurant_bar_manager", "cashier", "finance", "front_desk"]} />
       
       {/* My Profile - accessible to all authenticated users */}
       <ProtectedRoute path="/my-profile" component={MyProfile} allowedRoles={["super_admin", "owner", "manager", "housekeeping_supervisor", "housekeeping_staff", "restaurant_bar_manager", "waiter", "kitchen_staff", "bartender", "barista", "security_head", "security_guard", "surveillance_officer", "finance", "front_desk", "cashier", "storekeeper"]} />

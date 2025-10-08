@@ -88,7 +88,8 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'expenses': '/finance/expenses',
         'cashflow': '/finance/cashflow',
         'reconciliation': '/finance/reconciliation',
-        'reports': '/finance/reports'
+        'reports': '/finance/reports',
+        'leave': '/leave-requests'
       },
       'waiter': {
         'dashboard': '/waiter',
@@ -104,13 +105,15 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
       'cashier': {
         'dashboard': '/cashier',
         'table-billing': '/cashier/table-billing',
-        'hall-bookings': '/hall-bookings'
+        'hall-bookings': '/hall-bookings',
+        'leave': '/leave-requests'
       },
       'front_desk': {
         'dashboard': '/front-desk',
         'guests': '/guests',
         'hall-bookings': '/hall-bookings',
-        'request-stock': '/front-desk/request-stock'
+        'request-stock': '/front-desk/request-stock',
+        'leave': '/leave-requests'
       },
       'surveillance_officer': {
         'dashboard': '/surveillance-officer',

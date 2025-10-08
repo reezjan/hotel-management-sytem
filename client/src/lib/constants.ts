@@ -251,13 +251,15 @@ export const NAVIGATION_ITEMS = {
   [ROLES.CASHIER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'Receipt', label: 'Table Billing', id: 'table-billing' },
-    { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' }
+    { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.FRONT_DESK]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'Users', label: 'Guest Management', id: 'guests' },
     { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
-    { icon: 'Package', label: 'Request Stock', id: 'request-stock' }
+    { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.HOUSEKEEPING_SUPERVISOR]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
@@ -345,7 +347,8 @@ export const NAVIGATION_ITEMS = {
     { icon: 'TrendingDown', label: 'Expense Tracking', id: 'expenses' },
     { icon: 'DollarSign', label: 'Cash Flow', id: 'cashflow' },
     { icon: 'CreditCard', label: 'Payment Reconciliation', id: 'reconciliation' },
-    { icon: 'FileText', label: 'Reports & Summary', id: 'reports' }
+    { icon: 'FileText', label: 'Reports & Summary', id: 'reports' },
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.STOREKEEPER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
