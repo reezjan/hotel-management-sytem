@@ -2804,8 +2804,13 @@ export class DatabaseStorage implements IStorage {
       .from(attendance)
       .where(and(
         eq(attendance.hotelId, hotelId),
-        gte(attendance.clockInTime, startOfDay),
-        lte(attendance.clockInTime, endOfDay)
+        or(
+          and(
+            gte(attendance.clockInTime, startOfDay),
+            lte(attendance.clockInTime, endOfDay)
+          ),
+          eq(attendance.status, 'active')
+        )
       ))
       .orderBy(desc(attendance.clockInTime));
   }
