@@ -956,6 +956,9 @@ export const insertRoomReservationSchema = createInsertSchema(roomReservations).
   id: true,
   createdAt: true,
   updatedAt: true
+}).extend({
+  checkInDate: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val)),
+  checkOutDate: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val))
 });
 
 export const insertVendorSchema = createInsertSchema(vendors).omit({

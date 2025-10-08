@@ -138,6 +138,7 @@ export interface IStorage {
 
   // Room reservation operations
   createRoomReservation(reservation: InsertRoomReservation): Promise<RoomReservation>;
+  getRoomReservationsByHotel(hotelId: string): Promise<RoomReservation[]>;
 
   // Room type operations
   getRoomTypesByHotel(hotelId: string): Promise<RoomType[]>;
@@ -583,6 +584,14 @@ export class DatabaseStorage implements IStorage {
       .values(reservationData)
       .returning();
     return reservation;
+  }
+
+  async getRoomReservationsByHotel(hotelId: string): Promise<RoomReservation[]> {
+    const reservations = await db
+      .select()
+      .from(roomReservations)
+      .where(eq(roomReservations.hotelId, hotelId));
+    return reservations;
   }
 
   // Menu operations
