@@ -266,6 +266,7 @@ export interface IStorage {
   getLeaveRequestsForManager(hotelId: string): Promise<LeaveRequest[]>;
   getPendingLeaveRequestsForManager(hotelId: string): Promise<LeaveRequest[]>;
   getPendingLeaveRequestsForApprover(approverRole: string, hotelId: string): Promise<LeaveRequest[]>;
+  getLeaveRequestsForApprover(approverRole: string, hotelId: string): Promise<LeaveRequest[]>;
   createLeaveRequest(request: InsertLeaveRequest): Promise<LeaveRequest>;
   updateLeaveRequest(id: string, request: Partial<any>): Promise<LeaveRequest>;
   getLeaveRequest(id: string): Promise<LeaveRequest | undefined>;
@@ -1946,7 +1947,7 @@ export class DatabaseStorage implements IStorage {
       'restaurant_bar_manager': ['cashier', 'waiter', 'barista', 'bartender', 'kitchen_staff'],
       'housekeeping_supervisor': ['housekeeping_staff'],
       'security_head': ['security_guard', 'surveillance_officer'],
-      'manager': ['restaurant_bar_manager', 'housekeeping_supervisor', 'security_head', 'storekeeper', 'front_desk'],
+      'manager': ['restaurant_bar_manager', 'housekeeping_supervisor', 'security_head', 'finance', 'storekeeper', 'front_desk'],
       'owner': ['manager']
     };
 
@@ -1985,6 +1986,62 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(leaveRequests.hotelId, hotelId),
         eq(leaveRequests.status, 'pending'),
+        inArray(leaveRequests.requestedBy, subordinateUserIds)
+      ))
+      .orderBy(desc(leaveRequests.createdAt));
+
+    // Return just the leave requests with user info attached
+    return allRequests.map(r => ({
+      ...r.leaveRequest,
+      requestedByUser: r.user,
+      requestedByRole: r.role
+    })) as any;
+  }
+
+  async getLeaveRequestsForApprover(approverRole: string, hotelId: string): Promise<LeaveRequest[]> {
+    // Define role hierarchy: which roles each approver can approve
+    const approvalMapping: Record<string, string[]> = {
+      'restaurant_bar_manager': ['cashier', 'waiter', 'barista', 'bartender', 'kitchen_staff'],
+      'housekeeping_supervisor': ['housekeeping_staff'],
+      'security_head': ['security_guard', 'surveillance_officer'],
+      'manager': ['restaurant_bar_manager', 'housekeeping_supervisor', 'security_head', 'finance', 'storekeeper', 'front_desk'],
+      'owner': ['manager']
+    };
+
+    const rolesCanApprove = approvalMapping[approverRole] || [];
+    
+    if (rolesCanApprove.length === 0) {
+      return [];
+    }
+
+    // First, get all users with the subordinate roles
+    const subordinateUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .innerJoin(roles, eq(users.roleId, roles.id))
+      .where(and(
+        eq(users.hotelId, hotelId),
+        inArray(roles.name, rolesCanApprove)
+      ));
+
+    const subordinateUserIds = subordinateUsers.map(u => u.id);
+
+    if (subordinateUserIds.length === 0) {
+      return [];
+    }
+
+    // Get ALL leave requests from those subordinate users (all statuses)
+    const allRequests = await db
+      .select({
+        leaveRequest: leaveRequests,
+        user: users,
+        role: roles
+      })
+      .from(leaveRequests)
+      .innerJoin(users, eq(leaveRequests.requestedBy, users.id))
+      .innerJoin(roles, eq(users.roleId, roles.id))
+      .where(and(
+        eq(leaveRequests.hotelId, hotelId),
         inArray(leaveRequests.requestedBy, subordinateUserIds)
       ))
       .orderBy(desc(leaveRequests.createdAt));

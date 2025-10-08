@@ -2996,11 +2996,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const userRole = user.role?.name || '';
       const canViewAllRequests = ['manager', 'owner', 'super_admin'].includes(userRole);
+      const isDepartmentHead = ['restaurant_bar_manager', 'housekeeping_supervisor', 'security_head'].includes(userRole);
       
       let leaveRequests;
       if (canViewAllRequests) {
         // Managers, owners, and super_admins can see all requests for the hotel
         leaveRequests = await storage.getLeaveRequestsForManager(user.hotelId);
+      } else if (isDepartmentHead) {
+        // Department heads can see requests from their subordinates (all statuses, not just pending)
+        leaveRequests = await storage.getLeaveRequestsForApprover(userRole, user.hotelId);
       } else {
         // Regular staff can only see their own requests
         leaveRequests = await storage.getLeaveRequestsByUser(user.id);
@@ -3126,12 +3130,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
-      // Only managers can approve leave requests
+      // Check if user has approval authority
       const userRole = user.role?.name || '';
-      const canApprove = ['manager', 'owner', 'super_admin'].includes(userRole);
+      const canApprove = [
+        'restaurant_bar_manager', 
+        'housekeeping_supervisor', 
+        'security_head', 
+        'manager', 
+        'owner', 
+        'super_admin'
+      ].includes(userRole);
       
       if (!canApprove) {
-        return res.status(403).json({ message: "Only managers can approve leave requests" });
+        return res.status(403).json({ message: "You don't have permission to approve leave requests" });
       }
 
       const { id } = req.params;
@@ -3212,12 +3223,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
-      // Only managers can reject leave requests
+      // Check if user has rejection authority
       const userRole = user.role?.name || '';
-      const canReject = ['manager', 'owner', 'super_admin'].includes(userRole);
+      const canReject = [
+        'restaurant_bar_manager', 
+        'housekeeping_supervisor', 
+        'security_head', 
+        'manager', 
+        'owner', 
+        'super_admin'
+      ].includes(userRole);
       
       if (!canReject) {
-        return res.status(403).json({ message: "Only managers can reject leave requests" });
+        return res.status(403).json({ message: "You don't have permission to reject leave requests" });
       }
 
       const { id } = req.params;
