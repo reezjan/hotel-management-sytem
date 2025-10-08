@@ -168,6 +168,8 @@ export default function FrontDeskDashboard() {
       checkInDate: "",
       checkOutDate: "",
       roomId: "",
+      numberOfPersons: "",
+      mealPlanId: "",
       specialRequests: ""
     }
   });
@@ -462,7 +464,20 @@ export default function FrontDeskDashboard() {
 
   const createReservationMutation = useMutation({
     mutationFn: async (data: any) => {
-      // In a real implementation, this would create a reservation record
+      const room = rooms.find(r => r.id === data.roomId);
+      const roomPrice = room?.roomType?.priceWalkin ? Number(room.roomType.priceWalkin) : 0;
+      
+      const plan = mealPlans.find(p => p.id === data.mealPlanId);
+      const mealPlanPrice = plan && data.numberOfPersons 
+        ? Number(plan.pricePerPerson) * Number(data.numberOfPersons) 
+        : 0;
+      
+      const checkIn = new Date(data.checkInDate);
+      const checkOut = new Date(data.checkOutDate);
+      const nights = Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 3600 * 24)));
+      
+      const totalPrice = (roomPrice + mealPlanPrice) * nights;
+
       await apiRequest("POST", "/api/reservations", {
         hotelId: user?.hotelId,
         guestName: data.guestName,
@@ -471,6 +486,11 @@ export default function FrontDeskDashboard() {
         roomId: data.roomId,
         checkInDate: data.checkInDate,
         checkOutDate: data.checkOutDate,
+        numberOfPersons: Number(data.numberOfPersons),
+        mealPlanId: data.mealPlanId || null,
+        roomPrice: String(roomPrice),
+        mealPlanPrice: String(mealPlanPrice),
+        totalPrice: String(totalPrice),
         specialRequests: data.specialRequests,
         status: 'confirmed',
         createdBy: user?.id
@@ -481,6 +501,13 @@ export default function FrontDeskDashboard() {
       reservationForm.reset();
       setIsReservationModalOpen(false);
       handlePrintReservationConfirmation();
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to create reservation", 
+        description: error.message || "Please try again",
+        variant: "destructive" 
+      });
     }
   });
 
@@ -2050,7 +2077,112 @@ export default function FrontDeskDashboard() {
                       </FormItem>
                     )}
                   />
+                  
+                  <FormField
+                    control={reservationForm.control}
+                    name="numberOfPersons"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Number of Persons *</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" min="1" placeholder="1" data-testid="input-reservation-persons" />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={reservationForm.control}
+                    name="mealPlanId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Meal Plan</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-reservation-meal-plan">
+                              <SelectValue placeholder="Select meal plan (optional)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {mealPlans.map((plan) => (
+                              <SelectItem key={plan.id} value={plan.id}>
+                                {plan.planName} - {formatCurrency(plan.pricePerPerson)}/person/day
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
                 </div>
+
+                {reservationForm.watch("roomId") && reservationForm.watch("checkInDate") && reservationForm.watch("checkOutDate") && (
+                  <Card className="bg-muted">
+                    <CardContent className="pt-4">
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between font-medium">
+                          <span>Pricing Summary:</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Room:</span>
+                          <span>{(() => {
+                            const room = rooms.find(r => r.id === reservationForm.watch("roomId"));
+                            return room?.roomType?.name || 'N/A';
+                          })()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Room Price/Night:</span>
+                          <span>{(() => {
+                            const room = rooms.find(r => r.id === reservationForm.watch("roomId"));
+                            const price = room?.roomType?.priceWalkin;
+                            return price ? formatCurrency(price) : 'N/A';
+                          })()}</span>
+                        </div>
+                        {reservationForm.watch("mealPlanId") && (
+                          <div className="flex justify-between">
+                            <span>Meal Plan ({reservationForm.watch("numberOfPersons") || 0} persons):</span>
+                            <span>{(() => {
+                              const plan = mealPlans.find(p => p.id === reservationForm.watch("mealPlanId"));
+                              const persons = Number(reservationForm.watch("numberOfPersons")) || 0;
+                              return plan ? `${formatCurrency(plan.pricePerPerson)} × ${persons} = ${formatCurrency(Number(plan.pricePerPerson) * persons)}/night` : 'N/A';
+                            })()}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span>Number of Nights:</span>
+                          <span>{(() => {
+                            const checkIn = reservationForm.watch("checkInDate");
+                            const checkOut = reservationForm.watch("checkOutDate");
+                            if (checkIn && checkOut) {
+                              const nights = Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 3600 * 24));
+                              return nights > 0 ? nights : 0;
+                            }
+                            return 0;
+                          })()}</span>
+                        </div>
+                        <div className="flex justify-between font-semibold text-base pt-2 border-t">
+                          <span>Estimated Total:</span>
+                          <span>{(() => {
+                            const room = rooms.find(r => r.id === reservationForm.watch("roomId"));
+                            const roomPrice = room?.roomType?.priceWalkin ? Number(room.roomType.priceWalkin) : 0;
+                            const plan = mealPlans.find(p => p.id === reservationForm.watch("mealPlanId"));
+                            const mealPrice = plan && reservationForm.watch("numberOfPersons") 
+                              ? Number(plan.pricePerPerson) * Number(reservationForm.watch("numberOfPersons")) 
+                              : 0;
+                            const checkIn = reservationForm.watch("checkInDate");
+                            const checkOut = reservationForm.watch("checkOutDate");
+                            let nights = 0;
+                            if (checkIn && checkOut) {
+                              nights = Math.max(0, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 3600 * 24)));
+                            }
+                            const total = (roomPrice + mealPrice) * nights;
+                            return formatCurrency(total);
+                          })()}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <FormField
                   control={reservationForm.control}
