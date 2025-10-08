@@ -43,28 +43,56 @@ export default function LeaveApprovals() {
     }
   });
 
-  // Update leave request mutation
-  const updateRequestMutation = useMutation({
-    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes: string }) => {
-      const response = await fetch(`/api/hotels/current/leave-requests/${id}`, {
-        method: "PUT",
+  // Approve leave request mutation
+  const approveRequestMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes?: string }) => {
+      const response = await fetch(`/api/leave-requests/${id}/approve`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ status, managerNotes: notes })
+        body: JSON.stringify({ managerNotes: notes })
       });
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to update leave request");
+        throw new Error(errorData.message || "Failed to approve leave request");
       }
       return response.json();
     },
-    onSuccess: (data, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/leave-requests/pending-approvals"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/leave-requests"] });
       setIsActionDialogOpen(false);
       setSelectedRequest(null);
       setManagerNotes("");
-      toast.success(`Leave request ${variables.status}`);
+      toast.success("Leave request approved successfully");
+    },
+    onError: (error: any) => {
+      toast.error(error.message);
+    }
+  });
+
+  // Reject leave request mutation
+  const rejectRequestMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const response = await fetch(`/api/leave-requests/${id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ managerNotes: notes })
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to reject leave request");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/leave-requests/pending-approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/leave-requests"] });
+      setIsActionDialogOpen(false);
+      setSelectedRequest(null);
+      setManagerNotes("");
+      toast.success("Leave request rejected");
     },
     onError: (error: any) => {
       toast.error(error.message);
@@ -81,12 +109,17 @@ export default function LeaveApprovals() {
   const handleConfirmAction = () => {
     if (!selectedRequest) return;
     
-    const status = actionType === 'approve' ? 'approved' : 'rejected';
-    updateRequestMutation.mutate({
-      id: selectedRequest.id,
-      status,
-      notes: managerNotes
-    });
+    if (actionType === 'approve') {
+      approveRequestMutation.mutate({
+        id: selectedRequest.id,
+        notes: managerNotes
+      });
+    } else {
+      rejectRequestMutation.mutate({
+        id: selectedRequest.id,
+        notes: managerNotes
+      });
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -324,10 +357,10 @@ export default function LeaveApprovals() {
                   </Button>
                   <Button 
                     onClick={handleConfirmAction}
-                    disabled={updateRequestMutation.isPending || (actionType === 'reject' && !managerNotes.trim())}
+                    disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending || (actionType === 'reject' && !managerNotes.trim())}
                     variant={actionType === 'approve' ? 'default' : 'destructive'}
                   >
-                    {updateRequestMutation.isPending 
+                    {(approveRequestMutation.isPending || rejectRequestMutation.isPending) 
                       ? (actionType === 'approve' ? "Approving..." : "Rejecting...") 
                       : (actionType === 'approve' ? "Approve Request" : "Reject Request")
                     }

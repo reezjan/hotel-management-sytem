@@ -36,6 +36,18 @@ export default function LeaveRequests() {
     }
   });
 
+  // Fetch leave balances
+  const { data: leaveBalances = [] } = useQuery<any[]>({
+    queryKey: ["/api/leave-balances"],
+    queryFn: async () => {
+      const response = await fetch("/api/leave-balances", { 
+        credentials: "include" 
+      });
+      if (!response.ok) throw new Error("Failed to fetch leave balances");
+      return response.json();
+    }
+  });
+
   // Create leave request mutation
   const createRequestMutation = useMutation({
     mutationFn: async (requestData: any) => {
@@ -185,6 +197,32 @@ export default function LeaveRequests() {
   return (
     <DashboardLayout title="Leave Requests">
       <div className="space-y-6">
+        {/* Leave Balance Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {leaveBalances.map((balance: any) => (
+            <Card key={balance.id} data-testid={`balance-card-${balance.leaveType}`}>
+              <CardContent className="p-6">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground capitalize">
+                    {balance.leaveType.replace(/_/g, ' ')} Leave Balance
+                  </p>
+                  <div className="flex items-baseline space-x-2">
+                    <p className="text-3xl font-bold" data-testid={`balance-remaining-${balance.leaveType}`}>
+                      {parseFloat(balance.remainingDays)}
+                    </p>
+                    <span className="text-sm text-muted-foreground">
+                      / {parseFloat(balance.totalDays)} days
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Used: {parseFloat(balance.usedDays)} days
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
