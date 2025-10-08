@@ -758,32 +758,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
       }
+      
       const user = req.user as any;
-      if (!user || !user.hotelId) {
-        return res.status(400).json({ message: "User not associated with a hotel" });
-      }
       const { id } = req.params;
-      const taskData = insertTaskSchema.partial().parse(req.body);
-      // Verify the task belongs to current hotel
+      const taskData = req.body;
+      
       const existingTask = await storage.getTask(id);
       if (!existingTask || existingTask.hotelId !== user.hotelId) {
         return res.status(404).json({ message: "Task not found" });
       }
-      // Verify user is authorized to update this task (assigned to them or is a manager)
-      const roleName = user.role?.name ?? user.role;
-      const userRoles = ['restaurant_bar_manager', 'manager', 'owner'];
-      const isManager = userRoles.includes(roleName);
-      if (existingTask.assignedTo !== user.id && !isManager) {
-        return res.status(403).json({ message: "Not authorized to update this task" });
+      
+      const isManager = ['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(user.role?.name || '');
+      const isAssignedUser = existingTask.assignedTo === user.id;
+      
+      let updateData: any = {};
+      
+      if (isAssignedUser && !isManager) {
+        // CRITICAL: Non-managers can only update status to 'in_progress' or 'pending_review'
+        if (taskData.status === 'completed') {
+          // Change status to 'pending_review' instead
+          updateData = { 
+            status: 'pending_review',
+            completionNotes: taskData.completionNotes || taskData.notes,
+            updatedAt: new Date()
+          };
+        } else if (taskData.status === 'in_progress') {
+          updateData = { status: 'in_progress', updatedAt: new Date() };
+        } else {
+          return res.status(403).json({ 
+            message: "You can only mark tasks as in progress. Completion requires manager approval." 
+          });
+        }
+      } else if (isManager) {
+        // Managers can update anything
+        updateData = taskData;
+        
+        // If manager is approving completion
+        if (taskData.status === 'completed' && existingTask.status === 'pending_review') {
+          updateData.approvedBy = user.id;
+          updateData.approvedAt = new Date();
+        }
+      } else {
+        return res.status(403).json({ 
+          message: "You can only update tasks assigned to you" 
+        });
       }
-      // Non-managers can only update status
-      let updateData = taskData;
-      if (!isManager) {
-        updateData = { status: taskData.status };
-      }
+      
       const task = await storage.updateTask(id, updateData);
       res.json(task);
     } catch (error) {
+      console.error("Task update error:", error);
       res.status(400).json({ message: "Failed to update task" });
     }
   });

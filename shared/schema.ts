@@ -291,6 +291,9 @@ export const tasks = pgTable("tasks", {
   priority: text("priority").default('medium'),
   dueDate: timestamp("due_date", { withTimezone: true }),
   context: jsonb("context"),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  completionNotes: text("completion_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
