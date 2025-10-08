@@ -138,6 +138,78 @@ export default function FinanceRevenuePage() {
           </Card>
         </div>
 
+        {/* Meal Plan Revenue Analysis */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UtensilsCrossed className="h-5 w-5" />
+              Meal Plan Revenue Analysis
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {(() => {
+                const mealPlanTransactions = revenueTransactions.filter(t => 
+                  t.details?.mealPlanCharges && Number(t.details.mealPlanCharges) > 0
+                );
+                
+                const totalMealPlanRevenue = mealPlanTransactions.reduce((sum, t) => 
+                  sum + Number(t.details?.mealPlanCharges || 0), 0
+                );
+                
+                if (totalMealPlanRevenue === 0) {
+                  return (
+                    <p className="text-center text-muted-foreground py-8">No meal plan revenue data available</p>
+                  );
+                }
+                
+                return (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <p className="text-sm text-muted-foreground">Total Meal Plan Revenue</p>
+                        <p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totalMealPlanRevenue)}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{mealPlanTransactions.length} reservations</p>
+                      </div>
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <p className="text-sm text-muted-foreground">Average per Guest</p>
+                        <p className="text-2xl font-bold text-green-600 mt-1">
+                          {formatCurrency(mealPlanTransactions.length > 0 ? totalMealPlanRevenue / mealPlanTransactions.length : 0)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">per reservation</p>
+                      </div>
+                      <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                        <p className="text-sm text-muted-foreground">% of Total Revenue</p>
+                        <p className="text-2xl font-bold text-orange-600 mt-1">
+                          {totalRevenue > 0 ? ((totalMealPlanRevenue / totalRevenue) * 100).toFixed(1) : 0}%
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">of {formatCurrency(totalRevenue)}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4">
+                      <h4 className="font-semibold mb-3">Recent Meal Plan Transactions</h4>
+                      <div className="space-y-2">
+                        {mealPlanTransactions.slice(0, 5).map((t, i) => (
+                          <div key={i} className="flex justify-between items-center p-2 hover:bg-muted rounded">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{t.details?.guestName || 'Guest'}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {t.details?.numberOfDays || 1} days × {formatCurrency(Number(t.details?.mealPlanCharges || 0) / (t.details?.numberOfDays || 1))}/day
+                              </p>
+                            </div>
+                            <span className="font-bold text-green-600">{formatCurrency(Number(t.details?.mealPlanCharges || 0))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Revenue Distribution Chart (Visual Representation) */}
         <Card>
           <CardHeader>

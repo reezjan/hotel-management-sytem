@@ -2256,7 +2256,7 @@ export default function FrontDeskDashboard() {
                           <SelectContent>
                             {mealPlans.map((plan) => (
                               <SelectItem key={plan.id} value={plan.id}>
-                                {plan.planName} - {formatCurrency(plan.pricePerPerson)}/person/day
+                                {plan.planName} - {formatCurrency(Number(plan.pricePerPerson))}/person/day
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -2285,7 +2285,7 @@ export default function FrontDeskDashboard() {
                           <span>{(() => {
                             const room = rooms.find(r => r.id === reservationForm.watch("roomId"));
                             const price = room?.roomType?.priceWalkin;
-                            return price ? formatCurrency(price) : 'N/A';
+                            return price ? formatCurrency(Number(price)) : 'N/A';
                           })()}</span>
                         </div>
                         {reservationForm.watch("mealPlanId") && (
@@ -2294,7 +2294,7 @@ export default function FrontDeskDashboard() {
                             <span>{(() => {
                               const plan = mealPlans.find(p => p.id === reservationForm.watch("mealPlanId"));
                               const persons = Number(reservationForm.watch("numberOfPersons")) || 0;
-                              return plan ? `${formatCurrency(plan.pricePerPerson)} × ${persons} = ${formatCurrency(Number(plan.pricePerPerson) * persons)}/night` : 'N/A';
+                              return plan ? `${formatCurrency(Number(plan.pricePerPerson))} × ${persons} = ${formatCurrency(Number(plan.pricePerPerson) * persons)}/night` : 'N/A';
                             })()}</span>
                           </div>
                         )}
