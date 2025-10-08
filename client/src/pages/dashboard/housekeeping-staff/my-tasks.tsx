@@ -24,7 +24,7 @@ export default function HousekeepingStaffMyTasks() {
 
   const updateTaskMutation = useMutation({
     mutationFn: async ({ taskId, status }: { taskId: string; status: string }) => {
-      await apiRequest("PUT", `/api/tasks/${taskId}`, { status });
+      await apiRequest("PUT", `/api/hotels/current/tasks/${taskId}`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users", user?.id, "tasks"] });
@@ -36,8 +36,8 @@ export default function HousekeepingStaffMyTasks() {
   });
 
   const pendingTasks = tasks.filter((t: any) => t.status === 'pending');
-  const performingTasks = tasks.filter((t: any) => t.status === 'performing');
-  const completedTasks = tasks.filter((t: any) => t.status === 'completed');
+  const performingTasks = tasks.filter((t: any) => t.status === 'in_progress');
+  const completedTasks = tasks.filter((t: any) => t.status === 'completed' || t.status === 'pending_review');
 
   const handleTaskStatusUpdate = (task: any, newStatus: string) => {
     updateTaskMutation.mutate({ taskId: task.id, status: newStatus });
@@ -105,14 +105,14 @@ export default function HousekeepingStaffMyTasks() {
                       {task.status === 'pending' && (
                         <Button
                           size="sm"
-                          onClick={() => handleTaskStatusUpdate(task, 'performing')}
+                          onClick={() => handleTaskStatusUpdate(task, 'in_progress')}
                           disabled={updateTaskMutation.isPending}
                           data-testid={`button-start-task-${index}`}
                         >
                           Start Task
                         </Button>
                       )}
-                      {task.status === 'performing' && (
+                      {task.status === 'in_progress' && (
                         <Button
                           size="sm"
                           onClick={() => handleTaskStatusUpdate(task, 'completed')}
@@ -121,6 +121,11 @@ export default function HousekeepingStaffMyTasks() {
                         >
                           Mark Complete
                         </Button>
+                      )}
+                      {task.status === 'pending_review' && (
+                        <Badge className="bg-yellow-100 text-yellow-800" variant="secondary">
+                          Pending Approval
+                        </Badge>
                       )}
                       {task.status === 'completed' && (
                         <Badge className="bg-green-100 text-green-800" variant="secondary">

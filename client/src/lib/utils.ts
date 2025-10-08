@@ -49,6 +49,8 @@ export function getStatusColor(status: string): string {
     case 'performing':
     case 'in_progress':
       return 'bg-blue-100 text-blue-800';
+    case 'pending_review':
+      return 'bg-orange-100 text-orange-800';
     case 'completed':
     case 'ready':
       return 'bg-green-100 text-green-800';

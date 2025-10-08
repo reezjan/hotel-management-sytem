@@ -51,8 +51,10 @@ export default function WaiterMyTasks() {
     switch (status) {
       case 'completed':
         return <CheckCircle2 className="h-5 w-5 text-green-600" />;
-      case 'performing':
+      case 'in_progress':
         return <Clock className="h-5 w-5 text-blue-600" />;
+      case 'pending_review':
+        return <CheckCircle2 className="h-5 w-5 text-yellow-600" />;
       case 'pending':
       default:
         return <Circle className="h-5 w-5 text-gray-400" />;
@@ -64,8 +66,8 @@ export default function WaiterMyTasks() {
   };
 
   const pendingTasks = myTasks.filter((task: any) => task.status === 'pending');
-  const performingTasks = myTasks.filter((task: any) => task.status === 'performing');
-  const completedTasks = myTasks.filter((task: any) => task.status === 'completed');
+  const performingTasks = myTasks.filter((task: any) => task.status === 'in_progress');
+  const completedTasks = myTasks.filter((task: any) => task.status === 'completed' || task.status === 'pending_review');
 
   return (
     <DashboardLayout title="My Tasks">
@@ -139,13 +141,13 @@ export default function WaiterMyTasks() {
                       {task.status === 'pending' && (
                         <Button
                           className="h-11 min-h-11"
-                          onClick={() => handleStatusChange(task.id, 'performing')}
+                          onClick={() => handleStatusChange(task.id, 'in_progress')}
                           disabled={updateTaskMutation.isPending}
                         >
                           Start Task
                         </Button>
                       )}
-                      {task.status === 'performing' && (
+                      {task.status === 'in_progress' && (
                         <>
                           <Button
                             className="h-11 min-h-11"
@@ -163,6 +165,11 @@ export default function WaiterMyTasks() {
                             Complete
                           </Button>
                         </>
+                      )}
+                      {task.status === 'pending_review' && (
+                        <Badge className="bg-yellow-100 text-yellow-800 h-11 flex items-center px-4" variant="secondary">
+                          Pending Approval
+                        </Badge>
                       )}
                       {task.status === 'completed' && (
                         <Button
