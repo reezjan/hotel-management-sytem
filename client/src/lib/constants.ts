@@ -269,7 +269,8 @@ export const NAVIGATION_ITEMS = {
     { icon: 'ClipboardList', label: 'Task Assignment', id: 'tasks' },
     { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
     { icon: 'MapPin', label: 'Staff Tracking', id: 'tracking' },
-    { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' }
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' },
+    { icon: 'CheckCircle', label: 'Leave Approvals', id: 'leave-approvals' }
   ],
   [ROLES.HOUSEKEEPING_STAFF]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
@@ -319,7 +320,8 @@ export const NAVIGATION_ITEMS = {
   [ROLES.SECURITY_HEAD]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
-    { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' }
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' },
+    { icon: 'CheckCircle', label: 'Leave Approvals', id: 'leave-approvals' }
   ],
   [ROLES.SECURITY_GUARD]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },

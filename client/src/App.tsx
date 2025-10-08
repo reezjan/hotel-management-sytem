@@ -32,6 +32,7 @@ import HousekeepingSupervisorCleaningQueue from "@/pages/dashboard/housekeeping-
 import HousekeepingSupervisorTaskAssignment from "@/pages/dashboard/housekeeping-supervisor/task-assignment";
 import HousekeepingSupervisorMaintenanceRequests from "@/pages/dashboard/housekeeping-supervisor/maintenance-requests";
 import HousekeepingSupervisorStaffTracking from "@/pages/dashboard/housekeeping-supervisor/staff-tracking";
+import HousekeepingSupervisorLeaveRequests from "@/pages/dashboard/housekeeping-supervisor/leave-requests";
 import HousekeepingStaffDashboard from "@/pages/dashboard/housekeeping-staff";
 import HousekeepingStaffDutyStatus from "@/pages/dashboard/housekeeping-staff/duty-status";
 import HousekeepingStaffMyTasks from "@/pages/dashboard/housekeeping-staff/my-tasks";
@@ -57,6 +58,7 @@ import BaristaDashboard from "@/pages/dashboard/barista";
 import CashierDashboard from "@/pages/dashboard/cashier";
 import CashierTableBilling from "@/pages/dashboard/cashier/table-billing";
 import SecurityHeadDashboard from "@/pages/dashboard/security-head";
+import SecurityHeadLeaveRequests from "@/pages/dashboard/security-head/leave-requests";
 import SecurityGuardDashboard from "@/pages/dashboard/security-guard";
 import SurveillanceOfficerDashboard from "@/pages/dashboard/surveillance-officer";
 import SurveillanceOfficerDutyStatus from "@/pages/dashboard/surveillance-officer/duty-status";
@@ -118,6 +120,7 @@ function Router() {
       <ProtectedRoute path="/housekeeping-supervisor/task-assignment" component={HousekeepingSupervisorTaskAssignment} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-supervisor/maintenance-requests" component={HousekeepingSupervisorMaintenanceRequests} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-supervisor/staff-tracking" component={HousekeepingSupervisorStaffTracking} allowedRoles={["housekeeping_supervisor"]} />
+      <ProtectedRoute path="/housekeeping-supervisor/leave-requests" component={HousekeepingSupervisorLeaveRequests} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-supervisor/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-staff" component={HousekeepingStaffDashboard} allowedRoles={["housekeeping_staff"]} />
       <ProtectedRoute path="/housekeeping-staff/duty-status" component={HousekeepingStaffDutyStatus} allowedRoles={["housekeeping_staff"]} />
@@ -152,6 +155,7 @@ function Router() {
       <ProtectedRoute path="/cashier/table-billing" component={CashierTableBilling} allowedRoles={["cashier"]} />
       <ProtectedRoute path="/security-head" component={SecurityHeadDashboard} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-head/request-stock" component={RequestStock} allowedRoles={["security_head"]} />
+      <ProtectedRoute path="/security-head/leave-requests" component={SecurityHeadLeaveRequests} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-head/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-guard" component={SecurityGuardDashboard} allowedRoles={["security_guard"]} />
       <ProtectedRoute path="/security-guard/request-stock" component={RequestStock} allowedRoles={["security_guard"]} />
