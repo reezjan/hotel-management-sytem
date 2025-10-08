@@ -1944,10 +1944,10 @@ export class DatabaseStorage implements IStorage {
   async getPendingLeaveRequestsForApprover(approverRole: string, hotelId: string): Promise<LeaveRequest[]> {
     // Define role hierarchy: which roles each approver can approve
     const approvalMapping: Record<string, string[]> = {
-      'restaurant_bar_manager': ['cashier', 'waiter', 'barista', 'bartender', 'kitchen_staff'],
+      'restaurant_bar_manager': ['waiter', 'cashier', 'bartender', 'kitchen_staff', 'barista'],
       'housekeeping_supervisor': ['housekeeping_staff'],
-      'security_head': ['security_guard', 'surveillance_officer'],
-      'manager': ['restaurant_bar_manager', 'housekeeping_supervisor', 'security_head', 'finance', 'storekeeper', 'front_desk'],
+      'security_head': ['surveillance_officer'],
+      'manager': ['restaurant_bar_manager', 'housekeeping_supervisor', 'security_head', 'finance', 'front_desk', 'storekeeper'],
       'owner': ['manager']
     };
 
@@ -2001,10 +2001,10 @@ export class DatabaseStorage implements IStorage {
   async getLeaveRequestsForApprover(approverRole: string, hotelId: string): Promise<LeaveRequest[]> {
     // Define role hierarchy: which roles each approver can approve
     const approvalMapping: Record<string, string[]> = {
-      'restaurant_bar_manager': ['cashier', 'waiter', 'barista', 'bartender', 'kitchen_staff'],
+      'restaurant_bar_manager': ['waiter', 'cashier', 'bartender', 'kitchen_staff', 'barista'],
       'housekeeping_supervisor': ['housekeeping_staff'],
-      'security_head': ['security_guard', 'surveillance_officer'],
-      'manager': ['restaurant_bar_manager', 'housekeeping_supervisor', 'security_head', 'finance', 'storekeeper', 'front_desk'],
+      'security_head': ['surveillance_officer'],
+      'manager': ['restaurant_bar_manager', 'housekeeping_supervisor', 'security_head', 'finance', 'front_desk', 'storekeeper'],
       'owner': ['manager']
     };
 

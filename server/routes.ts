@@ -3074,6 +3074,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
+      // Validate user role has a valid approver in the hierarchy
+      const userRole = user.role?.name || '';
+      const roleHierarchy: Record<string, string> = {
+        'waiter': 'restaurant_bar_manager',
+        'cashier': 'restaurant_bar_manager',
+        'bartender': 'restaurant_bar_manager',
+        'kitchen_staff': 'restaurant_bar_manager',
+        'barista': 'restaurant_bar_manager',
+        'housekeeping_staff': 'housekeeping_supervisor',
+        'surveillance_officer': 'security_head',
+        'restaurant_bar_manager': 'manager',
+        'housekeeping_supervisor': 'manager',
+        'security_head': 'manager',
+        'finance': 'manager',
+        'front_desk': 'manager',
+        'storekeeper': 'manager',
+        'manager': 'owner'
+      };
+
+      if (!roleHierarchy[userRole]) {
+        return res.status(403).json({ 
+          message: `Your role (${userRole}) is not eligible to submit leave requests or does not have an assigned approver.` 
+        });
+      }
+
       const leaveRequestData = insertLeaveRequestSchema.parse({
         ...req.body,
         hotelId: user.hotelId,
