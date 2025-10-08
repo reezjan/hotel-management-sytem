@@ -681,6 +681,7 @@ export const billPayments = pgTable("bill_payments", {
   isVoided: boolean("is_voided").default(false),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
   voidedBy: uuid("voided_by").references(() => users.id),
+  voidReason: text("void_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 

@@ -2902,6 +2902,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Void payment endpoint - requires manager approval
+  app.post("/api/bill-payments/:paymentId/void", async (req, res) => {
+    console.log('🔥 VOID ENDPOINT HIT:', req.params.paymentId, req.isAuthenticated());
+    try {
+      if (!req.isAuthenticated()) {
+        console.log('🔥 NOT AUTHENTICATED');
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      console.log('🔥 USER:', currentUser.username, currentUser.role?.name);
+      const { paymentId } = req.params;
+      const { reason } = req.body;
+      
+      // CRITICAL: Only managers can void payments
+      const canVoid = ['manager', 'owner'].includes(currentUser.role?.name || '');
+      if (!canVoid) {
+        return res.status(403).json({ 
+          message: "Only managers can void payments" 
+        });
+      }
+      
+      // CRITICAL: Require detailed reason
+      if (!reason || reason.trim().length < 15) {
+        return res.status(400).json({ 
+          message: "Void reason required (minimum 15 characters)" 
+        });
+      }
+      
+      // Get existing payment
+      const payment = await storage.getBillPayment(paymentId);
+      if (!payment) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+      
+      // Verify not already voided
+      if (payment.isVoided) {
+        return res.status(400).json({ message: "Payment already voided" });
+      }
+      
+      // Verify belongs to user's hotel
+      if (payment.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+      
+      // Check payment age - prevent voiding old payments (e.g., >=7 days)
+      const paymentDate = new Date(payment.createdAt);
+      const daysSince = (Date.now() - paymentDate.getTime()) / (1000 * 60 * 60 * 24);
+      
+      if (daysSince >= 7) {
+        // Only owner can void payments 7 days or older
+        if (currentUser.role?.name !== 'owner') {
+          return res.status(403).json({ 
+            message: "Cannot void payments 7 days or older. Contact hotel owner." 
+          });
+        }
+      }
+      
+      // Void the payment
+      const voidedPayment = await storage.voidBillPayment(paymentId, currentUser.id, reason);
+      
+      // Always recalculate and update bill status after voiding payment
+      const bill = await storage.getRestaurantBill(payment.billId);
+      const allPayments = await storage.getBillPayments(payment.billId);
+      const totalPaid = allPayments
+        .filter(p => !p.isVoided)
+        .reduce((sum, p) => sum + Number(p.amount), 0);
+      
+      const grandTotal = Number(bill.grandTotal);
+      
+      // Update bill status based on payment total
+      if (totalPaid >= grandTotal) {
+        // Fully paid
+        await storage.updateRestaurantBill(payment.billId, {
+          status: 'paid'
+        });
+      } else if (totalPaid > 0) {
+        // Partially paid
+        await storage.updateRestaurantBill(payment.billId, {
+          status: 'partial'
+        });
+      } else {
+        // No payments or all voided
+        await storage.updateRestaurantBill(payment.billId, {
+          status: 'draft'
+        });
+      }
+      
+      res.json({ 
+        success: true, 
+        payment: voidedPayment,
+        message: "Payment voided successfully" 
+      });
+    } catch (error) {
+      console.error("Payment void error:", error);
+      res.status(500).json({ message: "Failed to void payment" });
+    }
+  });
+
   // Wastage routes
   app.post("/api/hotels/current/wastages", async (req, res) => {
     try {

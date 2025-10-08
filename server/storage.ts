@@ -339,6 +339,8 @@ export interface IStorage {
   updateRestaurantBill(id: string, bill: Partial<any>): Promise<any>;
   getBillPayments(billId: string): Promise<any[]>;
   createBillPayment(payment: any): Promise<any>;
+  getBillPayment(paymentId: string): Promise<any | undefined>;
+  voidBillPayment(paymentId: string, voidedBy: string, reason: string): Promise<any>;
   
   // Attendance operations
   createAttendance(userId: string, hotelId: string, clockInTime: Date, location: string | null, ip: string | null, source: string | null): Promise<any>;
@@ -2820,6 +2822,28 @@ export class DatabaseStorage implements IStorage {
       .values(paymentData)
       .returning();
     return payment;
+  }
+
+  async getBillPayment(paymentId: string): Promise<any | undefined> {
+    const [payment] = await db
+      .select()
+      .from(billPayments)
+      .where(eq(billPayments.id, paymentId));
+    return payment || undefined;
+  }
+
+  async voidBillPayment(paymentId: string, voidedBy: string, reason: string): Promise<any> {
+    const [voided] = await db
+      .update(billPayments)
+      .set({
+        isVoided: true,
+        voidedBy,
+        voidedAt: new Date(),
+        voidReason: reason
+      })
+      .where(eq(billPayments.id, paymentId))
+      .returning();
+    return voided;
   }
 
   async createAttendance(userId: string, hotelId: string, clockInTime: Date, location: string | null, ip: string | null, source: string | null): Promise<Attendance> {
