@@ -65,7 +65,7 @@ export function DashboardLayout({ children, title, currentHotel }: DashboardLayo
             <div className="flex items-center space-x-2 md:space-x-4">
               {/* Duty Status Toggle - Visible on all screens */}
               {showDutyToggle && (
-                <DutyToggle userId={user?.id || ""} />
+                <DutyToggle />
               )}
               
               {/* User Info */}

@@ -5,41 +5,50 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-interface DutyToggleProps {
-  userId: string;
-}
-
-export function DutyToggle({ userId }: DutyToggleProps) {
+export function DutyToggle() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isOnDuty, setIsOnDuty] = useState(false);
 
-  const { data: userData } = useQuery<any>({
-    queryKey: ["/api/user"]
+  const { data: attendanceStatus } = useQuery<any>({
+    queryKey: ["/api/attendance/status"]
   });
 
   useEffect(() => {
-    if (userData?.isOnline !== undefined) {
-      setIsOnDuty(userData.isOnline);
+    if (attendanceStatus?.isOnDuty !== undefined) {
+      setIsOnDuty(attendanceStatus.isOnDuty);
     }
-  }, [userData]);
+  }, [attendanceStatus]);
 
   const updateDutyMutation = useMutation({
-    mutationFn: async (isOnline: boolean) => {
-      await apiRequest("POST", `/api/users/${userId}/duty`, { isOnline });
+    mutationFn: async (shouldClockIn: boolean) => {
+      if (shouldClockIn) {
+        const res = await apiRequest("POST", "/api/attendance/clock-in", {
+          location: "Web Dashboard",
+          source: "web"
+        });
+        return res.json();
+      } else {
+        const res = await apiRequest("POST", "/api/attendance/clock-out", {
+          location: "Web Dashboard",
+          source: "web"
+        });
+        return res.json();
+      }
     },
-    onSuccess: (_, isOnline) => {
-      setIsOnDuty(isOnline);
+    onSuccess: (_, shouldClockIn) => {
+      setIsOnDuty(shouldClockIn);
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       toast({
-        title: "Duty Status Updated",
-        description: `You are now ${isOnline ? "online" : "offline"}`,
+        title: shouldClockIn ? "Clocked In" : "Clocked Out",
+        description: shouldClockIn ? "You are now on duty" : "You have clocked out successfully",
       });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to update duty status",
+        description: error.message || "Failed to update duty status",
         variant: "destructive",
       });
     },
@@ -65,7 +74,7 @@ export function DutyToggle({ userId }: DutyToggleProps) {
           "w-2 h-2 rounded-full",
           isOnDuty ? "bg-white" : "bg-current"
         )} />
-        <span>{isOnDuty ? "Online" : "Offline"}</span>
+        <span>{isOnDuty ? "On Duty" : "Off Duty"}</span>
       </Button>
     </div>
   );
