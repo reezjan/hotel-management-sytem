@@ -39,6 +39,10 @@ export default function TaskAssignment() {
     ['waiter', 'kitchen_staff', 'bartender', 'barista', 'cashier'].includes(staff.role?.name || '')
   );
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   // Fetch tasks
   const { data: tasks = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/tasks"],
@@ -218,7 +222,9 @@ export default function TaskAssignment() {
   const pendingTasks = restaurantTasks.filter(t => t.status === 'pending').length;
   const inProgressTasks = restaurantTasks.filter(t => t.status === 'performing').length;
   const completedTasks = restaurantTasks.filter(t => t.status === 'completed').length;
-  const onDutyStaff = restaurantStaff.filter(s => s.isOnline).length;
+  const onDutyStaff = restaurantStaff.filter(s => 
+    dailyAttendance.some(a => a.userId === s.id && a.status === 'active')
+  ).length;
 
   return (
     <DashboardLayout title="Task Assignment">
@@ -324,19 +330,22 @@ export default function TaskAssignment() {
                     <SelectValue placeholder="Select staff member" />
                   </SelectTrigger>
                   <SelectContent>
-                    {restaurantStaff.map((staff) => (
-                      <SelectItem key={staff.id} value={staff.id}>
-                        <div className="flex items-center space-x-2">
-                          <span>{staff.username}</span>
-                          <span className="text-sm text-muted-foreground">
-                            ({staff.role?.name?.replace(/_/g, ' ')})
-                          </span>
-                          {staff.isOnline && (
-                            <div className="h-2 w-2 rounded-full bg-green-500" />
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
+                    {restaurantStaff.map((staff) => {
+                      const isOnDuty = dailyAttendance.some(a => a.userId === staff.id && a.status === 'active');
+                      return (
+                        <SelectItem key={staff.id} value={staff.id}>
+                          <div className="flex items-center space-x-2">
+                            <span>{staff.username}</span>
+                            <span className="text-sm text-muted-foreground">
+                              ({staff.role?.name?.replace(/_/g, ' ')})
+                            </span>
+                            {isOnDuty && (
+                              <div className="h-2 w-2 rounded-full bg-green-500" />
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>

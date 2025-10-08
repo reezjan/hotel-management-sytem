@@ -41,6 +41,10 @@ export default function RestaurantStaffManagement() {
     ['waiter', 'kitchen_staff', 'bartender', 'barista', 'cashier'].includes(staff.role?.name || '')
   );
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   // Restaurant roles that manager can create
   const restaurantRoles = [
     { name: "waiter", label: "Waiter" },
@@ -76,29 +80,6 @@ export default function RestaurantStaffManagement() {
     }
   });
 
-  // Toggle duty status mutation
-  const toggleDutyMutation = useMutation({
-    mutationFn: async ({ userId, isOnline }: { userId: string; isOnline: boolean }) => {
-      const response = await fetch(`/api/hotels/current/users/${userId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ isOnline })
-      });
-      if (!response.ok) {
-        throw new Error("Failed to update duty status");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/users"] });
-      toast.success("Duty status updated successfully");
-    },
-    onError: (error: any) => {
-      toast.error(error.message);
-    }
-  });
-
   const handleAddStaff = () => {
     if (!newStaff.username || !newStaff.email || !newStaff.password || !newStaff.role) {
       toast.error("Please fill in all required fields");
@@ -111,12 +92,6 @@ export default function RestaurantStaffManagement() {
     });
   };
 
-  const handleToggleDuty = (staff: any) => {
-    toggleDutyMutation.mutate({
-      userId: staff.id,
-      isOnline: !staff.isOnline
-    });
-  };
 
   const handleDeleteStaff = async (staff: any) => {
     if (confirm(`Are you sure you want to remove ${staff.username}?`)) {
@@ -156,20 +131,16 @@ export default function RestaurantStaffManagement() {
     { key: "email", label: "Email", sortable: true },
     { key: "phone", label: "Phone", sortable: true },
     { 
-      key: "isOnline", 
+      key: "id", 
       label: "Duty Status", 
-      render: (value: boolean, row: any) => (
-        <div className="flex items-center space-x-2">
-          <Switch
-            checked={value}
-            onCheckedChange={() => handleToggleDuty(row)}
-            disabled={toggleDutyMutation.isPending}
-          />
-          <span className={`text-sm ${value ? 'text-green-600' : 'text-gray-600'}`}>
-            {value ? 'On Duty' : 'Off Duty'}
+      render: (userId: string) => {
+        const isOnDuty = dailyAttendance.some(a => a.userId === userId && a.status === 'active');
+        return (
+          <span className={`px-3 py-1 rounded-full text-xs ${isOnDuty ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+            {isOnDuty ? 'On Duty' : 'Off Duty'}
           </span>
-        </div>
-      )
+        );
+      }
     },
     { 
       key: "lastLogin", 
@@ -209,7 +180,7 @@ export default function RestaurantStaffManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">On Duty</p>
-                  <p className="text-2xl font-bold">{restaurantStaff.filter(s => s.isOnline).length}</p>
+                  <p className="text-2xl font-bold">{restaurantStaff.filter(s => dailyAttendance.some(a => a.userId === s.id && a.status === 'active')).length}</p>
                 </div>
                 <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
                   <div className="h-4 w-4 rounded-full bg-green-500" />

@@ -27,6 +27,10 @@ export default function HousekeepingSupervisorStaffTracking() {
     refetchIntervalInBackground: true
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');
 
   const getStaffTasks = (staffId: string) => {
@@ -65,10 +69,10 @@ export default function HousekeepingSupervisorStaffTracking() {
                             <p className="text-sm text-muted-foreground">{member.phone}</p>
                           </div>
                           <Badge 
-                            className={member.isOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} 
+                            className={dailyAttendance.some(a => a.userId === member.id && a.status === 'active') ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} 
                             variant="secondary"
                           >
-                            {member.isOnline ? 'Online' : 'Offline'}
+                            {dailyAttendance.some(a => a.userId === member.id && a.status === 'active') ? 'On Duty' : 'Off Duty'}
                           </Badge>
                         </div>
 
@@ -102,7 +106,7 @@ export default function HousekeepingSupervisorStaffTracking() {
                             </div>
                           )}
 
-                          {!currentTask && member.isOnline && (
+                          {!currentTask && dailyAttendance.some(a => a.userId === member.id && a.status === 'active') && (
                             <div className="mt-3 p-2 bg-gray-50 rounded border border-gray-200">
                               <p className="text-xs text-gray-600">No active tasks</p>
                             </div>

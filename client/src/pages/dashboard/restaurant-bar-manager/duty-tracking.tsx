@@ -1,17 +1,12 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Clock, Users, CheckCircle, UserCheck } from "lucide-react";
-import { toast } from "sonner";
+import { formatDateTime } from "@/lib/utils";
 
 export default function DutyTracking() {
-  const queryClient = useQueryClient();
-
-  // Fetch restaurant staff
   const { data: allStaff = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"],
     queryFn: async () => {
@@ -21,37 +16,25 @@ export default function DutyTracking() {
     }
   });
 
-  // Filter for restaurant staff only
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"],
+    queryFn: async () => {
+      const response = await fetch("/api/attendance/daily", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch attendance");
+      return response.json();
+    }
+  });
+
   const restaurantStaff = allStaff.filter(staff => 
     ['waiter', 'kitchen_staff', 'bartender', 'barista', 'cashier'].includes(staff.role?.name || '')
   );
 
-  // Toggle duty status mutation
-  const toggleDutyMutation = useMutation({
-    mutationFn: async ({ userId, isOnline }: { userId: string; isOnline: boolean }) => {
-      const response = await fetch(`/api/hotels/current/users/${userId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ isOnline })
-      });
-      if (!response.ok) throw new Error("Failed to update duty status");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/users"] });
-      toast.success("Duty status updated successfully");
-    },
-    onError: (error: any) => {
-      toast.error(error.message);
-    }
-  });
+  const activeAttendanceUserIds = dailyAttendance.filter(a => a.status === 'active').map(a => a.userId);
+  const onDutyStaff = restaurantStaff.filter(s => activeAttendanceUserIds.includes(s.id));
+  const offDutyStaff = restaurantStaff.filter(s => !activeAttendanceUserIds.includes(s.id));
 
-  const handleToggleDuty = (staff: any) => {
-    toggleDutyMutation.mutate({
-      userId: staff.id,
-      isOnline: !staff.isOnline
-    });
+  const getStaffAttendance = (userId: string) => {
+    return dailyAttendance.find(a => a.userId === userId && a.status === 'active');
   };
 
   const columns = [
@@ -63,38 +46,53 @@ export default function DutyTracking() {
       render: (value: any) => value?.name?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
     },
     { 
-      key: "isOnline", 
+      key: "id", 
       label: "Duty Status", 
-      render: (value: boolean, row: any) => (
-        <div className="flex items-center space-x-3">
-          <Switch
-            checked={value}
-            onCheckedChange={() => handleToggleDuty(row)}
-            disabled={toggleDutyMutation.isPending}
-          />
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            value ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-          }`}>
-            {value ? 'On Duty' : 'Off Duty'}
-          </span>
-        </div>
-      )
+      render: (_: any, row: any) => {
+        const isOnDuty = activeAttendanceUserIds.includes(row.id);
+        const attendance = getStaffAttendance(row.id);
+        return (
+          <div className="space-y-1">
+            <Badge 
+              variant={isOnDuty ? 'default' : 'secondary'}
+              className={isOnDuty ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'}
+            >
+              {isOnDuty ? 'On Duty' : 'Off Duty'}
+            </Badge>
+            {attendance && (
+              <p className="text-xs text-muted-foreground">
+                Since {formatDateTime(attendance.clockInTime)}
+              </p>
+            )}
+          </div>
+        );
+      }
     },
     { 
-      key: "lastLogin", 
-      label: "Last Active", 
-      sortable: true,
-      render: (value: string) => value ? new Date(value).toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu' }) : 'Never'
+      key: "id", 
+      label: "Total Hours Today", 
+      render: (_: any, row: any) => {
+        const userAttendance = dailyAttendance.filter(a => a.userId === row.id);
+        const totalHours = userAttendance.reduce((sum, a) => {
+          if (a.totalHours) {
+            return sum + parseFloat(a.totalHours);
+          }
+          return sum;
+        }, 0);
+        return totalHours > 0 ? `${totalHours.toFixed(2)} hrs` : '-';
+      }
     }
   ];
 
-  const onDutyStaff = restaurantStaff.filter(s => s.isOnline);
-  const offDutyStaff = restaurantStaff.filter(s => !s.isOnline);
+  const getRoleCount = (roleName: string, isOnDuty: boolean) => {
+    const roleStaff = restaurantStaff.filter(s => s.role?.name === roleName);
+    const onDutyCount = roleStaff.filter(s => activeAttendanceUserIds.includes(s.id)).length;
+    return isOnDuty ? onDutyCount : roleStaff.length;
+  };
 
   return (
     <DashboardLayout title="Restaurant Duty Tracking">
       <div className="space-y-6">
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardContent className="p-6">
@@ -147,89 +145,54 @@ export default function DutyTracking() {
           </Card>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Duty Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={() => {
-                  restaurantStaff.forEach(staff => {
-                    if (!staff.isOnline) {
-                      handleToggleDuty(staff);
-                    }
-                  });
-                }}
-                disabled={toggleDutyMutation.isPending}
-              >
-                <UserCheck className="h-4 w-4 mr-2" />
-                Mark All On Duty
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={() => {
-                  restaurantStaff.forEach(staff => {
-                    if (staff.isOnline) {
-                      handleToggleDuty(staff);
-                    }
-                  });
-                }}
-                disabled={toggleDutyMutation.isPending}
-              >
-                <Clock className="h-4 w-4 mr-2" />
-                Mark All Off Duty
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Duty Summary</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Waiters</span>
-                  <span className="font-medium">
-                    {restaurantStaff.filter(s => s.role?.name === 'waiter' && s.isOnline).length} / {restaurantStaff.filter(s => s.role?.name === 'waiter').length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Kitchen Staff</span>
-                  <span className="font-medium">
-                    {restaurantStaff.filter(s => s.role?.name === 'kitchen_staff' && s.isOnline).length} / {restaurantStaff.filter(s => s.role?.name === 'kitchen_staff').length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Bartenders</span>
-                  <span className="font-medium">
-                    {restaurantStaff.filter(s => s.role?.name === 'bartender' && s.isOnline).length} / {restaurantStaff.filter(s => s.role?.name === 'bartender').length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Baristas</span>
-                  <span className="font-medium">
-                    {restaurantStaff.filter(s => s.role?.name === 'barista' && s.isOnline).length} / {restaurantStaff.filter(s => s.role?.name === 'barista').length}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Cashiers</span>
-                  <span className="font-medium">
-                    {restaurantStaff.filter(s => s.role?.name === 'cashier' && s.isOnline).length} / {restaurantStaff.filter(s => s.role?.name === 'cashier').length}
-                  </span>
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Duty Summary by Role</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Waiters</span>
+                <span className="font-medium">
+                  {getRoleCount('waiter', true)} / {getRoleCount('waiter', false)}
+                </span>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Kitchen Staff</span>
+                <span className="font-medium">
+                  {getRoleCount('kitchen_staff', true)} / {getRoleCount('kitchen_staff', false)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Bartenders</span>
+                <span className="font-medium">
+                  {getRoleCount('bartender', true)} / {getRoleCount('bartender', false)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Baristas</span>
+                <span className="font-medium">
+                  {getRoleCount('barista', true)} / {getRoleCount('barista', false)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Cashiers</span>
+                <span className="font-medium">
+                  {getRoleCount('cashier', true)} / {getRoleCount('cashier', false)}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Staff Duty Table */}
+        <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+          <CardContent className="p-4">
+            <p className="text-sm text-blue-900 dark:text-blue-100">
+              <strong>Note:</strong> Staff members manage their own duty status using the duty toggle. Attendance is tracked automatically when staff clock in and out.
+            </p>
+          </CardContent>
+        </Card>
+
         <DataTable
           title="Restaurant Staff Duty Status"
           data={restaurantStaff}

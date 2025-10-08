@@ -56,6 +56,10 @@ export default function StaffManagement() {
     queryKey: ["/api/roles"]
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   // Form for staff creation
   const form = useForm<StaffFormData>({
     resolver: zodResolver(staffSchema),
@@ -121,7 +125,7 @@ export default function StaffManagement() {
 
   // Calculate staff metrics
   const totalStaff = staff.length;
-  const onlineStaff = staff.filter(s => s.isOnline).length;
+  const onlineStaff = staff.filter(s => dailyAttendance.some(a => a.userId === s.id && a.status === 'active')).length;
   const offlineStaff = totalStaff - onlineStaff;
   const activeStaff = staff.filter(s => s.isActive).length;
 
@@ -148,15 +152,18 @@ export default function StaffManagement() {
     { key: "email", label: "Email", sortable: true },
     { key: "phone", label: "Phone", sortable: true },
     { 
-      key: "isOnline", 
+      key: "id", 
       label: "Status", 
-      render: (value: boolean) => (
-        <span className={`px-2 py-1 rounded-full text-xs ${
-          value ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-        }`}>
-          {value ? 'Online' : 'Offline'}
-        </span>
-      )
+      render: (userId: string) => {
+        const isOnDuty = dailyAttendance.some(a => a.userId === userId && a.status === 'active');
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs ${
+            isOnDuty ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+          }`}>
+            {isOnDuty ? 'On Duty' : 'Off Duty'}
+          </span>
+        );
+      }
     },
     { 
       key: "isActive", 
@@ -247,7 +254,7 @@ export default function StaffManagement() {
                         {membersList.length}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {membersList.filter((m: any) => m.isOnline).length} online
+                        {membersList.filter((m: any) => dailyAttendance.some(a => a.userId === m.id && a.status === 'active')).length} on duty
                       </div>
                     </div>
                   </div>

@@ -43,8 +43,14 @@ export default function HousekeepingSupervisorCleaningQueue() {
     refetchIntervalInBackground: true
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');
-  const onlineStaff = housekeepingStaff.filter(s => s.isOnline);
+  const onlineStaff = housekeepingStaff.filter(s => 
+    dailyAttendance.some(a => a.userId === s.id && a.status === 'active')
+  );
 
   const pendingRooms = cleaningQueue.filter((item: any) => item.status === 'pending');
   const assignedRooms = cleaningQueue.filter((item: any) => item.status === 'assigned');
@@ -259,7 +265,7 @@ export default function HousekeepingSupervisorCleaningQueue() {
                       <SelectContent>
                         {onlineStaff.map((member) => (
                           <SelectItem key={member.id} value={member.id}>
-                            {member.username} {member.isOnline ? '(Online)' : ''}
+                            {member.username} (On Duty)
                           </SelectItem>
                         ))}
                       </SelectContent>

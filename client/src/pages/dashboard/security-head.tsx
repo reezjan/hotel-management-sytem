@@ -67,6 +67,10 @@ export default function SecurityHeadDashboard() {
     queryKey: ["/api/hotels/current/users"]
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   // Filter maintenance requests from surveillance officers
   const maintenanceRequests = allMaintenanceRequests.filter(req => {
     const reporter = allUsers.find(u => u.id === req.reportedBy);
@@ -163,7 +167,9 @@ export default function SecurityHeadDashboard() {
     }
   };
 
-  const onlineOfficers = officers.filter(o => o.isOnline);
+  const onlineOfficers = officers.filter(o => {
+    return dailyAttendance.some(a => a.userId === o.id && a.status === 'active');
+  });
   const pendingTasks = tasks.filter(t => t.status === 'pending');
   const activeVehicles = vehicleLogs.filter(v => !v.checkOut);
   const pendingMaintenance = maintenanceRequests.filter(r => r.status === 'pending');
@@ -303,11 +309,14 @@ export default function SecurityHeadDashboard() {
                           <SelectValue placeholder="Select an officer" />
                         </SelectTrigger>
                         <SelectContent>
-                          {officers.map((officer) => (
-                            <SelectItem key={officer.id} value={officer.id}>
-                              {officer.username} {officer.isOnline ? '(Online)' : '(Offline)'}
-                            </SelectItem>
-                          ))}
+                          {officers.map((officer) => {
+                            const isOnDuty = dailyAttendance.some(a => a.userId === officer.id && a.status === 'active');
+                            return (
+                              <SelectItem key={officer.id} value={officer.id}>
+                                {officer.username} {isOnDuty ? '(On Duty)' : '(Off Duty)'}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -398,24 +407,27 @@ export default function SecurityHeadDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {officers.map((officer) => (
-                      <div key={officer.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`officer-${officer.id}`}>
-                        <div className="flex items-center space-x-4">
-                          <div className={`w-3 h-3 rounded-full ${officer.isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
-                          <div>
-                            <div className="font-medium" data-testid={`officer-name-${officer.id}`}>{officer.username}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {officer.email || 'No email'} • {officer.phone || 'No phone'}
+                    {officers.map((officer) => {
+                      const isOnDuty = dailyAttendance.some(a => a.userId === officer.id && a.status === 'active');
+                      return (
+                        <div key={officer.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`officer-${officer.id}`}>
+                          <div className="flex items-center space-x-4">
+                            <div className={`w-3 h-3 rounded-full ${isOnDuty ? 'bg-green-500' : 'bg-gray-400'}`} />
+                            <div>
+                              <div className="font-medium" data-testid={`officer-name-${officer.id}`}>{officer.username}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {officer.email || 'No email'} • {officer.phone || 'No phone'}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center space-x-2">
+                            <span className={`px-3 py-1 rounded-full text-xs ${isOnDuty ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`} data-testid={`officer-status-${officer.id}`}>
+                              {isOnDuty ? 'On Duty' : 'Off Duty'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <span className={`px-3 py-1 rounded-full text-xs ${officer.isOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`} data-testid={`officer-status-${officer.id}`}>
-                            {officer.isOnline ? 'On Duty' : 'Off Duty'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

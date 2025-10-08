@@ -52,10 +52,16 @@ export default function RestaurantBarManagerDashboard() {
     }
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   const restaurantStaff = staff.filter(s => 
     ['waiter', 'kitchen_staff', 'bartender', 'barista', 'cashier'].includes(s.role?.name || '')
   );
-  const onlineStaff = restaurantStaff.filter(s => s.isOnline);
+  const onlineStaff = restaurantStaff.filter(s => {
+    return dailyAttendance.some(a => a.userId === s.id && a.status === 'active');
+  });
   const activeMenuItems = menuItems.filter(item => item.active);
   const lowStockItems = inventory.filter(item => 
     Number(item.stockQty) <= Number(item.reorderLevel)
@@ -70,14 +76,17 @@ export default function RestaurantBarManagerDashboard() {
       render: (value: any) => value?.name?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
     },
     { 
-      key: "isOnline", 
+      key: "id", 
       label: "Status", 
-      render: (value: boolean) => (
-        <span className={`px-2 py-1 rounded-full text-xs flex items-center space-x-1 ${value ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-          <div className={`w-2 h-2 rounded-full ${value ? 'bg-green-500' : 'bg-gray-400'}`} />
-          <span>{value ? 'On Duty' : 'Off Duty'}</span>
-        </span>
-      )
+      render: (userId: string) => {
+        const isOnDuty = dailyAttendance.some(a => a.userId === userId && a.status === 'active');
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs flex items-center space-x-1 ${isOnDuty ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+            <div className={`w-2 h-2 rounded-full ${isOnDuty ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span>{isOnDuty ? 'On Duty' : 'Off Duty'}</span>
+          </span>
+        );
+      }
     },
     { 
       key: "lastLogin", 
@@ -317,12 +326,19 @@ export default function RestaurantBarManagerDashboard() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-medium text-foreground">
-                      {staff.isOnline ? 'On Duty' : 'Available'}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {staff.isOnline ? 'Currently on duty' : 'Off duty'}
-                    </div>
+                    {(() => {
+                      const isOnDuty = dailyAttendance.some(a => a.userId === staff.id && a.status === 'active');
+                      return (
+                        <>
+                          <div className="text-sm font-medium text-foreground">
+                            {isOnDuty ? 'On Duty' : 'Available'}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {isOnDuty ? 'Currently on duty' : 'Off duty'}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}

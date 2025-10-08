@@ -14,6 +14,10 @@ export default function ManagerDashboard() {
     queryKey: ["/api/hotels/current/users"]
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   const { data: transactions = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions"]
   });
@@ -39,13 +43,16 @@ export default function ManagerDashboard() {
       render: (value: any) => value?.name?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
     },
     { 
-      key: "isOnline", 
+      key: "id", 
       label: "Status", 
-      render: (value: boolean) => (
-        <span className={`px-2 py-1 rounded-full text-xs ${value ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-          {value ? 'Online' : 'Offline'}
-        </span>
-      )
+      render: (userId: string) => {
+        const isOnDuty = dailyAttendance.some(a => a.userId === userId && a.status === 'active');
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs ${isOnDuty ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+            {isOnDuty ? 'On Duty' : 'Off Duty'}
+          </span>
+        );
+      }
     },
     { key: "createdAt", label: "Hired", sortable: true }
   ];

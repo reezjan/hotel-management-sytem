@@ -34,6 +34,10 @@ export default function Reports() {
     queryKey: ["/api/hotels/current/inventory-items"]
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   // Calculate report metrics
   const totalRevenue = transactions
     .filter(t => t.txnType === 'cash_in' || t.txnType === 'pos_in' || t.txnType === 'fonepay_in')
@@ -226,8 +230,8 @@ export default function Reports() {
                   <span className="font-bold text-green-600">{activeStaff}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2">
-                  <span>Online Now:</span>
-                  <span className="font-bold">{staff.filter(s => s.isOnline).length}</span>
+                  <span>On Duty Now:</span>
+                  <span className="font-bold">{staff.filter(s => dailyAttendance.some(a => a.userId === s.id && a.status === 'active')).length}</span>
                 </div>
                 <Button 
                   variant="outline" 

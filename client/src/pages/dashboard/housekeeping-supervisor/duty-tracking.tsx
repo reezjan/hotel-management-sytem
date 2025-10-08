@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, UserCheck, UserX } from "lucide-react";
 import { StatsCard } from "@/components/dashboard/stats-card";
+import { formatDateTime } from "@/lib/utils";
 
 export default function HousekeepingSupervisorDutyTracking() {
   const { data: staff = [], isLoading } = useQuery<any[]>({
@@ -15,9 +16,19 @@ export default function HousekeepingSupervisorDutyTracking() {
     }
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"],
+    queryFn: async () => {
+      const response = await fetch("/api/attendance/daily", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to fetch attendance");
+      return response.json();
+    }
+  });
+
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');
-  const onlineStaff = housekeepingStaff.filter(s => s.isOnline);
-  const offlineStaff = housekeepingStaff.filter(s => !s.isOnline);
+  const activeAttendanceUserIds = dailyAttendance.filter(a => a.status === 'active').map(a => a.userId);
+  const onlineStaff = housekeepingStaff.filter(s => activeAttendanceUserIds.includes(s.id));
+  const offlineStaff = housekeepingStaff.filter(s => !activeAttendanceUserIds.includes(s.id));
 
   return (
     <DashboardLayout title="Duty Tracking">
@@ -55,20 +66,23 @@ export default function HousekeepingSupervisorDutyTracking() {
                 <p className="text-muted-foreground" data-testid="no-online-staff">No staff currently on duty</p>
               ) : (
                 <div className="space-y-3">
-                  {onlineStaff.map((member, index) => (
-                    <div key={member.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`online-staff-${index}`}>
-                      <div>
-                        <h4 className="font-medium text-foreground">{member.username}</h4>
-                        <p className="text-sm text-muted-foreground">{member.phone}</p>
+                  {onlineStaff.map((member, index) => {
+                    const attendance = dailyAttendance.find(a => a.userId === member.id && a.status === 'active');
+                    return (
+                      <div key={member.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`online-staff-${index}`}>
+                        <div>
+                          <h4 className="font-medium text-foreground">{member.username}</h4>
+                          <p className="text-sm text-muted-foreground">{member.phone}</p>
+                        </div>
+                        <div className="text-right">
+                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" variant="secondary">On Duty</Badge>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {attendance?.clockInTime ? formatDateTime(attendance.clockInTime) : 'Active'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <Badge className="bg-green-100 text-green-800" variant="secondary">Online</Badge>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {member.lastLogin ? new Date(member.lastLogin).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kathmandu' }) : 'Active'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -85,20 +99,25 @@ export default function HousekeepingSupervisorDutyTracking() {
                 <p className="text-muted-foreground" data-testid="no-offline-staff">All staff are on duty</p>
               ) : (
                 <div className="space-y-3">
-                  {offlineStaff.map((member, index) => (
-                    <div key={member.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`offline-staff-${index}`}>
-                      <div>
-                        <h4 className="font-medium text-foreground">{member.username}</h4>
-                        <p className="text-sm text-muted-foreground">{member.phone}</p>
+                  {offlineStaff.map((member, index) => {
+                    const lastAttendance = dailyAttendance
+                      .filter(a => a.userId === member.id && a.status === 'completed')
+                      .sort((a, b) => new Date(b.clockOutTime).getTime() - new Date(a.clockOutTime).getTime())[0];
+                    return (
+                      <div key={member.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`offline-staff-${index}`}>
+                        <div>
+                          <h4 className="font-medium text-foreground">{member.username}</h4>
+                          <p className="text-sm text-muted-foreground">{member.phone}</p>
+                        </div>
+                        <div className="text-right">
+                          <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100" variant="secondary">Off Duty</Badge>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {lastAttendance?.clockOutTime ? formatDateTime(lastAttendance.clockOutTime) : 'No recent activity'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <Badge className="bg-gray-100 text-gray-800" variant="secondary">Offline</Badge>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {member.lastLogout ? new Date(member.lastLogout).toLocaleTimeString('en-GB', { timeZone: 'Asia/Kathmandu' }) : 'Not logged in'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

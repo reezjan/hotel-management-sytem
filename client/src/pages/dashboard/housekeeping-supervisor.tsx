@@ -22,22 +22,31 @@ export default function HousekeepingSupervisorDashboard() {
     refetchIntervalInBackground: true
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');
-  const onlineStaff = housekeepingStaff.filter(s => s.isOnline);
+  const onlineStaff = housekeepingStaff.filter(s => {
+    return dailyAttendance.some(a => a.userId === s.id && a.status === 'active');
+  });
   const pendingTasks = tasks.filter(t => t.status === 'pending');
   const completedTasks = tasks.filter(t => t.status === 'completed');
 
   const staffColumns = [
     { key: "username", label: "Name", sortable: true },
     { 
-      key: "isOnline", 
+      key: "id", 
       label: "Duty Status", 
-      render: (value: boolean) => (
-        <span className={`px-2 py-1 rounded-full text-xs flex items-center space-x-1 ${value ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-          <div className={`w-2 h-2 rounded-full ${value ? 'bg-green-500' : 'bg-gray-400'}`} />
-          <span>{value ? 'Online' : 'Offline'}</span>
-        </span>
-      )
+      render: (userId: string) => {
+        const isOnDuty = dailyAttendance.some(a => a.userId === userId && a.status === 'active');
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs flex items-center space-x-1 ${isOnDuty ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+            <div className={`w-2 h-2 rounded-full ${isOnDuty ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span>{isOnDuty ? 'On Duty' : 'Off Duty'}</span>
+          </span>
+        );
+      }
     },
     { 
       key: "lastLogin", 

@@ -30,6 +30,10 @@ export default function OwnerDashboard() {
     queryKey: ["/api/hotels/current"]
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   // Calculate real metrics without fake trends
   const totalRevenue = transactions
     .filter(t => t.txnType === 'cash_in' || t.txnType === 'pos_in' || t.txnType === 'fonepay_in')
@@ -162,8 +166,8 @@ export default function OwnerDashboard() {
                   <span className="font-bold">{users.length}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Online:</span>
-                  <span className="font-medium text-green-600">{users.filter(u => u.isOnline).length}</span>
+                  <span>On Duty:</span>
+                  <span className="font-medium text-green-600">{users.filter(u => dailyAttendance.some(a => a.userId === u.id && a.status === 'active')).length}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Active:</span>

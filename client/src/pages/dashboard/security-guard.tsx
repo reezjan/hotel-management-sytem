@@ -21,8 +21,6 @@ export default function SurveillanceOfficerDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  const [isDutyOn, setIsDutyOn] = useState(user?.isOnline || false);
-  
   // Vehicle check-in form
   const [vehicleForm, setVehicleForm] = useState({
     vehicleNumber: "",
@@ -52,29 +50,6 @@ export default function SurveillanceOfficerDashboard() {
   // Fetch my maintenance requests
   const { data: maintenanceRequests = [], isLoading: maintenanceLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/maintenance-requests"]
-  });
-
-  // Duty status toggle mutation
-  const toggleDutyMutation = useMutation({
-    mutationFn: async (isOnline: boolean) => {
-      return await apiRequest("PATCH", "/api/users/me/duty", { isOnline });
-    },
-    onSuccess: (data: any) => {
-      setIsDutyOn(data.isOnline);
-      toast({ 
-        title: data.isOnline ? "Duty started" : "Duty ended",
-        description: data.isOnline ? "You are now on duty" : "You are now off duty"
-      });
-      // Refresh user data
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
-    },
-    onError: (error: any) => {
-      toast({ 
-        title: "Failed to update duty status", 
-        description: error.message || "An error occurred",
-        variant: "destructive" 
-      });
-    }
   });
 
   // Vehicle check-in mutation
@@ -151,10 +126,6 @@ export default function SurveillanceOfficerDashboard() {
     }
   });
 
-  const handleDutyToggle = (checked: boolean) => {
-    toggleDutyMutation.mutate(checked);
-  };
-
   const handleVehicleCheckIn = (e: React.FormEvent) => {
     e.preventDefault();
     if (!vehicleForm.vehicleNumber || !vehicleForm.driverName) {
@@ -197,30 +168,6 @@ export default function SurveillanceOfficerDashboard() {
   return (
     <DashboardLayout title="Surveillance Officer Dashboard">
       <div className="space-y-6">
-        {/* Duty Status Toggle */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Duty Status</CardTitle>
-            <CardDescription>Toggle your duty status on or off</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className={`w-4 h-4 rounded-full ${isDutyOn ? 'bg-green-500' : 'bg-gray-400'}`} />
-                <span className="text-lg font-medium">
-                  {isDutyOn ? 'On Duty' : 'Off Duty'}
-                </span>
-              </div>
-              <Switch
-                checked={isDutyOn}
-                onCheckedChange={handleDutyToggle}
-                disabled={toggleDutyMutation.isPending}
-                data-testid="switch-duty-status"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard

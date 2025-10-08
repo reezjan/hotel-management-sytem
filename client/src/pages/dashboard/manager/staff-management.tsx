@@ -47,6 +47,10 @@ export default function StaffManagement() {
     }
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   // Roles that a manager can create
   const managerCanCreate = ["housekeeping_supervisor", "restaurant_bar_manager", "security_head", "finance", "front_desk", "storekeeper"];
   const availableRoles = allRoles.filter((role: any) => managerCanCreate.includes(role.name));
@@ -133,13 +137,16 @@ export default function StaffManagement() {
       render: (value: any) => value?.name?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || "Unknown"
     },
     { 
-      key: "isOnline", 
+      key: "id", 
       label: "Status", 
-      render: (value: boolean) => (
-        <span className={`px-2 py-1 rounded-full text-xs ${value ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-          {value ? 'Online' : 'Offline'}
-        </span>
-      )
+      render: (userId: string) => {
+        const isOnDuty = dailyAttendance.some(a => a.userId === userId && a.status === 'active');
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs ${isOnDuty ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+            {isOnDuty ? 'On Duty' : 'Off Duty'}
+          </span>
+        );
+      }
     },
     { key: "createdAt", label: "Hired", sortable: true, render: (value: string) => new Date(value).toLocaleDateString() }
   ];
@@ -171,8 +178,8 @@ export default function StaffManagement() {
                 <div className="text-sm text-blue-600">Total Staff</div>
               </div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{staff.filter((s: any) => s.isOnline).length}</div>
-                <div className="text-sm text-green-600">Online Now</div>
+                <div className="text-2xl font-bold text-green-600">{staff.filter((s: any) => dailyAttendance.some(a => a.userId === s.id && a.status === 'active')).length}</div>
+                <div className="text-sm text-green-600">On Duty Now</div>
               </div>
               <div className="text-center p-4 bg-orange-50 rounded-lg">
                 <div className="text-2xl font-bold text-orange-600">{availableRoles.length}</div>

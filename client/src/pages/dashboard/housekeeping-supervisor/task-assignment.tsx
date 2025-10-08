@@ -50,8 +50,14 @@ export default function HousekeepingSupervisorTaskAssignment() {
     refetchIntervalInBackground: true
   });
 
+  const { data: dailyAttendance = [] } = useQuery<any[]>({
+    queryKey: ["/api/attendance/daily"]
+  });
+
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');
-  const onlineStaff = housekeepingStaff.filter(s => s.isOnline);
+  const onlineStaff = housekeepingStaff.filter(s => 
+    dailyAttendance.some(a => a.userId === s.id && a.status === 'active')
+  );
   const housekeepingTasks = tasks.filter(task => 
     housekeepingStaff.some(s => s.id === task.assignedTo)
   );
