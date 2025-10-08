@@ -1027,6 +1027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { id } = req.params;
+      const userData = req.body;
       
       // Verify the user belongs to current hotel
       const existingUser = await storage.getUser(id);
@@ -1034,7 +1035,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const userData = req.body;
+      // CRITICAL: Prevent users from updating their own protected fields
+      if (currentUser.id === id) {
+        // Users CANNOT update their own:
+        const protectedFields = ['roleId', 'isActive', 'hotelId', 'createdBy', 'verification'];
+        const attemptedProtectedUpdate = protectedFields.some(field => field in userData);
+        
+        if (attemptedProtectedUpdate) {
+          return res.status(403).json({ 
+            message: "Cannot modify your own role, status, or hotel assignment. Contact your manager." 
+          });
+        }
+      }
+
+      // CRITICAL: Verify permission to update other users
+      if (currentUser.id !== id) {
+        const currentRole = currentUser.role?.name || '';
+        
+        // Only managers, owners, and security_head can update other users
+        const canUpdateUsers = ['owner', 'manager', 'security_head'].includes(currentRole);
+        
+        if (!canUpdateUsers) {
+          return res.status(403).json({ 
+            message: "You don't have permission to update other users" 
+          });
+        }
+        
+        // CRITICAL: Prevent updating protected fields without proper authorization
+        if ('roleId' in userData || 'isActive' in userData) {
+          // Only owner can change roles or activation status
+          if (currentRole !== 'owner') {
+            return res.status(403).json({ 
+              message: "Only the hotel owner can change user roles or activation status" 
+            });
+          }
+        }
+      }
+
       const user = await storage.updateUser(id, userData);
       
       // Return sanitized user
@@ -1062,6 +1099,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existingUser = await storage.getUser(id);
       if (!existingUser || existingUser.hotelId !== currentUser.hotelId) {
         return res.status(404).json({ message: "User not found" });
+      }
+
+      // CRITICAL: Prevent users from deleting themselves
+      if (currentUser.id === id) {
+        return res.status(403).json({ 
+          message: "Cannot delete your own account. Contact your manager." 
+        });
+      }
+
+      // CRITICAL: Only managers and owners can delete users
+      const currentRole = currentUser.role?.name || '';
+      const canDeleteUsers = ['owner', 'manager'].includes(currentRole);
+      
+      if (!canDeleteUsers) {
+        return res.status(403).json({ 
+          message: "You don't have permission to delete users" 
+        });
       }
 
       await storage.deleteUser(id);
@@ -1809,8 +1863,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/users/:id", async (req, res) => {
     try {
+      // CRITICAL: Require authentication
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const currentUser = req.user as any;
       const { id } = req.params;
       const userData = insertUserSchema.partial().parse(req.body);
+      
+      // Get target user to verify hotel and role
+      const targetUser = await storage.getUser(id);
+      if (!targetUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // CRITICAL: Hotel isolation check MUST come FIRST (before any other authorization)
+      // Prevents cross-hotel privilege escalation - managers/owners can only affect their own hotel
+      const currentRole = currentUser.role?.name || '';
+      if (currentRole !== 'super_admin') {
+        if (!targetUser.hotelId || targetUser.hotelId !== currentUser.hotelId) {
+          return res.status(403).json({ message: "Cannot update users from other hotels" });
+        }
+      }
+      
+      // CRITICAL: Prevent users from updating their own protected fields
+      if (currentUser.id === id) {
+        const protectedFields = ['roleId', 'isActive', 'hotelId', 'createdBy', 'verification'];
+        const attemptedProtectedUpdate = protectedFields.some(field => field in userData);
+        
+        if (attemptedProtectedUpdate) {
+          return res.status(403).json({ 
+            message: "Cannot modify your own role, status, or hotel assignment. Contact your manager." 
+          });
+        }
+      }
+      
+      // CRITICAL: Verify permission to update other users
+      if (currentUser.id !== id) {
+        
+        // Only managers, owners, and super_admins can update other users
+        const canUpdateUsers = ['owner', 'manager', 'super_admin'].includes(currentRole);
+        
+        if (!canUpdateUsers) {
+          return res.status(403).json({ 
+            message: "You don't have permission to update other users" 
+          });
+        }
+        
+        // CRITICAL: Prevent updating protected fields without proper authorization
+        if ('roleId' in userData || 'isActive' in userData) {
+          // Only owner and super_admin can change roles or activation status
+          if (!['owner', 'super_admin'].includes(currentRole)) {
+            return res.status(403).json({ 
+              message: "Only the hotel owner can change user roles or activation status" 
+            });
+          }
+        }
+      }
+      
       const user = await storage.updateUser(id, userData);
       const { passwordHash: _, ...sanitizedUser } = user;
       res.json(sanitizedUser);
@@ -2251,7 +2362,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/transactions/:id", async (req, res) => {
     try {
+      // CRITICAL: Require authentication
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const currentUser = req.user as any;
       const { id } = req.params;
+      
+      // Get transaction to verify hotel
+      const transaction = await db.query.transactions.findFirst({
+        where: (transactions, { eq }) => eq(transactions.id, id)
+      });
+      
+      if (!transaction) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+
+      // CRITICAL: Verify transaction belongs to user's hotel
+      if (transaction.hotelId !== currentUser.hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // CRITICAL: Only managers and owners can delete transactions
+      const currentRole = currentUser.role?.name || '';
+      const canDeleteTransactions = ['owner', 'manager', 'finance'].includes(currentRole);
+      
+      if (!canDeleteTransactions) {
+        return res.status(403).json({ 
+          message: "You don't have permission to delete transactions" 
+        });
+      }
+
       await storage.deleteTransaction(id);
       res.status(204).send();
     } catch (error) {
