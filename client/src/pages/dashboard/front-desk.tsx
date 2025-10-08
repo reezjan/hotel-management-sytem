@@ -73,6 +73,8 @@ export default function FrontDeskDashboard() {
   const [guestSearchQuery, setGuestSearchQuery] = useState("");
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
   const [isViewReservationsModalOpen, setIsViewReservationsModalOpen] = useState(false);
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
@@ -504,6 +506,7 @@ export default function FrontDeskDashboard() {
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/reservations"] });
       toast({ title: "Reservation created successfully" });
       reservationForm.reset();
       setIsReservationModalOpen(false);
@@ -2804,11 +2807,11 @@ export default function FrontDeskDashboard() {
           </DialogContent>
         </Dialog>
 
-        {/* View All Reservations Modal */}
+        {/* View All Reservations Modal - Calendar View */}
         <Dialog open={isViewReservationsModalOpen} onOpenChange={setIsViewReservationsModalOpen}>
           <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>All Reservations</DialogTitle>
+              <DialogTitle>Reservations Calendar</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               {reservations.length === 0 ? (
@@ -2817,86 +2820,304 @@ export default function FrontDeskDashboard() {
                   <p>No reservations found</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {reservations
-                    .sort((a: any, b: any) => new Date(a.checkInDate).getTime() - new Date(b.checkInDate).getTime())
-                    .map((reservation: any) => {
-                      const room = rooms.find(r => r.id === reservation.roomId);
-                      const checkInDate = new Date(reservation.checkInDate);
-                      const checkOutDate = new Date(reservation.checkOutDate);
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      checkInDate.setHours(0, 0, 0, 0);
-                      
-                      const isToday = checkInDate.getTime() === today.getTime();
-                      const isPast = checkInDate.getTime() < today.getTime();
-                      const isUpcoming = checkInDate.getTime() > today.getTime();
+                <div className="space-y-4">
+                  {/* Calendar Navigation */}
+                  <div className="flex items-center justify-between border-b pb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newDate = new Date(calendarDate);
+                        newDate.setMonth(newDate.getMonth() - 1);
+                        setCalendarDate(newDate);
+                      }}
+                      data-testid="button-prev-month"
+                    >
+                      ← Previous
+                    </Button>
+                    <h3 className="text-lg font-semibold">
+                      {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newDate = new Date(calendarDate);
+                        newDate.setMonth(newDate.getMonth() + 1);
+                        setCalendarDate(newDate);
+                      }}
+                      data-testid="button-next-month"
+                    >
+                      Next →
+                    </Button>
+                  </div>
 
-                      return (
-                        <div 
-                          key={reservation.id}
-                          className={cn(
-                            "p-4 border rounded-lg",
-                            isToday && "bg-blue-50 dark:bg-blue-950/20 border-blue-200",
-                            isPast && "bg-gray-50 dark:bg-gray-900/20 opacity-60",
-                            isUpcoming && "bg-white dark:bg-gray-950"
-                          )}
-                          data-testid={`reservation-${reservation.id}`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <h3 className="font-semibold text-lg" data-testid="text-guest-name">{reservation.guestName}</h3>
-                                {isToday && <Badge className="bg-blue-500">Today</Badge>}
-                                {isPast && <Badge variant="secondary">Past</Badge>}
-                                <Badge variant="outline">{reservation.status}</Badge>
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7 gap-2">
+                    {/* Day headers */}
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="text-center font-semibold text-sm py-2">
+                        {day}
+                      </div>
+                    ))}
+                    
+                    {/* Calendar days */}
+                    {(() => {
+                      const year = calendarDate.getFullYear();
+                      const month = calendarDate.getMonth();
+                      const firstDay = new Date(year, month, 1);
+                      const lastDay = new Date(year, month + 1, 0);
+                      const daysInMonth = lastDay.getDate();
+                      const startingDayOfWeek = firstDay.getDay();
+                      
+                      const days = [];
+                      
+                      // Empty cells before first day
+                      for (let i = 0; i < startingDayOfWeek; i++) {
+                        days.push(<div key={`empty-${i}`} className="aspect-square" />);
+                      }
+                      
+                      // Days of the month
+                      for (let day = 1; day <= daysInMonth; day++) {
+                        const currentDate = new Date(year, month, day, 0, 0, 0, 0);
+                        
+                        // Find reservations for this date - checking if current date falls within reservation period
+                        const dayReservations = reservations.filter((res: any) => {
+                          const checkIn = new Date(res.checkInDate);
+                          const checkOut = new Date(res.checkOutDate);
+                          
+                          // Normalize all dates to midnight local time for accurate comparison
+                          const checkInNormalized = new Date(checkIn.getFullYear(), checkIn.getMonth(), checkIn.getDate(), 0, 0, 0, 0);
+                          const checkOutNormalized = new Date(checkOut.getFullYear(), checkOut.getMonth(), checkOut.getDate(), 0, 0, 0, 0);
+                          const currentNormalized = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 0, 0, 0, 0);
+                          
+                          // Check if current date is within the stay period (inclusive of check-in, inclusive of check-out)
+                          return currentNormalized.getTime() >= checkInNormalized.getTime() && 
+                                 currentNormalized.getTime() <= checkOutNormalized.getTime();
+                        });
+                        
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        currentDate.setHours(0, 0, 0, 0);
+                        const isToday = currentDate.getTime() === today.getTime();
+                        const isSelected = selectedCalendarDate && 
+                          currentDate.toDateString() === selectedCalendarDate.toDateString();
+                        
+                        days.push(
+                          <button
+                            key={day}
+                            onClick={() => setSelectedCalendarDate(currentDate)}
+                            className={cn(
+                              "aspect-square p-2 border rounded-lg hover:bg-muted transition-colors relative",
+                              isToday && "border-blue-500 border-2",
+                              isSelected && "bg-blue-100 dark:bg-blue-950",
+                              dayReservations.length > 0 && "bg-green-50 dark:bg-green-950/20"
+                            )}
+                            data-testid={`calendar-day-${day}`}
+                          >
+                            <div className="text-sm font-medium">{day}</div>
+                            {dayReservations.length > 0 && (
+                              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+                                {dayReservations.slice(0, 3).map((_, idx) => (
+                                  <div key={idx} className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                ))}
                               </div>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
-                                <div className="flex items-center gap-1">
-                                  <Smartphone className="h-3 w-3" />
-                                  {reservation.guestPhone}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Bed className="h-3 w-3" />
-                                  Room {room?.roomNumber || 'N/A'}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Users className="h-3 w-3" />
-                                  {reservation.numberOfPersons} {reservation.numberOfPersons === 1 ? 'person' : 'persons'}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <CalendarIcon className="h-3 w-3" />
-                                  {checkInDate.toLocaleDateString()} - {checkOutDate.toLocaleDateString()}
+                            )}
+                          </button>
+                        );
+                      }
+                      
+                      return days;
+                    })()}
+                  </div>
+
+                  {/* Reservations for selected date */}
+                  {selectedCalendarDate && (() => {
+                    const dayReservations = reservations.filter((res: any) => {
+                      const checkIn = new Date(res.checkInDate);
+                      const checkOut = new Date(res.checkOutDate);
+                      
+                      // Normalize all dates to midnight local time for accurate comparison
+                      const checkInNormalized = new Date(checkIn.getFullYear(), checkIn.getMonth(), checkIn.getDate(), 0, 0, 0, 0);
+                      const checkOutNormalized = new Date(checkOut.getFullYear(), checkOut.getMonth(), checkOut.getDate(), 0, 0, 0, 0);
+                      const selectedNormalized = new Date(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), selectedCalendarDate.getDate(), 0, 0, 0, 0);
+                      
+                      // Check if selected date is within the stay period (inclusive of check-in, inclusive of check-out)
+                      return selectedNormalized.getTime() >= checkInNormalized.getTime() && 
+                             selectedNormalized.getTime() <= checkOutNormalized.getTime();
+                    });
+
+                    return dayReservations.length > 0 ? (
+                      <div className="border-t pt-4">
+                        <h4 className="font-semibold mb-3">
+                          Reservations for {selectedCalendarDate.toLocaleDateString()} ({dayReservations.length})
+                        </h4>
+                        <div className="space-y-3">
+                          {dayReservations.map((reservation: any) => {
+                            const room = rooms.find(r => r.id === reservation.roomId);
+                            const mealPlan = mealPlans.find(mp => mp.id === reservation.mealPlanId);
+                            const checkInDate = new Date(reservation.checkInDate);
+                            const checkOutDate = new Date(reservation.checkOutDate);
+                            
+                            // Normalize dates for accurate comparison
+                            const checkInNormalized = new Date(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate(), 0, 0, 0, 0);
+                            const checkOutNormalized = new Date(checkOutDate.getFullYear(), checkOutDate.getMonth(), checkOutDate.getDate(), 0, 0, 0, 0);
+                            const selectedNormalized = new Date(selectedCalendarDate.getFullYear(), selectedCalendarDate.getMonth(), selectedCalendarDate.getDate(), 0, 0, 0, 0);
+                            
+                            const isCheckInDay = selectedNormalized.getTime() === checkInNormalized.getTime();
+                            const isCheckOutDay = selectedNormalized.getTime() === checkOutNormalized.getTime();
+                            const nights = Math.ceil((checkOutNormalized.getTime() - checkInNormalized.getTime()) / (1000 * 3600 * 24));
+
+                            return (
+                              <div 
+                                key={reservation.id}
+                                className="p-4 border rounded-lg bg-card hover:bg-muted/50 transition-colors"
+                                data-testid={`reservation-${reservation.id}`}
+                              >
+                                <div className="space-y-3">
+                                  {/* Header with guest name and status */}
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <h5 className="font-semibold text-lg" data-testid="text-guest-name">{reservation.guestName}</h5>
+                                        <Badge variant="outline">{reservation.status}</Badge>
+                                        {isCheckInDay && <Badge className="bg-green-500">Check-in Day</Badge>}
+                                        {isCheckOutDay && <Badge className="bg-orange-500">Check-out Day</Badge>}
+                                      </div>
+                                    </div>
+                                    {isCheckInDay && reservation.status === 'confirmed' && (
+                                      <Button 
+                                        size="sm"
+                                        onClick={() => {
+                                          handleCheckInFromReservation(reservation);
+                                          setIsViewReservationsModalOpen(false);
+                                        }}
+                                        data-testid="button-quick-checkin-modal"
+                                      >
+                                        <UserCheck className="h-4 w-4 mr-1" />
+                                        Check-in
+                                      </Button>
+                                    )}
+                                  </div>
+
+                                  {/* Guest Contact Details */}
+                                  <div className="bg-muted/50 p-3 rounded-md">
+                                    <h6 className="text-sm font-semibold mb-2 text-muted-foreground">Guest Contact</h6>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                                      <div className="flex items-center gap-2">
+                                        <Users className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium">Email:</span>
+                                        <span className="text-muted-foreground">{reservation.guestEmail || 'N/A'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Smartphone className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium">Phone:</span>
+                                        <span className="text-muted-foreground">{reservation.guestPhone || 'N/A'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Reservation Details */}
+                                  <div className="bg-muted/50 p-3 rounded-md">
+                                    <h6 className="text-sm font-semibold mb-2 text-muted-foreground">Reservation Details</h6>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                      <div className="flex items-center gap-2">
+                                        <Bed className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium">Room:</span>
+                                        <span className="text-muted-foreground">
+                                          {room?.roomNumber || 'N/A'} - {room?.roomType?.name || 'Standard'}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Users className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium">Guests:</span>
+                                        <span className="text-muted-foreground">{reservation.numberOfPersons} {reservation.numberOfPersons === 1 ? 'person' : 'persons'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium">Check-in:</span>
+                                        <span className="text-muted-foreground">{checkInDate.toLocaleDateString()}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium">Check-out:</span>
+                                        <span className="text-muted-foreground">{checkOutDate.toLocaleDateString()}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Clock className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium">Duration:</span>
+                                        <span className="text-muted-foreground">{nights} {nights === 1 ? 'night' : 'nights'}</span>
+                                      </div>
+                                      {mealPlan && (
+                                        <div className="flex items-center gap-2">
+                                          <Utensils className="h-4 w-4 text-muted-foreground" />
+                                          <span className="font-medium">Meal Plan:</span>
+                                          <span className="text-muted-foreground">{mealPlan.planName}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Pricing Breakdown */}
+                                  <div className="bg-muted/50 p-3 rounded-md">
+                                    <h6 className="text-sm font-semibold mb-2 text-muted-foreground">Pricing</h6>
+                                    <div className="space-y-1 text-sm">
+                                      <div className="flex justify-between">
+                                        <span>Room ({formatCurrency(Number(reservation.roomPrice || 0))} × {nights} {nights === 1 ? 'night' : 'nights'}):</span>
+                                        <span className="font-medium">{formatCurrency(Number(reservation.roomPrice || 0) * nights)}</span>
+                                      </div>
+                                      {mealPlan && reservation.mealPlanPrice && Number(reservation.mealPlanPrice) > 0 && (
+                                        <div className="flex justify-between">
+                                          <span>Meal Plan ({formatCurrency(Number(reservation.mealPlanPrice))} × {nights} {nights === 1 ? 'night' : 'nights'}):</span>
+                                          <span className="font-medium">{formatCurrency(Number(reservation.mealPlanPrice) * nights)}</span>
+                                        </div>
+                                      )}
+                                      <div className="flex justify-between pt-2 border-t font-semibold text-base">
+                                        <span>Total Amount:</span>
+                                        <span className="text-primary">{formatCurrency(Number(reservation.totalPrice || 0))}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Special Requests */}
+                                  {reservation.specialRequests && (
+                                    <div className="bg-amber-50 dark:bg-amber-950/20 p-3 rounded-md border border-amber-200 dark:border-amber-800">
+                                      <h6 className="text-sm font-semibold mb-1 flex items-center gap-2">
+                                        <Building2 className="h-4 w-4" />
+                                        Special Requests
+                                      </h6>
+                                      <p className="text-sm text-muted-foreground">{reservation.specialRequests}</p>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
-                              {reservation.specialRequests && (
-                                <div className="mt-2 text-sm">
-                                  <span className="font-medium">Special Requests:</span> {reservation.specialRequests}
-                                </div>
-                              )}
-                              <div className="mt-2 text-sm font-medium">
-                                Total: {formatCurrency(Number(reservation.totalPrice || 0))}
-                              </div>
-                            </div>
-                            <div className="ml-4">
-                              {isToday && (
-                                <Button 
-                                  size="sm"
-                                  onClick={() => {
-                                    handleCheckInFromReservation(reservation);
-                                    setIsViewReservationsModalOpen(false);
-                                  }}
-                                  data-testid="button-quick-checkin-modal"
-                                >
-                                  <UserCheck className="h-4 w-4 mr-1" />
-                                  Check-in
-                                </Button>
-                              )}
-                            </div>
-                          </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ) : (
+                      <div className="border-t pt-4 text-center text-muted-foreground">
+                        <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No reservations on {selectedCalendarDate.toLocaleDateString()}</p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Legend */}
+                  <div className="border-t pt-4 flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-blue-500 rounded"></div>
+                      <span>Today</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-green-50 dark:bg-green-950/20 border rounded"></div>
+                      <span>Has Reservations</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                      <span>Reservation Indicator</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
