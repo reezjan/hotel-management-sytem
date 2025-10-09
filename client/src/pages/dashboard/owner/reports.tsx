@@ -13,8 +13,10 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Reports() {
+  const { toast } = useToast();
   const [dateRange, setDateRange] = useState({
     from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     to: new Date().toISOString().split('T')[0]
@@ -132,14 +134,168 @@ export default function Reports() {
     bankTransfer: filteredTransactions.filter(t => t.paymentMethod === 'bank_transfer').reduce((sum, t) => sum + (Number(t.amount) || 0), 0),
   };
 
+  // CSV Export Helper Function
+  const downloadCSV = (data: string, filename: string) => {
+    const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const generateReport = () => {
-    console.log("Generating report:", { reportType, dateRange });
-    // TODO: Implement report generation
+    const reportTypeNames: Record<string, string> = {
+      financial: 'Financial Report',
+      occupancy: 'Occupancy Report',
+      staff: 'Staff Report',
+      inventory: 'Inventory Report',
+      comprehensive: 'Comprehensive Report'
+    };
+
+    // Call the appropriate export function based on report type
+    if (reportType === 'financial') {
+      exportReport('financial');
+    } else if (reportType === 'occupancy') {
+      exportReport('occupancy');
+    } else if (reportType === 'staff') {
+      exportReport('staff');
+    } else if (reportType === 'inventory') {
+      exportReport('inventory');
+    } else if (reportType === 'comprehensive') {
+      exportReport('comprehensive');
+    }
   };
 
   const exportReport = (format: string) => {
-    console.log("Exporting report in format:", format);
-    // TODO: Implement CSV export with detailed data
+    const dateFrom = new Date(dateRange.from).toLocaleDateString();
+    const dateTo = new Date(dateRange.to).toLocaleDateString();
+    
+    if (format === 'financial') {
+      // Financial Report CSV
+      let csv = `Financial Report (${dateFrom} - ${dateTo})\n\n`;
+      csv += `REVENUE BREAKDOWN\n`;
+      csv += `Category,Amount,Percentage\n`;
+      csv += `Room Bookings,${revenueBySource.rooms},${Math.round((revenueBySource.rooms / (totalRevenue || 1)) * 100)}%\n`;
+      csv += `Restaurant & Bar,${revenueBySource.restaurant},${Math.round((revenueBySource.restaurant / (totalRevenue || 1)) * 100)}%\n`;
+      csv += `Hall Bookings,${revenueBySource.halls},${Math.round((revenueBySource.halls / (totalRevenue || 1)) * 100)}%\n`;
+      csv += `Other Revenue,${revenueBySource.other},${Math.round((revenueBySource.other / (totalRevenue || 1)) * 100)}%\n`;
+      csv += `Total Revenue,${totalRevenue},100%\n\n`;
+      
+      csv += `EXPENSES BREAKDOWN\n`;
+      csv += `Category,Amount,Percentage\n`;
+      csv += `Salaries & Wages,${expensesByCategory.salaries},${Math.round((expensesByCategory.salaries / (totalExpenses || 1)) * 100)}%\n`;
+      csv += `Food & Supplies,${expensesByCategory.supplies},${Math.round((expensesByCategory.supplies / (totalExpenses || 1)) * 100)}%\n`;
+      csv += `Utilities,${expensesByCategory.utilities},${Math.round((expensesByCategory.utilities / (totalExpenses || 1)) * 100)}%\n`;
+      csv += `Maintenance & Repairs,${expensesByCategory.maintenance},${Math.round((expensesByCategory.maintenance / (totalExpenses || 1)) * 100)}%\n`;
+      csv += `Other Expenses,${expensesByCategory.other},${Math.round((expensesByCategory.other / (totalExpenses || 1)) * 100)}%\n`;
+      csv += `Total Expenses,${totalExpenses},100%\n\n`;
+      
+      csv += `SUMMARY\n`;
+      csv += `Total Revenue,${totalRevenue}\n`;
+      csv += `Total Expenses,${totalExpenses}\n`;
+      csv += `Refunds,${refunds}\n`;
+      csv += `Net Profit,${netProfit}\n`;
+      csv += `Profit Margin,${profitMargin.toFixed(1)}%\n`;
+      
+      downloadCSV(csv, `financial_report_${dateRange.from}_to_${dateRange.to}.csv`);
+      toast({ title: "Financial Report Exported", description: "CSV file downloaded successfully" });
+      
+    } else if (format === 'occupancy') {
+      // Occupancy Report CSV
+      let csv = `Occupancy Report (${dateFrom} - ${dateTo})\n\n`;
+      csv += `Room Number,Type,Status,Price Per Night,Capacity\n`;
+      rooms.forEach(room => {
+        csv += `${room.roomNumber},${room.type},${room.isOccupied ? 'Occupied' : 'Available'},${room.pricePerNight || 0},${room.capacity || 0}\n`;
+      });
+      csv += `\nSUMMARY\n`;
+      csv += `Total Rooms,${rooms.length}\n`;
+      csv += `Occupied Rooms,${rooms.filter(r => r.isOccupied).length}\n`;
+      csv += `Available Rooms,${rooms.filter(r => !r.isOccupied).length}\n`;
+      csv += `Occupancy Rate,${occupancyRate.toFixed(1)}%\n`;
+      
+      downloadCSV(csv, `occupancy_report_${dateRange.from}_to_${dateRange.to}.csv`);
+      toast({ title: "Occupancy Report Exported", description: "CSV file downloaded successfully" });
+      
+    } else if (format === 'staff') {
+      // Staff Report CSV
+      let csv = `Staff Report (${dateFrom} - ${dateTo})\n\n`;
+      csv += `Username,Full Name,Role,Status,Email,Phone\n`;
+      staff.forEach(member => {
+        csv += `${member.username},${member.fullName || ''},${member.role},${member.isActive ? 'Active' : 'Inactive'},${member.email || ''},${member.phone || ''}\n`;
+      });
+      csv += `\nSUMMARY\n`;
+      csv += `Total Staff,${staff.length}\n`;
+      csv += `Active Staff,${activeStaff}\n`;
+      csv += `Inactive Staff,${staff.length - activeStaff}\n`;
+      
+      downloadCSV(csv, `staff_report_${dateRange.from}_to_${dateRange.to}.csv`);
+      toast({ title: "Staff Report Exported", description: "CSV file downloaded successfully" });
+      
+    } else if (format === 'all_transactions') {
+      // All Transactions CSV
+      let csv = `Complete Transaction History (${dateFrom} - ${dateTo})\n\n`;
+      csv += `Date,Time,Type,Purpose,Payment Method,Reference,Vendor,Created By,Amount,Status\n`;
+      filteredTransactions.forEach(txn => {
+        const vendor = vendors.find(v => v.id === txn.vendorId);
+        const creator = staff.find(u => u.id === txn.createdBy);
+        const date = new Date(txn.createdAt);
+        csv += `${date.toLocaleDateString()},${date.toLocaleTimeString()},${txn.txnType},"${txn.purpose || ''}",${txn.paymentMethod || ''},${txn.reference || ''},${vendor?.name || ''},${creator?.username || ''},${txn.amount},${txn.isVoided ? 'Voided' : 'Active'}\n`;
+      });
+      
+      downloadCSV(csv, `all_transactions_${dateRange.from}_to_${dateRange.to}.csv`);
+      toast({ title: "Transaction History Exported", description: "CSV file downloaded successfully" });
+      
+    } else if (format === 'maintenance') {
+      // Maintenance Report CSV
+      let csv = `Maintenance Requests Report (${dateFrom} - ${dateTo})\n\n`;
+      csv += `Title,Location,Priority,Status,Reported By,Assigned To,Created Date,Resolved Date,Description\n`;
+      maintenanceRequests.forEach(req => {
+        const reporter = staff.find(u => u.id === req.reportedBy);
+        const assignee = staff.find(u => u.id === req.assignedTo);
+        csv += `"${req.title}","${req.location}",${req.priority},${req.status},${reporter?.username || ''},${assignee?.username || ''},${new Date(req.createdAt).toLocaleDateString()},${req.resolvedAt ? new Date(req.resolvedAt).toLocaleDateString() : ''},"${req.description}"\n`;
+      });
+      
+      downloadCSV(csv, `maintenance_report_${dateRange.from}_to_${dateRange.to}.csv`);
+      toast({ title: "Maintenance Report Exported", description: "CSV file downloaded successfully" });
+      
+    } else if (format === 'comprehensive') {
+      // Comprehensive Report with everything
+      let csv = `COMPREHENSIVE HOTEL REPORT (${dateFrom} - ${dateTo})\n\n`;
+      
+      csv += `=== FINANCIAL SUMMARY ===\n`;
+      csv += `Total Revenue,${totalRevenue}\n`;
+      csv += `Total Expenses,${totalExpenses}\n`;
+      csv += `Net Profit,${netProfit}\n`;
+      csv += `Profit Margin,${profitMargin.toFixed(1)}%\n\n`;
+      
+      csv += `=== OCCUPANCY SUMMARY ===\n`;
+      csv += `Total Rooms,${rooms.length}\n`;
+      csv += `Occupied,${rooms.filter(r => r.isOccupied).length}\n`;
+      csv += `Available,${rooms.filter(r => !r.isOccupied).length}\n`;
+      csv += `Occupancy Rate,${occupancyRate.toFixed(1)}%\n\n`;
+      
+      csv += `=== STAFF SUMMARY ===\n`;
+      csv += `Total Staff,${staff.length}\n`;
+      csv += `Active Staff,${activeStaff}\n\n`;
+      
+      csv += `=== PAYMENT METHODS ===\n`;
+      csv += `Cash,${paymentMethods.cash}\n`;
+      csv += `Credit Card,${paymentMethods.creditCard}\n`;
+      csv += `Bank Transfer,${paymentMethods.bankTransfer}\n\n`;
+      
+      csv += `=== RECENT TRANSACTIONS ===\n`;
+      csv += `Date,Type,Purpose,Amount\n`;
+      filteredTransactions.slice(0, 20).forEach(txn => {
+        csv += `${new Date(txn.createdAt).toLocaleDateString()},${txn.txnType},"${txn.purpose || ''}",${txn.amount}\n`;
+      });
+      
+      downloadCSV(csv, `comprehensive_report_${dateRange.from}_to_${dateRange.to}.csv`);
+      toast({ title: "Comprehensive Report Exported", description: "CSV file downloaded successfully" });
+    }
   };
 
   return (
@@ -397,11 +553,13 @@ export default function Reports() {
         ) : (
           /* Advanced View - Comprehensive Hotel Management Dashboard */
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="overview" data-testid="tab-overview">Financial Overview</TabsTrigger>
-              <TabsTrigger value="transactions" data-testid="tab-transactions">All Transactions</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-6">
+              <TabsTrigger value="overview" data-testid="tab-overview">Financial</TabsTrigger>
+              <TabsTrigger value="transactions" data-testid="tab-transactions">Transactions</TabsTrigger>
+              <TabsTrigger value="rooms" data-testid="tab-rooms">Rooms & Occupancy</TabsTrigger>
+              <TabsTrigger value="staff" data-testid="tab-staff">Staff & HR</TabsTrigger>
               <TabsTrigger value="maintenance" data-testid="tab-maintenance">Maintenance</TabsTrigger>
-              <TabsTrigger value="analytics" data-testid="tab-analytics">Visual Analytics</TabsTrigger>
+              <TabsTrigger value="vendors" data-testid="tab-vendors">Vendors & Suppliers</TabsTrigger>
             </TabsList>
 
             {/* Tab 1: Financial Overview */}
@@ -788,7 +946,217 @@ export default function Reports() {
               </Card>
             </TabsContent>
 
-            {/* Tab 3: Maintenance Requests with Photos */}
+            {/* Tab 3: Rooms & Occupancy - Complete Room Overview */}
+            <TabsContent value="rooms" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart className="h-5 w-5" />
+                    Complete Room Overview & Status
+                  </CardTitle>
+                  <CardDescription>
+                    Real-time room availability, pricing, and occupancy analysis
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* Occupancy Stats */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-blue-600">{rooms.length}</p>
+                          <p className="text-sm text-muted-foreground">Total Rooms</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-green-50 dark:bg-green-950 border-green-200">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-green-600">{rooms.filter(r => r.isOccupied).length}</p>
+                          <p className="text-sm text-muted-foreground">Occupied</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gray-50 dark:bg-gray-950 border-gray-200">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-gray-600">{rooms.filter(r => !r.isOccupied).length}</p>
+                          <p className="text-sm text-muted-foreground">Available</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-purple-50 dark:bg-purple-950 border-purple-200">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-purple-600">{occupancyRate.toFixed(1)}%</p>
+                          <p className="text-sm text-muted-foreground">Occupancy Rate</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Room Details Table */}
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Room Number</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Capacity</TableHead>
+                            <TableHead>Price/Night</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Floor</TableHead>
+                            <TableHead>Features</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rooms.map(room => (
+                            <TableRow key={room.id}>
+                              <TableCell className="font-bold">{room.roomNumber}</TableCell>
+                              <TableCell>{room.type}</TableCell>
+                              <TableCell>{room.capacity || 2} guests</TableCell>
+                              <TableCell className="font-semibold">{formatCurrency(Number(room.pricePerNight || 0))}</TableCell>
+                              <TableCell>
+                                <Badge variant={room.isOccupied ? 'destructive' : 'default'}>
+                                  {room.isOccupied ? 'Occupied' : 'Available'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{room.roomNumber?.toString().charAt(0) || '1'}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {room.description || 'Standard amenities'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Revenue Potential */}
+                    <Card className="bg-muted/30">
+                      <CardContent className="p-6">
+                        <h3 className="font-semibold mb-4">Revenue Analysis</h3>
+                        <div className="grid grid-cols-3 gap-6">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Total Potential (Full Occupancy)</p>
+                            <p className="text-2xl font-bold text-green-600">
+                              {formatCurrency(rooms.reduce((sum, r) => sum + Number(r.pricePerNight || 0), 0))}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">Per night if all rooms occupied</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Current Revenue</p>
+                            <p className="text-2xl font-bold text-blue-600">
+                              {formatCurrency(rooms.filter(r => r.isOccupied).reduce((sum, r) => sum + Number(r.pricePerNight || 0), 0))}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">From occupied rooms today</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-muted-foreground">Lost Opportunity</p>
+                            <p className="text-2xl font-bold text-orange-600">
+                              {formatCurrency(rooms.filter(r => !r.isOccupied).reduce((sum, r) => sum + Number(r.pricePerNight || 0), 0))}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">From vacant rooms</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Tab 4: Staff & HR - Complete Staff Information */}
+            <TabsContent value="staff" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Complete Staff Directory
+                  </CardTitle>
+                  <CardDescription>
+                    Full staff information, roles, and activity status
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    {/* Staff Stats */}
+                    <div className="grid grid-cols-4 gap-4">
+                      <Card className="bg-blue-50 dark:bg-blue-950">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-blue-600">{staff.length}</p>
+                          <p className="text-sm text-muted-foreground">Total Staff</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-green-50 dark:bg-green-950">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-green-600">{activeStaff}</p>
+                          <p className="text-sm text-muted-foreground">Active</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-orange-50 dark:bg-orange-950">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-orange-600">{staff.filter(s => dailyAttendance.some(a => a.userId === s.id && a.status === 'active')).length}</p>
+                          <p className="text-sm text-muted-foreground">On Duty</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gray-50 dark:bg-gray-950">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-gray-600">{staff.length - activeStaff}</p>
+                          <p className="text-sm text-muted-foreground">Inactive</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Staff Details Table */}
+                    <div className="rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Username</TableHead>
+                            <TableHead>Full Name</TableHead>
+                            <TableHead>Role</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Phone</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>On Duty</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {staff.map(member => {
+                            const isOnDuty = dailyAttendance.some(a => a.userId === member.id && a.status === 'active');
+                            return (
+                              <TableRow key={member.id}>
+                                <TableCell className="font-medium">{member.username}</TableCell>
+                                <TableCell>{member.fullName || '-'}</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="capitalize">
+                                    {member.role?.replace(/_/g, ' ')}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-sm">{member.email || '-'}</TableCell>
+                                <TableCell className="text-sm">{member.phone || '-'}</TableCell>
+                                <TableCell>
+                                  <Badge variant={member.isActive ? 'default' : 'secondary'}>
+                                    {member.isActive ? 'Active' : 'Inactive'}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  {isOnDuty ? (
+                                    <Badge variant="default" className="bg-green-600">
+                                      <CheckCircle className="h-3 w-3 mr-1" />
+                                      On Duty
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="secondary">
+                                      Off Duty
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Tab 5: Maintenance Requests with Photos */}
             <TabsContent value="maintenance" className="space-y-6">
               <Card>
                 <CardHeader>
@@ -896,214 +1264,117 @@ export default function Reports() {
               </Card>
             </TabsContent>
 
-            {/* Tab 4: Visual Analytics with Charts */}
-            <TabsContent value="analytics" className="space-y-6">
-              {/* Revenue & Expenses Bar Chart */}
+            {/* Tab 6: Vendors & Suppliers - Complete Vendor Directory */}
+            <TabsContent value="vendors" className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <BarChart className="h-5 w-5" />
-                    Revenue vs Expenses Breakdown
+                    <Activity className="h-5 w-5" />
+                    Vendor & Supplier Directory
                   </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-8">
-                    {/* Revenue Bar Chart */}
-                    <div>
-                      <h3 className="text-sm font-semibold mb-4 text-green-600">Revenue by Source</h3>
-                      <div className="space-y-3">
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Room Bookings</span>
-                            <span className="font-bold">{formatCurrency(revenueBySource.rooms)}</span>
-                          </div>
-                          <div className="h-8 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-green-500 flex items-center justify-end pr-3 text-white text-xs font-bold"
-                              style={{ width: `${(revenueBySource.rooms / totalRevenue) * 100}%` }}
-                            >
-                              {Math.round((revenueBySource.rooms / totalRevenue) * 100)}%
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Restaurant & Bar</span>
-                            <span className="font-bold">{formatCurrency(revenueBySource.restaurant)}</span>
-                          </div>
-                          <div className="h-8 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-green-600 flex items-center justify-end pr-3 text-white text-xs font-bold"
-                              style={{ width: `${(revenueBySource.restaurant / totalRevenue) * 100}%` }}
-                            >
-                              {Math.round((revenueBySource.restaurant / totalRevenue) * 100)}%
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Hall Bookings</span>
-                            <span className="font-bold">{formatCurrency(revenueBySource.halls)}</span>
-                          </div>
-                          <div className="h-8 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-green-700 flex items-center justify-end pr-3 text-white text-xs font-bold"
-                              style={{ width: `${(revenueBySource.halls / totalRevenue) * 100}%` }}
-                            >
-                              {Math.round((revenueBySource.halls / totalRevenue) * 100)}%
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    {/* Expenses Bar Chart */}
-                    <div>
-                      <h3 className="text-sm font-semibold mb-4 text-red-600">Expenses by Category</h3>
-                      <div className="space-y-3">
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Salaries & Wages</span>
-                            <span className="font-bold">{formatCurrency(expensesByCategory.salaries)}</span>
-                          </div>
-                          <div className="h-8 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-red-500 flex items-center justify-end pr-3 text-white text-xs font-bold"
-                              style={{ width: `${(expensesByCategory.salaries / totalExpenses) * 100}%` }}
-                            >
-                              {Math.round((expensesByCategory.salaries / totalExpenses) * 100)}%
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Food & Supplies</span>
-                            <span className="font-bold">{formatCurrency(expensesByCategory.supplies)}</span>
-                          </div>
-                          <div className="h-8 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-red-600 flex items-center justify-end pr-3 text-white text-xs font-bold"
-                              style={{ width: `${(expensesByCategory.supplies / totalExpenses) * 100}%` }}
-                            >
-                              {Math.round((expensesByCategory.supplies / totalExpenses) * 100)}%
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Utilities</span>
-                            <span className="font-bold">{formatCurrency(expensesByCategory.utilities)}</span>
-                          </div>
-                          <div className="h-8 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-red-700 flex items-center justify-end pr-3 text-white text-xs font-bold"
-                              style={{ width: `${(expensesByCategory.utilities / totalExpenses) * 100}%` }}
-                            >
-                              {Math.round((expensesByCategory.utilities / totalExpenses) * 100)}%
-                            </div>
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Maintenance & Repairs</span>
-                            <span className="font-bold">{formatCurrency(expensesByCategory.maintenance)}</span>
-                          </div>
-                          <div className="h-8 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-red-800 flex items-center justify-end pr-3 text-white text-xs font-bold"
-                              style={{ width: `${(expensesByCategory.maintenance / totalExpenses) * 100}%` }}
-                            >
-                              {Math.round((expensesByCategory.maintenance / totalExpenses) * 100)}%
-                            </div>
-                          </div>
-                        </div>
-                        {expensesByCategory.other > 0 && (
-                          <div>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span>Other Expenses</span>
-                              <span className="font-bold">{formatCurrency(expensesByCategory.other)}</span>
-                            </div>
-                            <div className="h-8 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-red-900 flex items-center justify-end pr-3 text-white text-xs font-bold"
-                                style={{ width: `${(expensesByCategory.other / totalExpenses) * 100}%` }}
-                              >
-                                {Math.round((expensesByCategory.other / totalExpenses) * 100)}%
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Payment Methods Pie Chart Representation */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <PieChart className="h-5 w-5" />
-                    Payment Methods Distribution
-                  </CardTitle>
+                  <CardDescription>
+                    Complete list of all vendors and supplier information
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div className="p-6 bg-green-50 dark:bg-green-950 rounded-lg">
-                        <div className="text-3xl font-bold text-green-600 mb-2">
-                          {Math.round((paymentMethods.cash / (paymentMethods.cash + paymentMethods.creditCard + paymentMethods.bankTransfer || 1)) * 100)}%
-                        </div>
-                        <p className="text-sm font-medium">Cash</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatCurrency(paymentMethods.cash)}
-                        </p>
-                      </div>
-                      <div className="p-6 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                        <div className="text-3xl font-bold text-blue-600 mb-2">
-                          {Math.round((paymentMethods.creditCard / (paymentMethods.cash + paymentMethods.creditCard + paymentMethods.bankTransfer || 1)) * 100)}%
-                        </div>
-                        <p className="text-sm font-medium">Credit Card</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatCurrency(paymentMethods.creditCard)}
-                        </p>
-                      </div>
-                      <div className="p-6 bg-purple-50 dark:bg-purple-950 rounded-lg">
-                        <div className="text-3xl font-bold text-purple-600 mb-2">
-                          {Math.round((paymentMethods.bankTransfer / (paymentMethods.cash + paymentMethods.creditCard + paymentMethods.bankTransfer || 1)) * 100)}%
-                        </div>
-                        <p className="text-sm font-medium">Bank Transfer</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatCurrency(paymentMethods.bankTransfer)}
-                        </p>
-                      </div>
+                    {/* Vendor Stats */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <Card className="bg-blue-50 dark:bg-blue-950">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-blue-600">{vendors.length}</p>
+                          <p className="text-sm text-muted-foreground">Total Vendors</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-green-50 dark:bg-green-950">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-green-600">
+                            {filteredTransactions.filter(t => t.vendorId && t.txnType === 'expense').length}
+                          </p>
+                          <p className="text-sm text-muted-foreground">Vendor Payments</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-purple-50 dark:bg-purple-950">
+                        <CardContent className="p-4 text-center">
+                          <p className="text-3xl font-bold text-purple-600">
+                            {formatCurrency(filteredTransactions.filter(t => t.vendorId).reduce((sum, t) => sum + Number(t.amount || 0), 0))}
+                          </p>
+                          <p className="text-sm text-muted-foreground">Total Paid to Vendors</p>
+                        </CardContent>
+                      </Card>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
 
-              {/* Export Actions */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Export Detailed Reports</CardTitle>
-                  <CardDescription>Download comprehensive data for external analysis</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-3">
-                    <Button variant="outline" onClick={() => exportReport('all_transactions')}>
-                      <Download className="h-4 w-4 mr-2" />
-                      All Transactions (CSV)
-                    </Button>
-                    <Button variant="outline" onClick={() => exportReport('profit_loss')}>
-                      <Download className="h-4 w-4 mr-2" />
-                      P&L Statement (CSV)
-                    </Button>
-                    <Button variant="outline" onClick={() => exportReport('maintenance')}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Maintenance Log (CSV)
-                    </Button>
+                    {/* Vendors Table */}
+                    <div className="space-y-4">
+                      {vendors.length > 0 ? (
+                        vendors.map(vendor => {
+                          const vendorPayments = filteredTransactions.filter(t => t.vendorId === vendor.id);
+                          const totalPaid = vendorPayments.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+                          
+                          return (
+                            <Card key={vendor.id}>
+                              <CardContent className="p-6">
+                                <div className="flex justify-between items-start mb-4">
+                                  <div>
+                                    <h3 className="text-lg font-bold">{vendor.name}</h3>
+                                    <p className="text-sm text-muted-foreground">{vendorPayments.length} transactions in period</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-2xl font-bold text-purple-600">{formatCurrency(totalPaid)}</p>
+                                    <p className="text-xs text-muted-foreground">Total Paid</p>
+                                  </div>
+                                </div>
+                                
+                                <Separator className="my-4" />
+                                
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                  <div>
+                                    <p className="text-muted-foreground mb-1">Phone</p>
+                                    <p className="font-medium">{vendor.contact?.phone || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground mb-1">Email</p>
+                                    <p className="font-medium">{vendor.contact?.email || '-'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted-foreground mb-1">Address</p>
+                                    <p className="font-medium">{vendor.contact?.address || '-'}</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Recent Payments */}
+                                {vendorPayments.length > 0 && (
+                                  <>
+                                    <Separator className="my-4" />
+                                    <div>
+                                      <h4 className="font-semibold mb-2">Recent Payments</h4>
+                                      <div className="space-y-2">
+                                        {vendorPayments.slice(0, 3).map(payment => (
+                                          <div key={payment.id} className="flex justify-between text-sm p-2 bg-muted/50 rounded">
+                                            <div>
+                                              <p className="font-medium">{payment.purpose}</p>
+                                              <p className="text-xs text-muted-foreground">
+                                                {new Date(payment.createdAt).toLocaleDateString()} • {payment.paymentMethod}
+                                              </p>
+                                            </div>
+                                            <p className="font-bold text-red-600">{formatCurrency(Number(payment.amount))}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                              </CardContent>
+                            </Card>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center py-12 text-muted-foreground">
+                          <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>No vendors found</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
