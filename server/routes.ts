@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, requireActiveUser } from "./auth";
 import { logAudit } from "./audit";
 import { db } from "./db";
+import { wsEvents } from "./websocket";
 import { users, roles, auditLogs } from "@shared/schema";
 import { eq, and, isNull, asc, sql, ne } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
@@ -871,6 +872,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assignedTo: req.body.assignedTo || req.body.assignedToId // Handle both field names for compatibility
       });
       const task = await storage.createTask(taskData);
+      
+      // Broadcast real-time update
+      wsEvents.taskCreated(user.hotelId, task);
+      
       res.status(201).json(task);
     } catch (error) {
       console.error("Task creation error:", error);
@@ -938,6 +943,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const task = await storage.updateTask(id, updateData);
+      
+      // Broadcast real-time update
+      wsEvents.taskUpdated(user.hotelId, task);
+      
       res.json(task);
     } catch (error) {
       console.error("Task update error:", error);
@@ -961,6 +970,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Task not found" });
       }
       await storage.deleteTask(id);
+      
+      // Broadcast real-time update
+      wsEvents.taskDeleted(user.hotelId, id);
+      
       res.status(204).send();
     } catch (error) {
       res.status(400).json({ message: "Failed to delete task" });
@@ -3273,9 +3286,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (items && items.length > 0) {
         const kot = await storage.createKotOrderWithItems(enrichedKotData, items);
+        wsEvents.kotOrderCreated(currentUser.hotelId, kot);
         res.status(201).json(kot);
       } else {
         const kot = await storage.createKotOrder(enrichedKotData);
+        wsEvents.kotOrderCreated(currentUser.hotelId, kot);
         res.status(201).json(kot);
       }
     } catch (error) {
@@ -3287,8 +3302,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/kot-orders/:id", requireActiveUser, async (req, res) => {
     try {
       const { id } = req.params;
+      const user = req.user as any;
       const kotData = req.body;
       const kot = await storage.updateKotOrder(id, kotData);
+      if (user?.hotelId) {
+        wsEvents.kotOrderUpdated(user.hotelId, kot);
+      }
       res.json(kot);
     } catch (error) {
       res.status(400).json({ message: "Failed to update KOT order" });
@@ -3367,6 +3386,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Sync the parent order status after item update
       if (existingItem.kotId) {
         await storage.updateKotOrderStatus(existingItem.kotId);
+      }
+      
+      // Broadcast real-time KOT update
+      if (currentUser?.hotelId) {
+        wsEvents.kotOrderUpdated(currentUser.hotelId, updatedItem);
       }
       
       res.json(updatedItem);
@@ -6352,6 +6376,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.updateUserOnlineStatus(user.id, true);
 
+      // Broadcast real-time attendance update
+      wsEvents.attendanceUpdated(user.hotelId, attendanceRecord);
+
       res.status(201).json(attendanceRecord);
     } catch (error) {
       console.error("Clock-in error:", error);
@@ -6387,6 +6414,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       await storage.updateUserOnlineStatus(user.id, false);
+
+      // Broadcast real-time attendance update
+      wsEvents.attendanceUpdated(user.hotelId, updatedRecord);
 
       res.json(updatedRecord);
     } catch (error) {
