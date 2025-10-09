@@ -5,6 +5,7 @@ import { setupAuth, requireActiveUser } from "./auth";
 import { db } from "./db";
 import { users, roles } from "@shared/schema";
 import { eq, and, isNull, asc, sql, ne } from "drizzle-orm";
+import { sanitizeObject } from "./sanitize";
 import {
   insertUserSchema,
   insertHotelSchema,
@@ -584,8 +585,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      // Sanitize input to prevent XSS
+      const sanitizedBody = sanitizeObject(req.body);
       const itemData = insertMenuItemSchema.parse({
-        ...req.body,
+        ...sanitizedBody,
         hotelId: user.hotelId
       });
       const item = await storage.createMenuItem(itemData);
