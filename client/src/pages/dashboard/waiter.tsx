@@ -22,6 +22,8 @@ export default function WaiterDashboard() {
   const [currentOrder, setCurrentOrder] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editedItems, setEditedItems] = useState<Record<string, number>>({});
 
   const { data: tables = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/restaurant-tables"]
@@ -63,6 +65,16 @@ export default function WaiterDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
       toast({ title: "Order deleted successfully" });
+    }
+  });
+
+  const updateKotItemMutation = useMutation({
+    mutationFn: async ({ itemId, qty }: { itemId: string; qty: number }) => {
+      await apiRequest("PUT", `/api/kot-items/${itemId}`, { qty });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
+      toast({ title: "Item quantity updated successfully" });
     }
   });
 
@@ -146,6 +158,46 @@ export default function WaiterDashboard() {
     if (window.confirm('Are you sure you want to delete this order?')) {
       deleteOrderMutation.mutate(orderId);
     }
+  };
+
+  const handleEditOrder = (order: any) => {
+    setEditingOrderId(order.id);
+    const itemQuantities: Record<string, number> = {};
+    order.items?.forEach((item: any) => {
+      itemQuantities[item.id] = item.qty;
+    });
+    setEditedItems(itemQuantities);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingOrderId(null);
+    setEditedItems({});
+  };
+
+  const handleSaveEdit = async (order: any) => {
+    try {
+      const updatePromises = order.items
+        .filter((item: any) => editedItems[item.id] && editedItems[item.id] !== item.qty)
+        .map((item: any) => 
+          updateKotItemMutation.mutateAsync({
+            itemId: item.id,
+            qty: editedItems[item.id]
+          })
+        );
+      
+      await Promise.all(updatePromises);
+      setEditingOrderId(null);
+      setEditedItems({});
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to update items", variant: "destructive" });
+    }
+  };
+
+  const updateEditedItemQty = (itemId: string, qty: number) => {
+    setEditedItems(prev => ({
+      ...prev,
+      [itemId]: Math.max(1, qty)
+    }));
   };
 
   const tableOrders = selectedTable ? getTableOrders(selectedTable.id) : [];
@@ -392,53 +444,115 @@ export default function WaiterDashboard() {
                       No active orders for this table
                     </p>
                   ) : (
-                    tableOrders.map((order) => (
-                      <Card key={order.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <h4 className="font-medium">Order #{order.id.slice(0, 8)}</h4>
-                              <p className="text-sm text-muted-foreground">
-                                {new Date(order.createdAt).toLocaleString()}
-                              </p>
+                    tableOrders.map((order) => {
+                      const isEditing = editingOrderId === order.id;
+                      return (
+                        <Card key={order.id}>
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <h4 className="font-medium">Order #{order.id.slice(0, 8)}</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {new Date(order.createdAt).toLocaleString()}
+                                </p>
+                              </div>
+                              <Badge className={getStatusColor(order.status)} variant="secondary">
+                                {order.status}
+                              </Badge>
                             </div>
-                            <Badge className={getStatusColor(order.status)} variant="secondary">
-                              {order.status}
-                            </Badge>
-                          </div>
-                          
-                          {order.items && order.items.length > 0 && (
-                            <div className="mb-3 space-y-1">
-                              {order.items.map((item: any, idx: number) => (
-                                <div key={idx} className="text-sm flex justify-between">
-                                  <span>{item.description}</span>
-                                  <span className="text-muted-foreground">x{item.qty}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          
-                          <div className="flex space-x-2 mt-4">
-                            {order.status === 'ready' && (
-                              <Button
-                                className="flex-1"
-                                onClick={() => handleOrderStatusUpdate(order, 'served')}
-                                disabled={updateOrderMutation.isPending}
-                              >
-                                Mark as Served
-                              </Button>
+                            
+                            {order.items && order.items.length > 0 && (
+                              <div className="mb-3 space-y-2">
+                                {order.items.map((item: any, idx: number) => (
+                                  <div key={idx} className="text-sm flex items-center justify-between p-2 rounded border bg-card">
+                                    <span className="flex-1">{item.menuItem?.name || item.notes || 'Unknown Item'}</span>
+                                    {isEditing ? (
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          size="icon"
+                                          variant="outline"
+                                          className="h-8 w-8"
+                                          onClick={() => updateEditedItemQty(item.id, (editedItems[item.id] || item.qty) - 1)}
+                                          data-testid={`button-decrease-edit-${idx}`}
+                                        >
+                                          <Minus className="h-4 w-4" />
+                                        </Button>
+                                        <span className="w-12 text-center font-medium">
+                                          {editedItems[item.id] || item.qty}
+                                        </span>
+                                        <Button
+                                          size="icon"
+                                          variant="outline"
+                                          className="h-8 w-8"
+                                          onClick={() => updateEditedItemQty(item.id, (editedItems[item.id] || item.qty) + 1)}
+                                          data-testid={`button-increase-edit-${idx}`}
+                                        >
+                                          <Plus className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <span className="text-muted-foreground">x{item.qty}</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
                             )}
-                            <Button
-                              variant="destructive"
-                              className="flex-1"
-                              onClick={() => handleDeleteOrder(order.id)}
-                            >
-                              Delete Order
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
+                            
+                            <div className="flex space-x-2 mt-4">
+                              {isEditing ? (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    className="flex-1"
+                                    onClick={handleCancelEdit}
+                                    data-testid="button-cancel-edit"
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    className="flex-1"
+                                    onClick={() => handleSaveEdit(order)}
+                                    disabled={updateKotItemMutation.isPending}
+                                    data-testid="button-save-edit"
+                                  >
+                                    {updateKotItemMutation.isPending ? "Saving..." : "Save Changes"}
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  {order.status === 'ready' && (
+                                    <Button
+                                      className="flex-1"
+                                      onClick={() => handleOrderStatusUpdate(order, 'served')}
+                                      disabled={updateOrderMutation.isPending}
+                                      data-testid="button-mark-served"
+                                    >
+                                      Mark as Served
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="outline"
+                                    className="flex-1"
+                                    onClick={() => handleEditOrder(order)}
+                                    data-testid="button-edit-order"
+                                  >
+                                    Edit Order
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    className="flex-1"
+                                    onClick={() => handleDeleteOrder(order.id)}
+                                    data-testid="button-delete-order"
+                                  >
+                                    Delete Order
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })
                   )}
                 </div>
               </TabsContent>
