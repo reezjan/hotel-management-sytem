@@ -16,6 +16,7 @@ import { useForm } from "react-hook-form";
 import { DollarSign, TrendingUp, TrendingDown, Receipt, CreditCard, Smartphone, Building, CheckCircle, XCircle, Landmark, Building2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { Transaction, MaintenanceRequest, Vendor } from "@shared/schema";
@@ -51,8 +52,13 @@ export default function FinanceDashboard() {
 
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery<Transaction[]>({
     queryKey: ["/api/hotels/current/transactions"],
-    enabled: !!user?.hotelId,
-    refetchInterval: 5000 // Refresh every 5 seconds for real-time updates
+    enabled: !!user?.hotelId
+  });
+
+  // Listen for real-time transaction updates
+  useRealtimeQuery({
+    queryKey: ["/api/hotels/current/transactions"],
+    events: ['transaction:created', 'transaction:updated']
   });
 
   const { data: maintenanceRequests = [], isLoading: maintenanceLoading } = useQuery<MaintenanceRequest[]>({

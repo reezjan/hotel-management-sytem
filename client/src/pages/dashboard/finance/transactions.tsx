@@ -13,6 +13,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 
 export default function FinanceTransactionsPage() {
   const { user } = useAuth();
@@ -25,6 +26,12 @@ export default function FinanceTransactionsPage() {
   const { data: transactions = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions"],
     enabled: !!user?.hotelId
+  });
+
+  // Listen for real-time transaction updates
+  useRealtimeQuery({
+    queryKey: ["/api/hotels/current/transactions"],
+    events: ['transaction:created', 'transaction:updated']
   });
 
   const transactionForm = useForm({

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { CheckCircle, AlertCircle, DollarSign, CreditCard, Smartphone } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 
 export default function FinanceReconciliationPage() {
   const { user } = useAuth();
@@ -15,6 +16,12 @@ export default function FinanceReconciliationPage() {
   const { data: transactions = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions"],
     enabled: !!user?.hotelId
+  });
+
+  // Listen for real-time transaction updates
+  useRealtimeQuery({
+    queryKey: ["/api/hotels/current/transactions"],
+    events: ['transaction:created', 'transaction:updated']
   });
 
   const cashTransactions = transactions.filter(t => t.paymentMethod === 'cash');

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { TrendingUp, TrendingDown, DollarSign, Activity } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 
 export default function FinanceCashFlowPage() {
   const { user } = useAuth();
@@ -14,6 +15,12 @@ export default function FinanceCashFlowPage() {
   const { data: transactions = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions"],
     enabled: !!user?.hotelId
+  });
+
+  // Listen for real-time transaction updates
+  useRealtimeQuery({
+    queryKey: ["/api/hotels/current/transactions"],
+    events: ['transaction:created', 'transaction:updated']
   });
 
   const cashInTransactions = transactions.filter(t => 

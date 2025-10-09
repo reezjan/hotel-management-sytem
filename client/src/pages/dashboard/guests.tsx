@@ -18,6 +18,7 @@ import { Users, UserPlus, Search, Edit, Trash2, Phone, Mail, MapPin, CalendarIco
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 import { formatDate, cn } from "@/lib/utils";
 import { insertGuestSchema, type Guest } from "@shared/schema";
 import { z } from "zod";
@@ -44,6 +45,12 @@ export default function GuestsPage() {
   const { data: guests = [], isLoading } = useQuery<Guest[]>({
     queryKey: ["/api/hotels/current/guests"],
     enabled: !!user?.hotelId
+  });
+
+  // Listen for real-time guest updates
+  useRealtimeQuery({
+    queryKey: ["/api/hotels/current/guests"],
+    events: ['guest:created', 'guest:updated']
   });
 
   const guestForm = useForm<GuestFormData>({
