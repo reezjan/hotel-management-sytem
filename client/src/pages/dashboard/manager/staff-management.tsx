@@ -13,6 +13,9 @@ import { toast } from "sonner";
 
 export default function StaffManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<any>(null);
+  const [newPassword, setNewPassword] = useState("");
   const [newStaff, setNewStaff] = useState({
     username: "",
     email: "",
@@ -51,8 +54,8 @@ export default function StaffManagement() {
     queryKey: ["/api/attendance/daily"]
   });
 
-  // Roles that a manager can create
-  const managerCanCreate = ["housekeeping_supervisor", "restaurant_bar_manager", "security_head", "finance", "front_desk", "storekeeper"];
+  // Roles that a manager can create (based on server authorization)
+  const managerCanCreate = ['waiter', 'kitchen_staff', 'housekeeping_staff', 'security_guard', 'cashier', 'front_desk'];
   const availableRoles = allRoles.filter((role: any) => managerCanCreate.includes(role.name));
 
   // Create staff mutation
@@ -101,6 +104,32 @@ export default function StaffManagement() {
     }
   });
 
+  // Reset password mutation
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ targetUserId, newPassword }: { targetUserId: string; newPassword: string }) => {
+      const response = await fetch("/api/manager/reset-staff-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ targetUserId, newPassword })
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to reset password");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setIsResetPasswordDialogOpen(false);
+      setNewPassword("");
+      setSelectedStaff(null);
+      toast.success(`Password reset successfully for ${data.username}`);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to reset password");
+    }
+  });
+
   const handleCreateStaff = () => {
     if (!newStaff.username || !newStaff.password || !newStaff.role) {
       toast.error("Please fill in all required fields");
@@ -124,6 +153,26 @@ export default function StaffManagement() {
     if (window.confirm(`Are you sure you want to remove ${staffMember.username}?`)) {
       deleteStaffMutation.mutate(staffMember.id);
     }
+  };
+
+  const handleResetPassword = (staffMember: any) => {
+    setSelectedStaff(staffMember);
+    setIsResetPasswordDialogOpen(true);
+  };
+
+  const handleConfirmResetPassword = () => {
+    if (!newPassword || newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    if (!selectedStaff) {
+      toast.error("No staff member selected");
+      return;
+    }
+    resetPasswordMutation.mutate({ 
+      targetUserId: selectedStaff.id, 
+      newPassword 
+    });
   };
 
   const staffColumns = [
@@ -152,6 +201,11 @@ export default function StaffManagement() {
   ];
 
   const staffActions = [
+    { 
+      label: "Reset Password", 
+      action: handleResetPassword, 
+      variant: "outline" as const
+    },
     { 
       label: "Remove", 
       action: handleDeleteStaff, 
@@ -277,6 +331,54 @@ export default function StaffManagement() {
                   disabled={createStaffMutation.isPending}
                 >
                   {createStaffMutation.isPending ? "Creating..." : "Create Staff Member"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Password Dialog */}
+        <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reset Staff Password</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Reset password for <span className="font-semibold">{selectedStaff?.username}</span>
+              </p>
+              <div>
+                <Label htmlFor="new-password">New Password *</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password (min 8 characters)"
+                  data-testid="input-reset-password"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Password must be at least 8 characters long
+                </p>
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsResetPasswordDialogOpen(false);
+                    setNewPassword("");
+                    setSelectedStaff(null);
+                  }}
+                  data-testid="button-cancel-reset"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleConfirmResetPassword}
+                  disabled={resetPasswordMutation.isPending}
+                  data-testid="button-confirm-reset"
+                >
+                  {resetPasswordMutation.isPending ? "Resetting..." : "Reset Password"}
                 </Button>
               </div>
             </div>

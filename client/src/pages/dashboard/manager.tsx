@@ -85,18 +85,18 @@ export default function ManagerDashboard() {
   ];
 
   const staffActions = [
-    { label: "Edit", action: (row: any) => {/* TODO: Implement edit staff functionality */} },
-    { label: "Remove", action: (row: any) => {/* TODO: Implement remove staff functionality */}, variant: "destructive" as const }
+    { label: "View", action: (row: any) => setLocation("/manager/staff") },
+    { label: "Manage", action: (row: any) => setLocation("/manager/staff"), variant: "outline" as const }
   ];
 
   const voucherActions = [
-    { label: "Edit", action: (row: any) => {/* TODO: Implement edit voucher functionality */} },
-    { label: "Deactivate", action: (row: any) => {/* TODO: Implement deactivate voucher functionality */}, variant: "destructive" as const }
+    { label: "View", action: (row: any) => setLocation("/manager/discount-vouchers") },
+    { label: "Manage", action: (row: any) => setLocation("/manager/discount-vouchers"), variant: "outline" as const }
   ];
 
   const roomActions = [
-    { label: "Edit", action: (row: any) => {/* TODO: Implement edit room functionality */} },
-    { label: "Maintenance", action: (row: any) => {/* TODO: Implement schedule maintenance functionality */}, variant: "outline" as const }
+    { label: "View", action: (row: any) => setLocation("/manager/room-setup") },
+    { label: "Manage", action: (row: any) => setLocation("/manager/room-setup"), variant: "outline" as const }
   ];
 
   return (
@@ -175,7 +175,7 @@ export default function ManagerDashboard() {
           data={staff}
           columns={staffColumns}
           actions={staffActions}
-          onAdd={() => {/* TODO: Navigate to add staff page */}}
+          onAdd={() => setLocation("/manager/staff")}
           addButtonLabel="Add Staff Member"
           searchPlaceholder="Search staff..."
         />
@@ -186,7 +186,7 @@ export default function ManagerDashboard() {
           data={vouchers}
           columns={voucherColumns}
           actions={voucherActions}
-          onAdd={() => {/* TODO: Navigate to create voucher page */}}
+          onAdd={() => setLocation("/manager/discount-vouchers")}
           addButtonLabel="Create Voucher"
           searchPlaceholder="Search vouchers..."
         />
@@ -197,7 +197,7 @@ export default function ManagerDashboard() {
           data={rooms}
           columns={roomColumns}
           actions={roomActions}
-          onAdd={() => {/* TODO: Navigate to add room page */}}
+          onAdd={() => setLocation("/manager/room-setup")}
           addButtonLabel="Add Room"
           searchPlaceholder="Search rooms..."
         />
