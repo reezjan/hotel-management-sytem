@@ -118,7 +118,7 @@ export default function InventoryTracking() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Value</p>
-                  <p className="text-2xl font-bold">₹{totalValue.toFixed(0)}</p>
+                  <p className="text-2xl font-bold">रु{totalValue.toFixed(0)}</p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-green-500" />
               </div>

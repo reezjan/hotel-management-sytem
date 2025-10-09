@@ -103,7 +103,7 @@ export default function RestaurantBarManagerDashboard() {
       label: "Category", 
       render: (value: any, row: any) => row.category?.name || "Uncategorized"
     },
-    { key: "price", label: "Price", sortable: true, render: (value: number) => `₹${value}` },
+    { key: "price", label: "Price", sortable: true, render: (value: number) => `रु${value}` },
     { 
       key: "active", 
       label: "Status", 
@@ -289,7 +289,7 @@ export default function RestaurantBarManagerDashboard() {
               </div>
               <div className="text-center p-4 bg-purple-50 rounded-lg" data-testid="kot-summary-revenue">
                 <div className="text-2xl font-bold text-purple-600">
-                  ₹{kotOrders.reduce((total, order) => {
+                  रु{kotOrders.reduce((total, order) => {
                     if (order.status === 'served') {
                       // Calculate order total from items if available
                       return total + (order.total || 0);

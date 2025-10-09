@@ -94,7 +94,7 @@ export default function TransactionsPage() {
       key: "amount", 
       label: "Amount", 
       sortable: true,
-      render: (value: string) => `₹${Number(value).toLocaleString()}`
+      render: (value: string) => `रु${Number(value).toLocaleString()}`
     },
     { 
       key: "paymentMethod", 
@@ -155,7 +155,7 @@ export default function TransactionsPage() {
               <Receipt className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₹{totalAmount.toLocaleString()}</div>
+              <div className="text-2xl font-bold">रु{totalAmount.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">{filteredTransactions.length} transactions</p>
             </CardContent>
           </Card>
@@ -166,7 +166,7 @@ export default function TransactionsPage() {
               <Banknote className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₹{cashTotal.toLocaleString()}</div>
+              <div className="text-2xl font-bold">रु{cashTotal.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">
                 {transactions.filter(t => t.paymentMethod === 'cash').length} transactions
               </p>
@@ -179,7 +179,7 @@ export default function TransactionsPage() {
               <CreditCard className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₹{posTotal.toLocaleString()}</div>
+              <div className="text-2xl font-bold">रु{posTotal.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">
                 {transactions.filter(t => t.paymentMethod === 'pos').length} transactions
               </p>
@@ -192,7 +192,7 @@ export default function TransactionsPage() {
               <Smartphone className="h-4 w-4 text-purple-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₹{fonepayTotal.toLocaleString()}</div>
+              <div className="text-2xl font-bold">रु{fonepayTotal.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground">
                 {transactions.filter(t => t.paymentMethod === 'fonepay').length} transactions
               </p>

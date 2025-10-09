@@ -323,7 +323,7 @@ export default function MenuManagement() {
       sortable: true, 
       render: (value: any) => {
         const numValue = Number(value);
-        return `₹${!isNaN(numValue) ? numValue.toFixed(2) : '0.00'}`;
+        return `रु${!isNaN(numValue) ? numValue.toFixed(2) : '0.00'}`;
       }
     },
     { 
@@ -419,7 +419,7 @@ export default function MenuManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Avg Price</p>
-                  <p className="text-2xl font-bold">₹{avgPrice.toFixed(0)}</p>
+                  <p className="text-2xl font-bold">रु{avgPrice.toFixed(0)}</p>
                 </div>
                 <Wine className="h-8 w-8 text-orange-500" />
               </div>
@@ -511,7 +511,7 @@ export default function MenuManagement() {
               </div>
               
               <div>
-                <Label htmlFor="price">Price (₹) *</Label>
+                <Label htmlFor="price">Price (रु) *</Label>
                 <Input
                   id="price"
                   type="number"

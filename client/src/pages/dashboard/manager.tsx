@@ -106,19 +106,19 @@ export default function ManagerDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
             title="Cash Transactions"
-            value={`₹${cashTransactions.toLocaleString()}`}
+            value={`रु${cashTransactions.toLocaleString()}`}
             icon={<Receipt />}
             iconColor="text-green-500"
           />
           <StatsCard
             title="POS Transactions"
-            value={`₹${posTransactions.toLocaleString()}`}
+            value={`रु${posTransactions.toLocaleString()}`}
             icon={<CreditCard />}
             iconColor="text-blue-500"
           />
           <StatsCard
             title="Fonepay Transactions"
-            value={`₹${fonepayTransactions.toLocaleString()}`}
+            value={`रु${fonepayTransactions.toLocaleString()}`}
             icon={<TrendingUp />}
             iconColor="text-purple-500"
           />
@@ -219,7 +219,7 @@ export default function ManagerDashboard() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-bold text-foreground">₹{Number(payment.amount).toLocaleString()}</span>
+                    <span className="font-bold text-foreground">रु{Number(payment.amount).toLocaleString()}</span>
                     <p className="text-xs text-muted-foreground">{new Date(payment.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
