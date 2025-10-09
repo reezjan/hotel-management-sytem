@@ -83,6 +83,23 @@ The system is built as a full-stack application using React and TypeScript for t
 - **Audit Trail**: Complete immutability with `voidedBy`, `voidedAt`, `voidReason` tracking
 - **Location**: `server/routes.ts` (transaction void endpoint), `client/src/pages/dashboard/manager/vendor-payments.tsx` (UI)
 
+#### 5. Maintenance Request Reassignment Security (October 2025)
+- **Supervisor Approval Required**: Only managers, owners, security heads, and housekeeping supervisors can reassign maintenance requests
+- **Assignment Verification**: Users can only update requests assigned to them (unless they're supervisors)
+- **Audit Logging**: All reassignments are logged in the audit trail with previous/new assignee information
+- **Protected Endpoints**:
+  - `PUT /api/maintenance-requests/:id` - Maintenance request updates
+  - `PUT /api/hotels/current/maintenance-requests/:id` - Hotel-scoped maintenance updates
+- **Authorization Pattern**: `['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(role)`
+- **Audit Payload**: Tracks `previousAssignee`, `newAssignee`, `timestamp`, and `changedBy` for complete traceability
+
+#### 6. Type Coercion Attack Prevention (October 2025) 
+- **Vulnerability**: Server crashed when non-string types (numbers, objects, arrays) were sent as login credentials
+- **Attack Vector**: `POST /api/login` with `{username: 123, password: 456}` or `{username: {}, password: []}`
+- **Fix Location**: `server/auth.ts` - Enhanced `sanitizeInput()` function
+- **Solution**: Added type checking to reject non-string inputs before processing, preventing `TypeError: input.replace is not a function`
+- **Testing**: Comprehensive attack suite validates SQL injection, XSS, type coercion, and edge case protection
+
 ## External Dependencies
 -   **PostgreSQL**: Relational database for all application data.
 -   **Vite**: Frontend build tool.

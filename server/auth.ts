@@ -14,7 +14,12 @@ function sanitizeUser(user: SelectUser): Omit<SelectUser, 'passwordHash'> {
 }
 
 // Sanitize input to prevent null byte attacks and other injection attempts
-function sanitizeInput(input: string | null | undefined): string {
+function sanitizeInput(input: any): string {
+  // CRITICAL: Handle type coercion attacks - reject non-string inputs
+  if (typeof input !== 'string') {
+    return '';
+  }
+  
   if (!input) return '';
   
   // Remove null bytes (\x00) that crash PostgreSQL

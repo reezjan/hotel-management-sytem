@@ -956,20 +956,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
       }
-      const user = req.user as any;
-      if (!user || !user.hotelId) {
+      const currentUser = req.user as any;
+      if (!currentUser || !currentUser.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       const { id } = req.params;
-      const requestData = insertMaintenanceRequestSchema.partial().parse(req.body);
+      const updateData = req.body;
+      
       // Verify the maintenance request belongs to current hotel
       const existingRequest = await storage.getMaintenanceRequest(id);
-      if (!existingRequest || existingRequest.hotelId !== user.hotelId) {
+      if (!existingRequest || existingRequest.hotelId !== currentUser.hotelId) {
         return res.status(404).json({ message: "Maintenance request not found" });
       }
+      
+      // CRITICAL: Reassignment requires supervisor approval
+      if ('assignedTo' in updateData && updateData.assignedTo !== existingRequest.assignedTo) {
+        const canReassign = ['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+        
+        if (!canReassign) {
+          return res.status(403).json({ 
+            message: "Only supervisors can reassign maintenance requests" 
+          });
+        }
+        
+        // Log reassignment for audit
+        await storage.createAuditLog({
+          hotelId: currentUser.hotelId,
+          entity: 'maintenance_request',
+          entityId: id,
+          action: 'reassigned',
+          changedBy: currentUser.id,
+          payload: {
+            previousAssignee: existingRequest.assignedTo,
+            newAssignee: updateData.assignedTo,
+            timestamp: new Date()
+          }
+        });
+      }
+      
+      // Verify assigned user can update their own requests
+      const isAssigned = existingRequest.assignedTo === currentUser.id;
+      const isSupervisor = ['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+      
+      if (!isAssigned && !isSupervisor) {
+        return res.status(403).json({ 
+          message: "You can only update requests assigned to you" 
+        });
+      }
+      
+      const requestData = insertMaintenanceRequestSchema.partial().parse(updateData);
       const request = await storage.updateMaintenanceRequest(id, requestData);
       res.json(request);
     } catch (error) {
+      console.error("Maintenance request update error:", error);
       res.status(400).json({ message: "Failed to update maintenance request" });
     }
   });
@@ -2728,11 +2767,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/maintenance-requests/:id", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
       const { id } = req.params;
-      const requestData = insertMaintenanceRequestSchema.partial().parse(req.body);
-      const request = await storage.updateMaintenanceRequest(id, requestData);
-      res.json(request);
+      const updateData = req.body;
+      
+      const existingRequest = await storage.getMaintenanceRequest(id);
+      if (!existingRequest || existingRequest.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Maintenance request not found" });
+      }
+      
+      // CRITICAL: Reassignment requires supervisor approval
+      if ('assignedTo' in updateData && updateData.assignedTo !== existingRequest.assignedTo) {
+        const canReassign = ['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+        
+        if (!canReassign) {
+          return res.status(403).json({ 
+            message: "Only supervisors can reassign maintenance requests" 
+          });
+        }
+        
+        // Log reassignment for audit
+        await storage.createAuditLog({
+          hotelId: currentUser.hotelId,
+          entity: 'maintenance_request',
+          entityId: id,
+          action: 'reassigned',
+          changedBy: currentUser.id,
+          payload: {
+            previousAssignee: existingRequest.assignedTo,
+            newAssignee: updateData.assignedTo,
+            timestamp: new Date()
+          }
+        });
+      }
+      
+      // Verify assigned user can update their own requests
+      const isAssigned = existingRequest.assignedTo === currentUser.id;
+      const isSupervisor = ['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+      
+      if (!isAssigned && !isSupervisor) {
+        return res.status(403).json({ 
+          message: "You can only update requests assigned to you" 
+        });
+      }
+      
+      const requestData = insertMaintenanceRequestSchema.partial().parse(updateData);
+      const updatedRequest = await storage.updateMaintenanceRequest(id, requestData);
+      res.json(updatedRequest);
     } catch (error) {
+      console.error("Maintenance request update error:", error);
       res.status(400).json({ message: "Failed to update maintenance request" });
     }
   });
