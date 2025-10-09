@@ -1222,14 +1222,15 @@ export type InsertBookingPayment = z.infer<typeof insertBookingPaymentSchema>;
 export type SelectBookingPayment = typeof bookingPayments.$inferSelect;
 
 export const updateKotItemSchema = z.object({
-  status: z.enum(['pending', 'approved', 'declined', 'ready', 'served', 'completed', 'cancelled']),
+  status: z.enum(['pending', 'approved', 'declined', 'ready', 'served', 'completed', 'cancelled']).optional(),
+  qty: z.number().int().min(1).optional(),
   declineReason: z.string().optional(),
   inventoryVerified: z.boolean().optional()
 }).refine(
-  (data) => data.status !== 'declined' || (data.declineReason && data.declineReason.trim().length >= 10),
+  (data) => !data.status || data.status !== 'declined' || (data.declineReason && data.declineReason.trim().length >= 10),
   { message: "Decline reason requires minimum 10 characters when declining a KOT item", path: ['declineReason'] }
 ).refine(
-  (data) => data.status !== 'cancelled' || (data.declineReason && data.declineReason.trim().length >= 10),
+  (data) => !data.status || data.status !== 'cancelled' || (data.declineReason && data.declineReason.trim().length >= 10),
   { message: "Cancellation reason requires minimum 10 characters", path: ['declineReason'] }
 );
 
