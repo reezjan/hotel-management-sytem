@@ -114,7 +114,7 @@ export function DataTable({
     }
 
     if (column.key.includes("amount") || column.key.includes("price")) {
-      return `₹${Number(value).toLocaleString()}`;
+      return `रु${Number(value).toLocaleString()}`;
     }
 
     return value;

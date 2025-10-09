@@ -280,8 +280,8 @@ export function HallQuotation({ booking, open, onOpenChange }: HallQuotationProp
   if (Array.isArray(booking.foodServices)) {
     foodServices = booking.foodServices;
   } else if (typeof booking.foodServices === 'string' && booking.foodServices) {
-    // Parse text format: "Food: Items (690 persons × ₹800.00 = ₹552,000.00)"
-    const match = booking.foodServices.match(/Food:\s*(.+?)\s*\((\d+)\s*persons\s*×\s*[₹रु]?([\d,]+(?:\.\d+)?)\s*=\s*[₹रु]?([\d,]+(?:\.\d+)?)\)/);
+    // Parse text format: "Food: Items (690 persons × रु800.00 = रु552,000.00)"
+    const match = booking.foodServices.match(/Food:\s*(.+?)\s*\((\d+)\s*persons\s*×\s*(?:रु)?([\d,]+(?:\.\d+)?)\s*=\s*(?:रु)?([\d,]+(?:\.\d+)?)\)/);
     if (match) {
       foodServices = [{
         name: 'Food & Beverage',
