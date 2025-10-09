@@ -6,6 +6,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { UserWithRole as SelectUser } from "@shared/schema";
+import { logAudit } from "./audit";
 
 // Sanitize user object for API responses - remove sensitive fields
 function sanitizeUser(user: SelectUser): Omit<SelectUser, 'passwordHash'> {
@@ -38,9 +39,16 @@ export function requireActiveUser(req: any, res: any, next: any) {
   }
   
   const user = req.user as any;
+  
+  // CRITICAL: Block deactivated users
   if (!user.isActive) {
+    // Log them out
+    req.logout((err: any) => {
+      if (err) console.error('Logout error:', err);
+    });
+    
     return res.status(403).json({ 
-      message: "Your account has been deactivated. Please contact your manager." 
+      message: "Your account has been deactivated. Please contact your hotel manager." 
     });
   }
   
@@ -140,29 +148,73 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err: any, user: SelectUser | false, info: any) => {
+    passport.authenticate("local", async (err: any, user: SelectUser | false, info: any) => {
       if (err) {
         return next(err);
       }
       
       if (!user) {
+        // Log failed login attempt
+        await logAudit({
+          userId: 'unknown',
+          action: 'login_failed',
+          resourceType: 'user',
+          details: { username: req.body.username, reason: info?.message },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: false,
+          errorMessage: info?.message || "Invalid username or password"
+        });
+        
         return res.status(401).json({ 
           message: info?.message || "Invalid username or password" 
         });
       }
       
-      req.login(user, (err) => {
+      req.login(user, async (err) => {
         if (err) {
           return next(err);
         }
+        
+        // Log successful login
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId || undefined,
+          action: 'login',
+          resourceType: 'user',
+          resourceId: user.id,
+          details: { username: user.username },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
+        
         return res.status(200).json(sanitizeUser(user));
       });
     })(req, res, next);
   });
 
-  app.post("/api/logout", (req, res, next) => {
-    req.logout((err) => {
+  app.post("/api/logout", async (req, res, next) => {
+    const user = req.user as SelectUser | undefined;
+    
+    req.logout(async (err) => {
       if (err) return next(err);
+      
+      // Log logout
+      if (user) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId || undefined,
+          action: 'logout',
+          resourceType: 'user',
+          resourceId: user.id,
+          details: { username: user.username },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
+      }
+      
       res.sendStatus(200);
     });
   });
@@ -187,6 +239,20 @@ export function setupAuth(app: Express) {
       // Verify old password
       const isOldPasswordValid = await comparePasswords(oldPassword, user.passwordHash);
       if (!isOldPasswordValid) {
+        // Log failed password change attempt
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId || undefined,
+          action: 'password_change_failed',
+          resourceType: 'user',
+          resourceId: user.id,
+          details: { reason: 'incorrect_old_password' },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: false,
+          errorMessage: 'Current password is incorrect'
+        });
+        
         return res.status(400).json({ message: "Current password is incorrect" });
       }
       
@@ -195,6 +261,19 @@ export function setupAuth(app: Express) {
       
       // Update user's password in database
       await storage.updateUser(user.id, { passwordHash: hashedPassword });
+      
+      // Log successful password change
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId || undefined,
+        action: 'password_change',
+        resourceType: 'user',
+        resourceId: user.id,
+        details: { username: user.username },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: true
+      });
       
       res.json({ message: "Password changed successfully" });
     } catch (error) {

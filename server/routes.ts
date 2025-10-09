@@ -2,8 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, requireActiveUser } from "./auth";
+import { logAudit } from "./audit";
 import { db } from "./db";
-import { users, roles } from "@shared/schema";
+import { users, roles, auditLogs } from "@shared/schema";
 import { eq, and, isNull, asc, sql, ne } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
 import {
@@ -1154,6 +1155,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
+      // CRITICAL: Define role hierarchy and creation permissions
+      const rolePermissions: Record<string, string[]> = {
+        owner: ['manager', 'restaurant_bar_manager', 'storekeeper', 'front_desk', 
+                'housekeeping_supervisor', 'security_head', 'waiter', 'kitchen_staff', 
+                'housekeeping_staff', 'security_guard', 'cashier', 'finance', 'bartender', 'barista'],
+        manager: ['waiter', 'kitchen_staff', 'housekeeping_staff', 'security_guard', 'cashier', 'front_desk'],
+        restaurant_bar_manager: ['waiter', 'kitchen_staff', 'bartender', 'barista'],
+        security_head: ['security_guard', 'surveillance_officer'],
+        housekeeping_supervisor: ['housekeeping_staff'],
+        // Other roles cannot create users
+      };
+      
+      const currentRole = currentUser.role?.name || '';
+      const allowedRoles = rolePermissions[currentRole] || [];
+      
+      if (allowedRoles.length === 0) {
+        return res.status(403).json({ 
+          message: "You don't have permission to create users" 
+        });
+      }
+      
       // Handle role conversion and password hashing
       const { role, password, confirmPassword, ...userData } = req.body;
       
@@ -1170,33 +1192,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Role-based authorization - check what roles current user can create
-      const currentUserRoleName = currentUser.role?.name || '';
-      const rolePermissions = {
-        restaurant_bar_manager: ['waiter', 'kitchen_staff', 'bartender', 'barista', 'cashier']
-      };
-
-      const allowedRoles = rolePermissions[currentUserRoleName as keyof typeof rolePermissions] || [];
+      // CRITICAL: Verify current user can create this role
       if (!allowedRoles.includes(targetRoleName)) {
         return res.status(403).json({ 
-          message: `You do not have permission to create users with role '${targetRoleName}'`,
-          allowedRoles 
+          message: `You don't have permission to create users with role '${targetRoleName}'` 
         });
       }
       
-      // Hash password if provided
-      let hashedPassword = userData.passwordHash;
-      if (password) {
-        const { hashPassword } = await import("./auth.js");
-        hashedPassword = await hashPassword(password);
+      // Password validation
+      if (!password || password.length < 8) {
+        return res.status(400).json({ 
+          message: "Password must be at least 8 characters" 
+        });
       }
+      
+      if (password !== confirmPassword) {
+        return res.status(400).json({ 
+          message: "Passwords don't match" 
+        });
+      }
+      
+      // Check for duplicate username
+      const existingUser = await storage.getUserByUsername(userData.username);
+      if (existingUser) {
+        return res.status(400).json({ 
+          message: "Username already exists" 
+        });
+      }
+      
+      // Hash password
+      const { hashPassword } = await import("./auth.js");
+      const hashedPassword = await hashPassword(password);
 
       // Auto-assign hotel from current user
       const finalUserData = insertUserSchema.parse({
         ...userData,
         roleId,
         hotelId: currentUser.hotelId,
-        passwordHash: hashedPassword
+        passwordHash: hashedPassword,
+        createdBy: currentUser.id,
+        isActive: true
       });
 
       const user = await storage.createUser(finalUserData);
@@ -3106,12 +3141,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/kot-orders", async (req, res) => {
+  app.post("/api/kot-orders", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-      
       const currentUser = req.user as any;
       if (!currentUser || !currentUser.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
@@ -3139,7 +3170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/kot-orders/:id", async (req, res) => {
+  app.put("/api/kot-orders/:id", requireActiveUser, async (req, res) => {
     try {
       const { id } = req.params;
       const kotData = req.body;
@@ -3150,12 +3181,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/kot-items/:id", async (req, res) => {
+  app.put("/api/kot-items/:id", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-      
       const currentUser = req.user as any;
       const { id } = req.params;
       const updateData = req.body;
@@ -3238,11 +3265,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/kot-orders/:id", async (req, res) => {
+  app.delete("/api/kot-orders/:id", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
@@ -3480,14 +3504,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Void payment endpoint - requires manager approval
-  app.post("/api/bill-payments/:paymentId/void", async (req, res) => {
+  app.post("/api/bill-payments/:paymentId/void", requireActiveUser, async (req, res) => {
     console.log('🔥 VOID ENDPOINT HIT:', req.params.paymentId, req.isAuthenticated());
     try {
-      if (!req.isAuthenticated()) {
-        console.log('🔥 NOT AUTHENTICATED');
-        return res.status(401).json({ message: "Authentication required" });
-      }
-      
       const currentUser = req.user as any;
       console.log('🔥 USER:', currentUser.username, currentUser.role?.name);
       const { paymentId } = req.params;
@@ -3539,6 +3558,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Void the payment
       const voidedPayment = await storage.voidBillPayment(paymentId, currentUser.id, reason);
+      
+      // Log payment void
+      await logAudit({
+        userId: currentUser.id,
+        hotelId: currentUser.hotelId,
+        action: 'void_payment',
+        resourceType: 'bill_payment',
+        resourceId: paymentId,
+        details: { 
+          reason, 
+          amount: payment.amount, 
+          billId: payment.billId,
+          paymentMethod: payment.paymentMethod
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent']
+      });
       
       // Always recalculate and update bill status after voiding payment
       const bill = await storage.getRestaurantBill(payment.billId);
@@ -3708,12 +3744,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/wastages/:id/approve", async (req, res) => {
+  app.post("/api/wastages/:id/approve", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-      
       const currentUser = req.user as any;
       const { id } = req.params;
       const { approved, rejectionReason } = req.body;
@@ -3937,12 +3969,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vouchers", async (req, res) => {
+  app.post("/api/vouchers", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const currentUser = req.user as any;
       const voucherData = insertVoucherSchema.parse({
         ...req.body,
@@ -3958,12 +3986,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vouchers/validate", async (req, res) => {
+  app.post("/api/vouchers/validate", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const { code } = req.body;
       const currentUser = req.user as any;
       
@@ -4024,12 +4048,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/vouchers/redeem", async (req, res) => {
+  app.post("/api/vouchers/redeem", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const { voucherId } = req.body;
       const currentUser = req.user as any;
       
@@ -4085,12 +4105,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/vouchers/:id", async (req, res) => {
+  app.put("/api/vouchers/:id", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const { id } = req.params;
       const currentUser = req.user as any;
       
@@ -4122,12 +4138,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/vouchers/:id", async (req, res) => {
+  app.delete("/api/vouchers/:id", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const { id } = req.params;
       const currentUser = req.user as any;
       
@@ -4444,11 +4456,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/leave-requests/:id/approve", async (req, res) => {
+  app.post("/api/leave-requests/:id/approve", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
@@ -4537,11 +4546,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/leave-requests/:id/reject", async (req, res) => {
+  app.post("/api/leave-requests/:id/reject", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
@@ -4822,12 +4828,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/hotels/current/stock-requests/:id/approve", async (req, res) => {
+  app.patch("/api/hotels/current/stock-requests/:id/approve", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-      
       const user = req.user as any;
       const { id } = req.params;
       
@@ -4899,11 +4901,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/hotels/current/stock-requests/:id/deliver", async (req, res) => {
+  app.patch("/api/hotels/current/stock-requests/:id/deliver", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
@@ -6361,6 +6360,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get attendance status error:", error);
       res.status(500).json({ message: "Failed to fetch attendance status" });
+    }
+  });
+
+  // Audit Log Viewing Endpoint
+  app.get("/api/audit-logs", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      if (!currentUser || !currentUser.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only managers and owners can view audit logs
+      const canViewAudit = ['manager', 'owner', 'finance'].includes(currentUser.role?.name || '');
+      if (!canViewAudit) {
+        return res.status(403).json({ 
+          message: "Only managers can view audit logs" 
+        });
+      }
+      
+      const { startDate, endDate, userId, action, resourceType, limit } = req.query;
+      
+      // Build query with filters
+      const conditions: any[] = [eq(auditLogs.hotelId, currentUser.hotelId)];
+      
+      if (userId && typeof userId === 'string') {
+        conditions.push(eq(auditLogs.userId, userId));
+      }
+      if (action && typeof action === 'string') {
+        conditions.push(eq(auditLogs.action, action));
+      }
+      if (resourceType && typeof resourceType === 'string') {
+        conditions.push(eq(auditLogs.resourceType, resourceType));
+      }
+      
+      // Add date filters if provided
+      if (startDate && typeof startDate === 'string') {
+        conditions.push(sql`${auditLogs.createdAt} >= ${new Date(startDate)}`);
+      }
+      if (endDate && typeof endDate === 'string') {
+        conditions.push(sql`${auditLogs.createdAt} <= ${new Date(endDate)}`);
+      }
+      
+      const maxLimit = limit && typeof limit === 'string' ? Math.min(parseInt(limit), 1000) : 500;
+      
+      const logs = await db
+        .select()
+        .from(auditLogs)
+        .where(and(...conditions))
+        .orderBy(sql`${auditLogs.createdAt} DESC`)
+        .limit(maxLimit);
+      
+      res.json(logs);
+    } catch (error) {
+      console.error("Audit log fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch audit logs" });
     }
   });
 

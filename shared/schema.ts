@@ -83,12 +83,16 @@ export const userSessions = pgTable("user_sessions", {
 export const auditLogs = pgTable("audit_logs", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   hotelId: uuid("hotel_id").references(() => hotels.id),
-  entity: text("entity").notNull(),
-  entityId: text("entity_id"),
-  action: text("action").notNull(),
-  changedBy: uuid("changed_by").references(() => users.id),
-  changeTime: timestamp("change_time", { withTimezone: true }).defaultNow(),
-  payload: jsonb("payload")
+  userId: uuid("user_id").references(() => users.id),
+  action: text("action").notNull(), // login, logout, create, update, delete, void, approve, etc.
+  resourceType: text("resource_type").notNull(), // user, transaction, bill, inventory, etc.
+  resourceId: text("resource_id"),
+  details: jsonb("details"), // Store any additional context
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  success: boolean("success").default(true),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
 // Guests Table
@@ -933,6 +937,11 @@ export const insertUserSchema = createInsertSchema(users).omit({
   deletedAt: true
 });
 
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
+  id: true,
+  createdAt: true
+});
+
 export const insertHotelSchema = createInsertSchema(hotels).omit({
   id: true,
   createdAt: true,
@@ -1228,6 +1237,8 @@ export const updateKotItemSchema = z.object({
 export type User = typeof users.$inferSelect;
 export type UserWithRole = User & { role?: Role };
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type Hotel = typeof hotels.$inferSelect;
 export type InsertHotel = z.infer<typeof insertHotelSchema>;
 export type Room = typeof rooms.$inferSelect;
