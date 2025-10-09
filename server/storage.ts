@@ -12,6 +12,7 @@ import {
   maintenanceRequests,
   kotOrders,
   kotItems,
+  kotAuditLogs,
   inventoryItems,
   inventoryConsumptions,
   inventoryTransactions,
@@ -105,7 +106,7 @@ import {
   type InsertAttendance
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, not, isNull, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, or, not, isNull, desc, asc, sql, gte, lte, gt, lt, ne, inArray } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -218,6 +219,7 @@ export interface IStorage {
   createKotOrder(kot: any): Promise<KotOrder>;
   updateKotOrder(id: string, kot: any): Promise<KotOrder>;
   updateKotItem(id: string, item: Partial<KotItem>): Promise<KotItem>;
+  createKotAuditLog(log: { kotItemId: string; action: string; performedBy: string; reason?: string; previousStatus?: string; newStatus?: string }): Promise<any>;
   
   // Wastage operations
   createWastage(wastageData: any): Promise<any>;
@@ -623,11 +625,63 @@ export class DatabaseStorage implements IStorage {
 
   // Room reservation operations
   async createRoomReservation(reservationData: InsertRoomReservation): Promise<RoomReservation> {
-    const [reservation] = await db
-      .insert(roomReservations)
-      .values(reservationData)
-      .returning();
-    return reservation;
+    // CRITICAL: Use database transaction with row locking
+    return await db.transaction(async (tx) => {
+      const { roomId, checkInDate, checkOutDate } = reservationData;
+      
+      // Lock the room for update
+      const [room] = await tx
+        .select()
+        .from(rooms)
+        .where(eq(rooms.id, roomId))
+        .for('update'); // PostgreSQL row lock
+      
+      if (!room) {
+        throw new Error('Room not found');
+      }
+      
+      // Check availability with locked row
+      const overlapping = await tx
+        .select()
+        .from(roomReservations)
+        .where(
+          and(
+            eq(roomReservations.roomId, roomId),
+            or(
+              eq(roomReservations.status, 'confirmed'),
+              eq(roomReservations.status, 'checked_in')
+            ),
+            // Date overlap check
+            or(
+              and(
+                lte(roomReservations.checkInDate, checkInDate),
+                gt(roomReservations.checkOutDate, checkInDate)
+              ),
+              and(
+                lt(roomReservations.checkInDate, checkOutDate),
+                gte(roomReservations.checkOutDate, checkOutDate)
+              ),
+              and(
+                gte(roomReservations.checkInDate, checkInDate),
+                lte(roomReservations.checkOutDate, checkOutDate)
+              )
+            )
+          )
+        )
+        .limit(1);
+      
+      if (overlapping.length > 0) {
+        throw new Error('Room is already booked for selected dates');
+      }
+      
+      // Create reservation
+      const [reservation] = await tx
+        .insert(roomReservations)
+        .values(reservationData)
+        .returning();
+      
+      return reservation;
+    });
   }
 
   async getRoomReservationsByHotel(hotelId: string): Promise<RoomReservation[]> {
@@ -645,46 +699,35 @@ export class DatabaseStorage implements IStorage {
     checkOutDate: Date,
     excludeReservationId?: string
   ): Promise<boolean> {
-    const { and, or, lte, gte, ne } = await import('drizzle-orm');
-    
-    // Check for overlapping reservations
-    const conditions = [
-      eq(roomReservations.hotelId, hotelId),
-      eq(roomReservations.roomId, roomId),
-      or(
-        eq(roomReservations.status, 'pending'),
-        eq(roomReservations.status, 'confirmed'),
-        eq(roomReservations.status, 'checked-in')
-      ),
-      or(
-        // New reservation starts during existing reservation
-        and(
-          lte(roomReservations.checkInDate, checkInDate),
-          gte(roomReservations.checkOutDate, checkInDate)
-        ),
-        // New reservation ends during existing reservation
-        and(
-          lte(roomReservations.checkInDate, checkOutDate),
-          gte(roomReservations.checkOutDate, checkOutDate)
-        ),
-        // New reservation completely encompasses existing reservation
-        and(
-          gte(roomReservations.checkInDate, checkInDate),
-          lte(roomReservations.checkOutDate, checkOutDate)
-        )
-      )
-    ];
-
-    if (excludeReservationId) {
-      conditions.push(ne(roomReservations.id, excludeReservationId));
-    }
-
-    const overlappingReservations = await db
+    const overlapping = await db
       .select()
       .from(roomReservations)
-      .where(and(...conditions));
-
-    return overlappingReservations.length === 0;
+      .where(
+        and(
+          eq(roomReservations.roomId, roomId),
+          or(
+            eq(roomReservations.status, 'confirmed'),
+            eq(roomReservations.status, 'checked_in')
+          ),
+          or(
+            and(
+              lte(roomReservations.checkInDate, checkInDate),
+              gt(roomReservations.checkOutDate, checkInDate)
+            ),
+            and(
+              lt(roomReservations.checkInDate, checkOutDate),
+              gte(roomReservations.checkOutDate, checkOutDate)
+            ),
+            and(
+              gte(roomReservations.checkInDate, checkInDate),
+              lte(roomReservations.checkOutDate, checkOutDate)
+            )
+          )
+        )
+      )
+      .limit(1);
+    
+    return overlapping.length === 0;
   }
 
   async getReservationsByDateRange(
@@ -1216,6 +1259,21 @@ export class DatabaseStorage implements IStorage {
       .where(eq(kotItems.id, id))
       .returning();
     return item;
+  }
+
+  async createKotAuditLog(log: { kotItemId: string; action: string; performedBy: string; reason?: string; previousStatus?: string; newStatus?: string }): Promise<any> {
+    const [auditLog] = await db
+      .insert(kotAuditLogs)
+      .values({
+        kotItemId: log.kotItemId,
+        action: log.action,
+        performedBy: log.performedBy,
+        reason: log.reason,
+        previousStatus: log.previousStatus,
+        newStatus: log.newStatus
+      })
+      .returning();
+    return auditLog;
   }
 
   async updateKotOrderStatus(kotOrderId: string): Promise<void> {

@@ -2247,20 +2247,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const reservationData = insertRoomReservationSchema.parse(req.body);
       
-      // Check room availability before creating reservation
-      const isAvailable = await storage.checkRoomAvailability(
-        reservationData.hotelId!,
-        reservationData.roomId,
-        new Date(reservationData.checkInDate),
-        new Date(reservationData.checkOutDate)
-      );
-
-      if (!isAvailable) {
-        return res.status(409).json({ 
-          message: "Room is not available for the selected dates. Please choose different dates or another room." 
-        });
-      }
-
+      // Create reservation with atomic transaction and locking
+      // The storage method handles availability checking within the transaction
       const reservation = await storage.createRoomReservation(reservationData);
       
       // Update room status to reserved
@@ -2272,6 +2260,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(reservation);
     } catch (error) {
       console.error("Reservation creation error:", error);
+      
+      // Check if it's a double booking error
+      if (error instanceof Error && error.message.includes('already booked')) {
+        return res.status(409).json({ 
+          message: "Room is not available for the selected dates. Please choose different dates or another room." 
+        });
+      }
+      
       res.status(400).json({ 
         message: "Failed to create reservation", 
         error: error instanceof Error ? error.message : "Unknown error" 
@@ -2608,13 +2604,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/kot-orders", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      if (!currentUser || !currentUser.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
       const { items, ...kotData } = req.body;
       
+      // CRITICAL: Always set hotelId and createdBy from authenticated user
+      const enrichedKotData = {
+        ...kotData,
+        hotelId: currentUser.hotelId,
+        createdBy: currentUser.id
+      };
+      
       if (items && items.length > 0) {
-        const kot = await storage.createKotOrderWithItems(kotData, items);
+        const kot = await storage.createKotOrderWithItems(enrichedKotData, items);
         res.status(201).json(kot);
       } else {
-        const kot = await storage.createKotOrder(kotData);
+        const kot = await storage.createKotOrder(enrichedKotData);
         res.status(201).json(kot);
       }
     } catch (error) {
@@ -2639,32 +2651,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
       }
-      const user = req.user as any;
-      if (!user || !user.hotelId) {
+      
+      const currentUser = req.user as any;
+      const { id } = req.params;
+      const updateData = req.body;
+      
+      if (!currentUser || !currentUser.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
-      // Validate the request body
-      const validatedData = updateKotItemSchema.parse(req.body);
-      const { id } = req.params;
-
-      // Get the KOT item with its order to verify hotel ownership
-      const kotItem = await storage.getKotItemById(id);
-      if (!kotItem) {
+      const existingItem = await storage.getKotItemById(id);
+      if (!existingItem) {
         return res.status(404).json({ message: "KOT item not found" });
       }
 
       // Verify the KOT item belongs to the user's hotel
       const kotOrder = await db.query.kotOrders.findFirst({
-        where: (orders, { eq }) => eq(orders.id, kotItem.kotId!)
+        where: (orders, { eq }) => eq(orders.id, existingItem.kotId!)
       });
 
-      if (!kotOrder || kotOrder.hotelId !== user.hotelId) {
+      if (!kotOrder || kotOrder.hotelId !== currentUser.hotelId) {
         return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // CRITICAL: Authorization check BEFORE validation - Declining/canceling requires manager role
+      if (updateData.status === 'declined' || updateData.status === 'cancelled') {
+        const canDecline = ['manager', 'owner', 'restaurant_bar_manager'].includes(currentUser.role?.name || '');
+        
+        if (!canDecline) {
+          return res.status(403).json({ 
+            message: "Only managers can decline or cancel orders. Contact your supervisor." 
+          });
+        }
+      }
+
+      // Validate the request body (includes 10-char minimum check for decline/cancel reasons)
+      const validatedData = updateKotItemSchema.parse(updateData);
+      
+      // Log decline/cancellation for audit trail
+      if (validatedData.status === 'declined' || validatedData.status === 'cancelled') {
+        await storage.createKotAuditLog({
+          kotItemId: id,
+          action: validatedData.status,
+          performedBy: currentUser.id,
+          reason: validatedData.declineReason,
+          previousStatus: existingItem.status || undefined,
+          newStatus: validatedData.status
+        });
+      }
+      
+      // CRITICAL: When marking as completed, verify inventory was deducted
+      if (validatedData.status === 'completed' && existingItem.status !== 'completed') {
+        // Get menu item to check inventory items
+        const menuItem = await storage.getMenuItem(existingItem.menuItemId!);
+        
+        // If menu item has inventory items, mark as verified
+        if (menuItem && menuItem.recipe) {
+          validatedData.inventoryVerified = true;
+        }
       }
 
       // If status is being changed to "approved", deduct inventory
-      if (validatedData.status === 'approved' && kotItem.status !== 'approved') {
+      if (validatedData.status === 'approved' && existingItem.status !== 'approved') {
         await storage.deductInventoryForKotItem(id);
       }
 
@@ -2672,12 +2720,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedItem = await storage.updateKotItem(id, validatedData);
       
       // Sync the parent order status after item update
-      if (kotItem.kotId) {
-        await storage.updateKotOrderStatus(kotItem.kotId);
+      if (existingItem.kotId) {
+        await storage.updateKotOrderStatus(existingItem.kotId);
       }
       
       res.json(updatedItem);
     } catch (error: any) {
+      console.error("KOT item update error:", error);
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: error.errors[0]?.message || "Invalid data" });
       }

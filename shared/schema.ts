@@ -368,6 +368,18 @@ export const kotItems = pgTable("kot_items", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
+// KOT Audit Logs Table
+export const kotAuditLogs = pgTable("kot_audit_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  kotItemId: uuid("kot_item_id").references(() => kotItems.id),
+  action: text("action").notNull(),
+  performedBy: uuid("performed_by").references(() => users.id),
+  reason: text("reason"),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
 // Payments Table
 export const payments = pgTable("payments", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1111,11 +1123,15 @@ export type InsertBookingPayment = z.infer<typeof insertBookingPaymentSchema>;
 export type SelectBookingPayment = typeof bookingPayments.$inferSelect;
 
 export const updateKotItemSchema = z.object({
-  status: z.enum(['pending', 'approved', 'declined', 'ready']),
-  declineReason: z.string().optional()
+  status: z.enum(['pending', 'approved', 'declined', 'ready', 'served', 'completed', 'cancelled']),
+  declineReason: z.string().optional(),
+  inventoryVerified: z.boolean().optional()
 }).refine(
-  (data) => data.status !== 'declined' || (data.declineReason && data.declineReason.trim().length > 0),
-  { message: "Decline reason is required when declining a KOT item", path: ['declineReason'] }
+  (data) => data.status !== 'declined' || (data.declineReason && data.declineReason.trim().length >= 10),
+  { message: "Decline reason requires minimum 10 characters when declining a KOT item", path: ['declineReason'] }
+).refine(
+  (data) => data.status !== 'cancelled' || (data.declineReason && data.declineReason.trim().length >= 10),
+  { message: "Cancellation reason requires minimum 10 characters", path: ['declineReason'] }
 );
 
 // Types
