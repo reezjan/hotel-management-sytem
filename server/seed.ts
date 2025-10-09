@@ -1,5 +1,5 @@
 import { db } from './db';
-import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls, guests } from '@shared/schema';
+import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls, guests, transactions, vendors } from '@shared/schema';
 import { hashPassword } from './auth';
 import { eq } from 'drizzle-orm';
 
@@ -520,6 +520,76 @@ async function seed() {
       }
     }
 
+    // Create vendors
+    console.log('\n🏢 Creating vendors...');
+    const vendorData = [
+      { name: 'Nepal Electricity Authority', contact: { phone: '+977-1-4150220', email: 'nea@nea.org.np', address: 'Kathmandu' } },
+      { name: 'Fresh Foods Pvt Ltd', contact: { phone: '+977-1-4567890', email: 'sales@freshfoods.com.np', address: 'Baneshwor, Kathmandu' } },
+      { name: 'Cleaning Supplies Co', contact: { phone: '+977-1-7654321', email: 'info@cleaningsupplies.com.np', address: 'Teku, Kathmandu' } },
+      { name: 'Linens & More', contact: { phone: '+977-1-3456789', email: 'orders@linensmore.com.np', address: 'Putalisadak, Kathmandu' } },
+      { name: 'Tech Solutions Nepal', contact: { phone: '+977-1-2345678', email: 'support@techsolutions.com.np', address: 'Durbarmarg, Kathmandu' } }
+    ];
+
+    const createdVendors = [];
+    for (const vendor of vendorData) {
+      const existing = await db.select().from(vendors).where(eq(vendors.name, vendor.name));
+      if (existing.length === 0) {
+        const [created] = await db.insert(vendors).values({
+          hotelId: testHotel.id,
+          ...vendor
+        }).returning();
+        createdVendors.push(created);
+        console.log(`  ✓ Created vendor: ${vendor.name}`);
+      } else {
+        createdVendors.push(existing[0]);
+        console.log(`  → Vendor already exists: ${vendor.name}`);
+      }
+    }
+
+    // Create financial transactions
+    console.log('\n💰 Creating financial transactions...');
+    
+    // Get finance user for createdBy field
+    const financeUser = await db.select().from(users).where(eq(users.username, 'finance'));
+    const managerUser = await db.select().from(users).where(eq(users.username, 'manager'));
+    
+    const transactionData = [
+      // Revenue transactions
+      { txnType: 'revenue', amount: '15000', paymentMethod: 'cash', purpose: 'Room Booking Payment', reference: 'ROOM-001', details: { roomNumber: '101', guestName: 'John Smith', nights: 5 }, createdBy: frontDeskUser[0].id, createdAt: new Date('2025-10-05') },
+      { txnType: 'revenue', amount: '8500', paymentMethod: 'credit_card', purpose: 'Restaurant Bill', reference: 'REST-045', details: { tableNumber: 'Table 5', items: 7 }, createdBy: cashierRole[0] ? financeUser[0].id : frontDeskUser[0].id, createdAt: new Date('2025-10-06') },
+      { txnType: 'revenue', amount: '12000', paymentMethod: 'bank_transfer', purpose: 'Hall Booking', reference: 'HALL-023', details: { hallName: 'Conference Hall A', duration: '4 hours' }, createdBy: frontDeskUser[0].id, createdAt: new Date('2025-10-07') },
+      { txnType: 'revenue', amount: '20000', paymentMethod: 'cash', purpose: 'Room Booking Payment', reference: 'ROOM-002', details: { roomNumber: '301', guestName: 'Emma Johnson', nights: 4 }, createdBy: frontDeskUser[0].id, createdAt: new Date('2025-10-07') },
+      { txnType: 'revenue', amount: '4500', paymentMethod: 'credit_card', purpose: 'Restaurant Bill', reference: 'REST-046', details: { tableNumber: 'Table 3' }, createdBy: financeUser[0].id, createdAt: new Date('2025-10-08') },
+      
+      // Expense transactions
+      { txnType: 'expense', amount: '25000', paymentMethod: 'bank_transfer', vendorId: createdVendors[0].id, purpose: 'Electricity Bill - September', reference: 'INV-NEA-202509', details: { billingMonth: 'September 2025', units: 5000 }, createdBy: financeUser[0].id, createdAt: new Date('2025-10-01') },
+      { txnType: 'expense', amount: '45000', paymentMethod: 'cash', vendorId: createdVendors[1].id, purpose: 'Fresh Food Supplies', reference: 'INV-FF-1234', details: { items: ['Vegetables', 'Fruits', 'Meat', 'Dairy'] }, createdBy: managerUser[0].id, createdAt: new Date('2025-10-03') },
+      { txnType: 'expense', amount: '12000', paymentMethod: 'cash', vendorId: createdVendors[2].id, purpose: 'Cleaning Supplies Monthly Stock', reference: 'INV-CS-567', details: { items: ['Detergent', 'Floor Cleaner', 'Disinfectant'] }, createdBy: managerUser[0].id, createdAt: new Date('2025-10-04') },
+      { txnType: 'expense', amount: '35000', paymentMethod: 'bank_transfer', vendorId: createdVendors[3].id, purpose: 'Bed Linens and Towels', reference: 'INV-LM-890', details: { items: ['Bed Sheets - 50', 'Towels - 100', 'Pillow Covers - 80'] }, createdBy: financeUser[0].id, createdAt: new Date('2025-10-05') },
+      { txnType: 'expense', amount: '18000', paymentMethod: 'bank_transfer', vendorId: createdVendors[4].id, purpose: 'IT Support & Maintenance', reference: 'INV-TS-456', details: { service: 'Monthly maintenance', duration: 'October 2025' }, createdBy: financeUser[0].id, createdAt: new Date('2025-10-06') },
+      
+      // Salary payments
+      { txnType: 'expense', amount: '40000', paymentMethod: 'bank_transfer', purpose: 'Salary - Manager', reference: 'SAL-202509-MGR', details: { month: 'September 2025', employeeName: 'Manager' }, createdBy: financeUser[0].id, createdAt: new Date('2025-10-01') },
+      { txnType: 'expense', amount: '25000', paymentMethod: 'bank_transfer', purpose: 'Salary - Finance Officer', reference: 'SAL-202509-FIN', details: { month: 'September 2025', employeeName: 'Finance' }, createdBy: financeUser[0].id, createdAt: new Date('2025-10-01') },
+      
+      // Refund
+      { txnType: 'refund', amount: '3000', paymentMethod: 'cash', purpose: 'Guest Complaint - Room Service Issue', reference: 'REF-001', details: { guestName: 'David Brown', roomNumber: '201', reason: 'Delayed room service' }, createdBy: managerUser[0].id, createdAt: new Date('2025-10-08') },
+      
+      // Miscellaneous
+      { txnType: 'miscellaneous', amount: '8000', paymentMethod: 'cash', purpose: 'Office Supplies Purchase', reference: 'MISC-123', details: { items: ['Stationery', 'Printer Paper', 'Ink Cartridges'] }, createdBy: managerUser[0].id, createdAt: new Date('2025-10-02') },
+      { txnType: 'miscellaneous', amount: '5000', paymentMethod: 'cash', purpose: 'Minor Repairs - Plumbing', reference: 'MISC-124', details: { location: 'Room 102 bathroom', issue: 'Leaking faucet' }, createdBy: managerUser[0].id, createdAt: new Date('2025-10-06') }
+    ];
+
+    let transactionCount = 0;
+    for (const txn of transactionData) {
+      const [created] = await db.insert(transactions).values({
+        hotelId: testHotel.id,
+        ...txn
+      }).returning();
+      transactionCount++;
+      console.log(`  ✓ Created transaction: ${txn.txnType} - ${txn.purpose} (Rs. ${txn.amount})`);
+    }
+
     console.log('\n✅ Database seeded successfully!');
     console.log('\n📝 Summary:');
     console.log('  - Hotel: Test Hotel');
@@ -531,6 +601,8 @@ async function seed() {
     console.log('  - Menu Items: 13 items across 5 categories');
     console.log('  - Restaurant Tables: 10 tables (2-12 seating capacity)');
     console.log('  - Halls: 7 halls (20-200 capacity)');
+    console.log('  - Vendors: 5 vendors');
+    console.log(`  - Financial Transactions: ${transactionCount} transactions (revenue, expenses, refunds)`);
     process.exit(0);
   } catch (error) {
     console.error('❌ Seeding failed:', error);
