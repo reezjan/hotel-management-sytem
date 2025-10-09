@@ -1,5 +1,5 @@
 import { db } from './db';
-import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls, guests, transactions, vendors } from '@shared/schema';
+import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls, guests, transactions, vendors, maintenanceRequests } from '@shared/schema';
 import { hashPassword } from './auth';
 import { eq } from 'drizzle-orm';
 
@@ -590,6 +590,97 @@ async function seed() {
       console.log(`  ✓ Created transaction: ${txn.txnType} - ${txn.purpose} (Rs. ${txn.amount})`);
     }
 
+    // Create maintenance requests
+    console.log('\n🔧 Creating maintenance requests...');
+    
+    const hkSupervisorUser = await db.select().from(users).where(eq(users.username, 'hksupervisor'));
+    const hkStaffUser = await db.select().from(users).where(eq(users.username, 'hkstaff'));
+    
+    const maintenanceRequestData = [
+      {
+        reportedBy: hkStaffUser[0].id,
+        title: 'Air Conditioner Not Working',
+        location: 'Room 201',
+        description: 'The air conditioning unit in room 201 is not cooling properly. Guest complained about the room being too warm.',
+        photo: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=800',
+        priority: 'high',
+        status: 'approved',
+        assignedTo: hkSupervisorUser[0].id,
+        createdAt: new Date('2025-10-06T09:30:00'),
+        updatedAt: new Date('2025-10-06T10:15:00')
+      },
+      {
+        reportedBy: frontDeskUser[0].id,
+        title: 'Leaking Faucet in Bathroom',
+        location: 'Room 102',
+        description: 'Water is continuously dripping from the bathroom sink faucet. Needs immediate attention to avoid water wastage.',
+        photo: 'https://images.unsplash.com/photo-1607472586893-edb57bdc0e39?w=800',
+        priority: 'medium',
+        status: 'approved',
+        assignedTo: hkSupervisorUser[0].id,
+        createdAt: new Date('2025-10-07T14:20:00'),
+        updatedAt: new Date('2025-10-07T15:00:00')
+      },
+      {
+        reportedBy: hkStaffUser[0].id,
+        title: 'Broken Window Latch',
+        location: 'Room 301',
+        description: 'The window latch is broken and the window cannot be secured properly. This is a security concern.',
+        photo: 'https://images.unsplash.com/photo-1565008576549-57569a49371d?w=800',
+        priority: 'high',
+        status: 'approved',
+        assignedTo: hkSupervisorUser[0].id,
+        createdAt: new Date('2025-10-08T08:45:00'),
+        updatedAt: new Date('2025-10-08T09:30:00')
+      },
+      {
+        reportedBy: managerUser[0].id,
+        title: 'Damaged Carpet in Lobby',
+        location: 'Main Lobby',
+        description: 'Section of carpet near the entrance is torn and frayed. Needs replacement for aesthetic and safety reasons.',
+        photo: 'https://images.unsplash.com/photo-1565008447742-97f6f38c985c?w=800',
+        priority: 'medium',
+        status: 'approved',
+        assignedTo: hkSupervisorUser[0].id,
+        createdAt: new Date('2025-10-05T11:00:00'),
+        updatedAt: new Date('2025-10-05T12:00:00')
+      },
+      {
+        reportedBy: hkStaffUser[0].id,
+        title: 'Malfunctioning Door Lock',
+        location: 'Room 103',
+        description: 'Electronic door lock is not responding properly. Guest had difficulty entering the room.',
+        photo: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800',
+        priority: 'high',
+        status: 'approved',
+        assignedTo: hkSupervisorUser[0].id,
+        createdAt: new Date('2025-10-08T16:30:00'),
+        updatedAt: new Date('2025-10-08T17:00:00')
+      },
+      {
+        reportedBy: frontDeskUser[0].id,
+        title: 'Faulty Light Fixtures',
+        location: 'Conference Hall A',
+        description: 'Several ceiling light fixtures are flickering and some are completely non-functional. Affects meeting room ambiance.',
+        photo: 'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=800',
+        priority: 'medium',
+        status: 'approved',
+        assignedTo: hkSupervisorUser[0].id,
+        createdAt: new Date('2025-10-07T10:00:00'),
+        updatedAt: new Date('2025-10-07T11:30:00')
+      }
+    ];
+
+    let maintenanceCount = 0;
+    for (const request of maintenanceRequestData) {
+      await db.insert(maintenanceRequests).values({
+        hotelId: testHotel.id,
+        ...request
+      });
+      maintenanceCount++;
+      console.log(`  ✓ Created maintenance request: ${request.title} (${request.location}) - Status: ${request.status}`);
+    }
+
     console.log('\n✅ Database seeded successfully!');
     console.log('\n📝 Summary:');
     console.log('  - Hotel: Test Hotel');
@@ -603,6 +694,7 @@ async function seed() {
     console.log('  - Halls: 7 halls (20-200 capacity)');
     console.log('  - Vendors: 5 vendors');
     console.log(`  - Financial Transactions: ${transactionCount} transactions (revenue, expenses, refunds)`);
+    console.log(`  - Maintenance Requests: ${maintenanceCount} approved requests with photos`);
     process.exit(0);
   } catch (error) {
     console.error('❌ Seeding failed:', error);
