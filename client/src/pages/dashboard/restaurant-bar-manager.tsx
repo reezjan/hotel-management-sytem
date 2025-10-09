@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { DataTable } from "@/components/tables/data-table";
@@ -7,53 +8,35 @@ import { Button } from "@/components/ui/button";
 import { Users, Utensils, Package, Calendar, ChefHat, Coffee } from "lucide-react";
 
 export default function RestaurantBarManagerDashboard() {
+  const [, setLocation] = useLocation();
   const { data: staff = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/users", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch staff");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   const { data: menuItems = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/menu-items"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/menu-items", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch menu items");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   const { data: tables = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/restaurant-tables"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/restaurant-tables", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch tables");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   const { data: inventory = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory-items"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/inventory-items", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch inventory");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   const { data: kotOrders = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/kot-orders"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/kot-orders", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch KOT orders");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   const { data: dailyAttendance = [] } = useQuery<any[]>({
-    queryKey: ["/api/attendance/daily"]
+    queryKey: ["/api/attendance/daily"],
+    refetchInterval: 3000
   });
 
   const restaurantStaff = staff.filter(s => 
@@ -148,20 +131,15 @@ export default function RestaurantBarManagerDashboard() {
   ];
 
   const staffActions = [
-    { label: "Schedule", action: (row: any) => console.log("Schedule staff:", row) },
-    { label: "Edit", action: (row: any) => console.log("Edit staff:", row) },
-    { label: "Remove", action: (row: any) => console.log("Remove staff:", row), variant: "destructive" as const }
+    { label: "View", action: () => setLocation("/restaurant-bar-manager/staff-management") }
   ];
 
   const menuActions = [
-    { label: "Edit", action: (row: any) => console.log("Edit menu item:", row) },
-    { label: "Recipe", action: (row: any) => console.log("View recipe:", row) },
-    { label: "Toggle Active", action: (row: any) => console.log("Toggle active:", row) }
+    { label: "Manage", action: () => setLocation("/restaurant-bar-manager/menu-management") }
   ];
 
   const tableActions = [
-    { label: "Edit", action: (row: any) => console.log("Edit table:", row) },
-    { label: "Reserve", action: (row: any) => console.log("Reserve table:", row) }
+    { label: "Manage", action: () => setLocation("/restaurant-bar-manager/table-setup") }
   ];
 
   return (
@@ -207,19 +185,39 @@ export default function RestaurantBarManagerDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-add-staff">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                data-testid="button-add-staff"
+                onClick={() => setLocation("/restaurant-bar-manager/staff-management")}
+              >
                 <Users className="h-6 w-6 mb-2" />
                 <span className="text-sm">Add Staff</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-menu-management">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                data-testid="button-menu-management"
+                onClick={() => setLocation("/restaurant-bar-manager/menu-management")}
+              >
                 <Utensils className="h-6 w-6 mb-2" />
                 <span className="text-sm">Menu Management</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-table-setup">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                data-testid="button-table-setup"
+                onClick={() => setLocation("/restaurant-bar-manager/table-setup")}
+              >
                 <Calendar className="h-6 w-6 mb-2" />
                 <span className="text-sm">Table Setup</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-inventory">
+              <Button 
+                variant="outline" 
+                className="h-20 flex flex-col" 
+                data-testid="button-inventory"
+                onClick={() => setLocation("/restaurant-bar-manager/inventory-tracking")}
+              >
                 <Package className="h-6 w-6 mb-2" />
                 <span className="text-sm">Inventory</span>
               </Button>
@@ -233,7 +231,7 @@ export default function RestaurantBarManagerDashboard() {
           data={restaurantStaff}
           columns={staffColumns}
           actions={staffActions}
-          onAdd={() => console.log("Add restaurant staff")}
+          onAdd={() => setLocation("/restaurant-bar-manager/staff-management")}
           addButtonLabel="Add Staff Member"
           searchPlaceholder="Search staff..."
         />
@@ -244,7 +242,7 @@ export default function RestaurantBarManagerDashboard() {
           data={menuItems}
           columns={menuColumns}
           actions={menuActions}
-          onAdd={() => console.log("Add menu item")}
+          onAdd={() => setLocation("/restaurant-bar-manager/menu-management")}
           addButtonLabel="Add Menu Item"
           searchPlaceholder="Search menu items..."
         />
@@ -255,7 +253,7 @@ export default function RestaurantBarManagerDashboard() {
           data={tables}
           columns={tableColumns}
           actions={tableActions}
-          onAdd={() => console.log("Add table")}
+          onAdd={() => setLocation("/restaurant-bar-manager/table-setup")}
           addButtonLabel="Add Table"
           searchPlaceholder="Search tables..."
         />

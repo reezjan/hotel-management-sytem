@@ -25,11 +25,7 @@ export default function TableSetup() {
   // Fetch restaurant tables
   const { data: tables = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/restaurant-tables"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/restaurant-tables", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch tables");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   // Create table mutation

@@ -27,25 +27,13 @@ export default function LeaveRequests() {
   // Fetch user's leave requests
   const { data: myRequests = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/leave-requests/my-requests"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/leave-requests/my-requests", { 
-        credentials: "include" 
-      });
-      if (!response.ok) throw new Error("Failed to fetch leave requests");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   // Fetch leave balances
   const { data: leaveBalances = [] } = useQuery<any[]>({
     queryKey: ["/api/leave-balances"],
-    queryFn: async () => {
-      const response = await fetch("/api/leave-balances", { 
-        credentials: "include" 
-      });
-      if (!response.ok) throw new Error("Failed to fetch leave balances");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   // Create leave request mutation

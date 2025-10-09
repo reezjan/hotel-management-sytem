@@ -9,20 +9,12 @@ import { formatDateTime } from "@/lib/utils";
 export default function DutyTracking() {
   const { data: allStaff = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/users", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch staff");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   const { data: dailyAttendance = [] } = useQuery<any[]>({
     queryKey: ["/api/attendance/daily"],
-    queryFn: async () => {
-      const response = await fetch("/api/attendance/daily", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch attendance");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   const restaurantStaff = allStaff.filter(staff => 

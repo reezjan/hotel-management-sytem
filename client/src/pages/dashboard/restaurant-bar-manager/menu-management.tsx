@@ -33,31 +33,19 @@ export default function MenuManagement() {
   // Fetch menu items
   const { data: menuItems = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/menu-items"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/menu-items", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch menu items");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   // Fetch menu categories
   const { data: categories = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/menu-categories"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/menu-categories", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch categories");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   // Fetch inventory items for ingredients
   const { data: inventoryItems = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory-items"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/inventory-items", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch inventory");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   // Create menu item mutation
@@ -368,7 +356,7 @@ export default function MenuManagement() {
   const activeItems = menuItems.filter(item => item.active).length;
   const totalItems = menuItems.length;
   const avgPrice = menuItems.length > 0 
-    ? menuItems.reduce((sum, item) => sum + (item.price || 0), 0) / menuItems.length 
+    ? menuItems.reduce((sum, item) => sum + (Number(item.price) || 0), 0) / menuItems.length 
     : 0;
 
   return (

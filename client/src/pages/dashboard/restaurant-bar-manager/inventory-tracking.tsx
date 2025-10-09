@@ -9,11 +9,7 @@ export default function InventoryTracking() {
   // Fetch inventory items
   const { data: inventory = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory-items"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/inventory-items", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch inventory");
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   // Restaurant bar managers have read-only access to inventory

@@ -15,11 +15,8 @@ export default function MaintenanceRequests() {
   // Fetch maintenance requests from restaurant staff
   const { data: maintenanceRequests = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/maintenance-requests"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/maintenance-requests", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch maintenance requests");
-      const data = await response.json();
-      
+    refetchInterval: 3000,
+    select: (data) => {
       // Filter only requests from restaurant staff
       const restaurantStaffRoles = ['waiter', 'kitchen_staff', 'bartender', 'barista', 'cashier'];
       return data.filter((request: any) => 

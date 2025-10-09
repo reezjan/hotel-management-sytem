@@ -27,13 +27,7 @@ export default function RestaurantStaffManagement() {
   // Fetch restaurant staff
   const { data: allStaff = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/users", { credentials: "include" });
-      if (!response.ok) {
-        throw new Error("Failed to fetch staff");
-      }
-      return response.json();
-    }
+    refetchInterval: 3000
   });
 
   // Filter for restaurant staff only
@@ -42,7 +36,8 @@ export default function RestaurantStaffManagement() {
   );
 
   const { data: dailyAttendance = [] } = useQuery<any[]>({
-    queryKey: ["/api/attendance/daily"]
+    queryKey: ["/api/attendance/daily"],
+    refetchInterval: 3000
   });
 
   // Restaurant roles that manager can create

@@ -141,7 +141,7 @@ export default function ManagerDashboard() {
             <CardTitle>Manager Operations</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               <Button variant="outline" className="h-20 flex flex-col" data-testid="button-add-staff" onClick={() => setLocation("/manager/staff")}>
                 <Users className="h-6 w-6 mb-2" />
                 <span className="text-sm">Add Staff</span>
