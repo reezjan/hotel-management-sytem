@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 
 export default function HousekeepingSupervisorTaskAssignment() {
   const { user } = useAuth();
@@ -29,29 +30,26 @@ export default function HousekeepingSupervisorTaskAssignment() {
   });
 
   const { data: tasks = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/tasks"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/tasks", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch tasks");
-      return response.json();
-    },
-    refetchInterval: 5000, // Auto-refresh every 5 seconds
-    refetchIntervalInBackground: true
+    queryKey: ["/api/hotels/current/tasks"]
   });
 
   const { data: staff = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/users"],
-    queryFn: async () => {
-      const response = await fetch("/api/hotels/current/users", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch staff");
-      return response.json();
-    },
-    refetchInterval: 5000, // Auto-refresh every 5 seconds
-    refetchIntervalInBackground: true
+    queryKey: ["/api/hotels/current/users"]
   });
 
   const { data: dailyAttendance = [] } = useQuery<any[]>({
     queryKey: ["/api/attendance/daily"]
+  });
+
+  // Enable real-time updates
+  useRealtimeQuery({
+    queryKey: '/api/hotels/current/tasks',
+    events: ['task:created', 'task:updated', 'task:deleted']
+  });
+
+  useRealtimeQuery({
+    queryKey: '/api/attendance/daily',
+    events: ['attendance:updated']
   });
 
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');

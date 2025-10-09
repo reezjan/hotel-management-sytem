@@ -270,8 +270,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'ClipboardList', label: 'Task Assignment', id: 'tasks' },
     { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance' },
     { icon: 'MapPin', label: 'Staff Tracking', id: 'tracking' },
-    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' },
-    { icon: 'CheckCircle', label: 'Leave Approvals', id: 'leave-approvals' }
+    { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.HOUSEKEEPING_STAFF]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
