@@ -6477,6 +6477,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/hotels/current/attendance", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const userRole = user.role?.name || '';
+      const managerRoles = ['super_admin', 'owner', 'manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head', 'finance'];
+      
+      if (!managerRoles.includes(userRole)) {
+        return res.status(403).json({ message: "Only managers can view hotel attendance records" });
+      }
+
+      const { startDate, endDate } = req.query;
+      const start = startDate && typeof startDate === 'string' ? new Date(startDate) : undefined;
+      const end = endDate && typeof endDate === 'string' ? new Date(endDate) : undefined;
+      
+      const records = await storage.getAllAttendanceByHotel(user.hotelId, start, end);
+      res.json(records);
+    } catch (error) {
+      console.error("Get all attendance error:", error);
+      res.status(500).json({ message: "Failed to fetch attendance records" });
+    }
+  });
+
   // Audit Log Viewing Endpoint
   app.get("/api/audit-logs", async (req, res) => {
     try {

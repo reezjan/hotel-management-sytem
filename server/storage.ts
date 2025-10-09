@@ -376,6 +376,7 @@ export interface IStorage {
   clockOut(attendanceId: string, clockOutTime: Date, location: string | null, ip: string | null, source: string | null): Promise<any>;
   getAttendanceByUser(userId: string, startDate?: Date, endDate?: Date): Promise<any[]>;
   getAttendanceByHotel(hotelId: string, date: Date): Promise<any[]>;
+  getAllAttendanceByHotel(hotelId: string, startDate?: Date, endDate?: Date): Promise<any[]>;
   canClockIn(userId: string): Promise<{ canClockIn: boolean; reason?: string }>;
   
   // Audit log operations
@@ -3388,6 +3389,23 @@ export class DatabaseStorage implements IStorage {
           eq(attendance.status, 'active')
         )
       ))
+      .orderBy(desc(attendance.clockInTime));
+  }
+
+  async getAllAttendanceByHotel(hotelId: string, startDate?: Date, endDate?: Date): Promise<Attendance[]> {
+    const conditions = [eq(attendance.hotelId, hotelId)];
+    
+    if (startDate) {
+      conditions.push(gte(attendance.clockInTime, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(attendance.clockInTime, endDate));
+    }
+
+    return await db
+      .select()
+      .from(attendance)
+      .where(and(...conditions))
       .orderBy(desc(attendance.clockInTime));
   }
 
