@@ -103,7 +103,10 @@ import {
   type InsertRoomReservation,
   roomReservations,
   type Attendance,
-  type InsertAttendance
+  type InsertAttendance,
+  checkoutOverrideLogs,
+  type CheckoutOverrideLog,
+  type InsertCheckoutOverrideLog
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, not, isNull, desc, asc, sql, gte, lte, gt, lt, ne, inArray } from "drizzle-orm";
@@ -148,6 +151,9 @@ export interface IStorage {
   // Room reservation operations
   createRoomReservation(reservation: InsertRoomReservation): Promise<RoomReservation>;
   getRoomReservationsByHotel(hotelId: string): Promise<RoomReservation[]>;
+  getRoomReservation(id: string): Promise<RoomReservation | undefined>;
+  updateRoomReservation(id: string, data: Partial<InsertRoomReservation>): Promise<RoomReservation>;
+  createCheckoutOverrideLog(log: InsertCheckoutOverrideLog): Promise<CheckoutOverrideLog>;
 
   // Room type operations
   getRoomTypesByHotel(hotelId: string): Promise<RoomType[]>;
@@ -690,6 +696,39 @@ export class DatabaseStorage implements IStorage {
       .from(roomReservations)
       .where(eq(roomReservations.hotelId, hotelId));
     return reservations;
+  }
+
+  async getRoomReservation(id: string): Promise<RoomReservation | undefined> {
+    const [reservation] = await db
+      .select()
+      .from(roomReservations)
+      .where(eq(roomReservations.id, id));
+    return reservation;
+  }
+
+  async updateRoomReservation(id: string, data: Partial<InsertRoomReservation>): Promise<RoomReservation> {
+    const [updated] = await db
+      .update(roomReservations)
+      .set({
+        ...data,
+        updatedAt: new Date()
+      })
+      .where(eq(roomReservations.id, id))
+      .returning();
+    
+    if (!updated) {
+      throw new Error('Reservation not found');
+    }
+    
+    return updated;
+  }
+
+  async createCheckoutOverrideLog(log: InsertCheckoutOverrideLog): Promise<CheckoutOverrideLog> {
+    const [createdLog] = await db
+      .insert(checkoutOverrideLogs)
+      .values(log)
+      .returning();
+    return createdLog;
   }
 
   async checkRoomAvailability(

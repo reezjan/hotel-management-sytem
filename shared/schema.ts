@@ -564,6 +564,7 @@ export const roomReservations = pgTable("room_reservations", {
   roomPrice: numeric("room_price", { precision: 12, scale: 2 }),
   mealPlanPrice: numeric("meal_plan_price", { precision: 12, scale: 2 }),
   totalPrice: numeric("total_price", { precision: 12, scale: 2 }),
+  paidAmount: numeric("paid_amount", { precision: 12, scale: 2 }).default('0'),
   specialRequests: text("special_requests"),
   status: text("status").default('pending'),
   createdBy: uuid("created_by").references(() => users.id),
@@ -1229,3 +1230,23 @@ export const insertBillPaymentSchema = createInsertSchema(billPayments).omit({
 
 export type InsertBillPayment = z.infer<typeof insertBillPaymentSchema>;
 export type SelectBillPayment = typeof billPayments.$inferSelect;
+
+// Checkout Override Logs Table
+export const checkoutOverrideLogs = pgTable("checkout_override_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  reservationId: uuid("reservation_id").references(() => roomReservations.id),
+  balanceDue: numeric("balance_due", { precision: 14, scale: 2 }),
+  overriddenBy: uuid("overridden_by").references(() => users.id),
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
+export const insertCheckoutOverrideLogSchema = createInsertSchema(checkoutOverrideLogs).omit({
+  id: true,
+  createdAt: true
+}).extend({
+  balanceDue: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
+export type InsertCheckoutOverrideLog = z.infer<typeof insertCheckoutOverrideLogSchema>;
+export type CheckoutOverrideLog = typeof checkoutOverrideLogs.$inferSelect;

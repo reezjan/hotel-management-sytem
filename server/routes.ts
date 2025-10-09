@@ -2288,16 +2288,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/reservations/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const currentUser = req.user as any;
+      const { id } = req.params;
+      const { paidAmount } = req.body;
+
+      const reservation = await storage.getRoomReservation(id);
+      if (!reservation) {
+        return res.status(404).json({ message: "Reservation not found" });
+      }
+
+      if (reservation.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Reservation not found" });
+      }
+
+      // Update the paid amount
+      const updated = await storage.updateRoomReservation(id, { paidAmount });
+      res.json(updated);
+    } catch (error) {
+      console.error("Update reservation error:", error);
+      res.status(500).json({ message: "Failed to update reservation" });
+    }
+  });
+
   app.post("/api/reservations/:id/check-out", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
       const { id } = req.params;
-      const reservation = await storage.checkOutGuest(id);
-      res.json(reservation);
+      const { overrideBalance, overrideReason } = req.body;
+      
+      const reservation = await storage.getRoomReservation(id);
+      if (!reservation) {
+        return res.status(404).json({ message: "Reservation not found" });
+      }
+      
+      if (reservation.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Reservation not found" });
+      }
+      
+      // CRITICAL: Check for outstanding balance
+      const totalAmount = Number(reservation.totalPrice || 0);
+      const paidAmount = Number(reservation.paidAmount || 0);
+      const balanceDue = totalAmount - paidAmount;
+      
+      if (balanceDue > 0) {
+        // Only managers can override balance requirement
+        if (!overrideBalance) {
+          return res.status(400).json({ 
+            message: `Cannot check out with outstanding balance of ${balanceDue}. Please collect payment first.`,
+            balanceDue 
+          });
+        }
+        
+        const canOverride = ['manager', 'owner'].includes(currentUser.role?.name || '');
+        if (!canOverride) {
+          return res.status(403).json({ 
+            message: `Outstanding balance of ${balanceDue} must be cleared. Contact your manager to override.`,
+            balanceDue 
+          });
+        }
+        
+        // Log manager override for audit
+        await storage.createCheckoutOverrideLog({
+          reservationId: id,
+          balanceDue: String(balanceDue),
+          overriddenBy: currentUser.id,
+          reason: overrideReason || 'Manager override'
+        });
+      }
+      
+      // Process checkout
+      const checkedOutReservation = await storage.checkOutGuest(id);
+      
+      res.json(checkedOutReservation);
     } catch (error) {
-      console.error("Check-out error:", error);
-      res.status(400).json({ 
-        message: error instanceof Error ? error.message : "Failed to check out guest" 
-      });
+      console.error("Checkout error:", error);
+      res.status(500).json({ message: "Failed to check out guest" });
     }
   });
 
