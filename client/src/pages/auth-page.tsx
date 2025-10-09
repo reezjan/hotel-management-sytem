@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Hotel, LogIn } from "lucide-react";
 import { ROLE_DASHBOARDS } from "@/lib/constants";
+import { useEffect } from "react";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -30,13 +31,14 @@ export default function AuthPage() {
   });
 
   // Redirect if already logged in
-  if (user) {
-    const role = user.role?.name;
-    if (role && ROLE_DASHBOARDS[role as keyof typeof ROLE_DASHBOARDS]) {
-      setLocation(ROLE_DASHBOARDS[role as keyof typeof ROLE_DASHBOARDS]);
-      return null;
+  useEffect(() => {
+    if (user) {
+      const role = user.role?.name;
+      if (role && ROLE_DASHBOARDS[role as keyof typeof ROLE_DASHBOARDS]) {
+        setLocation(ROLE_DASHBOARDS[role as keyof typeof ROLE_DASHBOARDS]);
+      }
     }
-  }
+  }, [user, setLocation]);
 
   const onLogin = async (data: LoginData) => {
     try {
