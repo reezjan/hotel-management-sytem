@@ -171,6 +171,10 @@ export default function BartenderDashboard() {
       toast({ title: "Please provide a reason for declining", variant: "destructive" });
       return;
     }
+    if (declineReason.trim().length < 10) {
+      toast({ title: "Decline reason must be at least 10 characters", variant: "destructive" });
+      return;
+    }
     updateKotItemMutation.mutate({
       id: selectedItem.id,
       data: { status: "declined", declineReason: declineReason.trim() }
