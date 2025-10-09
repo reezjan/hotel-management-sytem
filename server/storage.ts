@@ -40,6 +40,8 @@ import {
   restaurantBills,
   billPayments,
   auditLogs,
+  priceChangeLogs,
+  taxChangeLogs,
   type User,
   type UserWithRole,
   type InsertUser,
@@ -258,7 +260,9 @@ export interface IStorage {
   
   // Tax operations
   getHotelTaxes(hotelId: string): Promise<HotelTax[]>;
+  getHotelTax(hotelId: string, taxType: string): Promise<HotelTax | undefined>;
   updateHotelTax(hotelId: string, taxType: string, isActive: boolean, percent?: number): Promise<HotelTax>;
+  createTaxChangeLog(log: { hotelId: string; taxType: string; previousPercent?: string | number | null; newPercent?: string | number | null; previousActive?: boolean; newActive?: boolean; changedBy: string }): Promise<any>;
   
   // Voucher operations
   getVouchersByHotel(hotelId: string): Promise<Voucher[]>;
@@ -321,6 +325,7 @@ export interface IStorage {
   createGuest(guest: InsertGuest): Promise<Guest>;
   updateGuest(id: string, guest: Partial<InsertGuest>): Promise<Guest>;
   deleteGuest(id: string): Promise<void>;
+  restoreGuest(id: string, hotelId: string): Promise<Guest>;
   searchGuests(hotelId: string, searchTerm: string): Promise<Guest[]>;
   
   // Stock request operations
@@ -365,6 +370,9 @@ export interface IStorage {
   
   // Audit log operations
   createAuditLog(log: { hotelId: string; entity: string; entityId: string; action: string; changedBy: string; payload: any }): Promise<any>;
+  
+  // Price change log operations
+  createPriceChangeLog(log: { hotelId: string; itemId: string; itemType: string; itemName: string; previousPrice: string | number; newPrice: string | number; changedBy: string }): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1789,6 +1797,17 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(hotelTaxes.taxType));
   }
 
+  async getHotelTax(hotelId: string, taxType: string): Promise<HotelTax | undefined> {
+    const [tax] = await db
+      .select()
+      .from(hotelTaxes)
+      .where(and(
+        eq(hotelTaxes.hotelId, hotelId),
+        eq(hotelTaxes.taxType, taxType)
+      ));
+    return tax || undefined;
+  }
+
   async updateHotelTax(hotelId: string, taxType: string, isActive: boolean, percent?: number): Promise<HotelTax> {
     const [tax] = await db
       .insert(hotelTaxes)
@@ -1807,6 +1826,23 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return tax;
+  }
+
+  async createTaxChangeLog(log: { hotelId: string; taxType: string; previousPercent?: string | number | null; newPercent?: string | number | null; previousActive?: boolean; newActive?: boolean; changedBy: string }): Promise<any> {
+    const [taxChangeLog] = await db
+      .insert(taxChangeLogs)
+      .values({
+        hotelId: log.hotelId,
+        taxType: log.taxType,
+        previousPercent: log.previousPercent !== undefined ? String(log.previousPercent) : null,
+        newPercent: log.newPercent !== undefined ? String(log.newPercent) : null,
+        previousActive: log.previousActive,
+        newActive: log.newActive,
+        changedBy: log.changedBy
+      })
+      .returning();
+    
+    return taxChangeLog;
   }
 
   // Voucher operations
@@ -2798,10 +2834,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteGuest(id: string): Promise<void> {
+    // CRITICAL: Never hard delete - use soft delete only
     await db
       .update(guests)
       .set({ deletedAt: new Date() })
       .where(eq(guests.id, id));
+    
+    // Do NOT use: await db.delete(guests).where(eq(guests.id, id));
+  }
+
+  async restoreGuest(id: string, hotelId: string): Promise<Guest> {
+    const [guest] = await db
+      .update(guests)
+      .set({ deletedAt: null, updatedAt: new Date() })
+      .where(and(
+        eq(guests.id, id),
+        eq(guests.hotelId, hotelId)
+      ))
+      .returning();
+    
+    if (!guest) {
+      throw new Error('Guest not found or does not belong to this hotel');
+    }
+    
+    return guest;
   }
 
   async searchGuests(hotelId: string, searchTerm: string): Promise<Guest[]> {
@@ -3359,6 +3415,23 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return auditLog;
+  }
+
+  async createPriceChangeLog(log: { hotelId: string; itemId: string; itemType: string; itemName: string; previousPrice: string | number; newPrice: string | number; changedBy: string }): Promise<any> {
+    const [priceChangeLog] = await db
+      .insert(priceChangeLogs)
+      .values({
+        hotelId: log.hotelId,
+        itemId: log.itemId,
+        itemType: log.itemType,
+        itemName: log.itemName,
+        previousPrice: String(log.previousPrice),
+        newPrice: String(log.newPrice),
+        changedBy: log.changedBy
+      })
+      .returning();
+    
+    return priceChangeLog;
   }
 }
 

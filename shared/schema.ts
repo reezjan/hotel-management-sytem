@@ -1305,3 +1305,51 @@ export const insertCheckoutOverrideLogSchema = createInsertSchema(checkoutOverri
 
 export type InsertCheckoutOverrideLog = z.infer<typeof insertCheckoutOverrideLogSchema>;
 export type CheckoutOverrideLog = typeof checkoutOverrideLogs.$inferSelect;
+
+// Price Change Logs Table
+export const priceChangeLogs = pgTable("price_change_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  itemId: uuid("item_id"),
+  itemType: text("item_type"),
+  itemName: text("item_name"),
+  previousPrice: numeric("previous_price", { precision: 12, scale: 2 }),
+  newPrice: numeric("new_price", { precision: 12, scale: 2 }),
+  changedBy: uuid("changed_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
+export const insertPriceChangeLogSchema = createInsertSchema(priceChangeLogs).omit({
+  id: true,
+  createdAt: true
+}).extend({
+  previousPrice: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  newPrice: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
+export type InsertPriceChangeLog = z.infer<typeof insertPriceChangeLogSchema>;
+export type PriceChangeLog = typeof priceChangeLogs.$inferSelect;
+
+// Tax Change Logs Table
+export const taxChangeLogs = pgTable("tax_change_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  taxType: text("tax_type").notNull(),
+  previousPercent: numeric("previous_percent", { precision: 5, scale: 2 }),
+  newPercent: numeric("new_percent", { precision: 5, scale: 2 }),
+  previousActive: boolean("previous_active"),
+  newActive: boolean("new_active"),
+  changedBy: uuid("changed_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
+export const insertTaxChangeLogSchema = createInsertSchema(taxChangeLogs).omit({
+  id: true,
+  createdAt: true
+}).extend({
+  previousPercent: z.union([z.string(), z.number(), z.null()]).transform((val) => val === null ? null : String(val)),
+  newPercent: z.union([z.string(), z.number(), z.null()]).transform((val) => val === null ? null : String(val))
+});
+
+export type InsertTaxChangeLog = z.infer<typeof insertTaxChangeLogSchema>;
+export type TaxChangeLog = typeof taxChangeLogs.$inferSelect;

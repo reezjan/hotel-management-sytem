@@ -346,9 +346,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { id } = req.params;
       await storage.deleteGuest(id);
-      res.json({ message: "Guest deleted successfully" });
+      res.json({ message: "Guest deleted successfully (soft delete)" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete guest" });
+    }
+  });
+
+  app.post("/api/hotels/current/guests/:id/restore", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      const { id } = req.params;
+      
+      if (!currentUser?.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // CRITICAL: Only managers can restore deleted guests
+      const canRestore = ['manager', 'owner', 'super_admin'].includes(currentUser.role?.name || '');
+      if (!canRestore) {
+        return res.status(403).json({ 
+          message: "Only managers can restore deleted guest records" 
+        });
+      }
+      
+      const guest = await storage.restoreGuest(id, currentUser.hotelId);
+      res.json({ 
+        ...guest,
+        message: "Guest record restored successfully" 
+      });
+    } catch (error) {
+      console.error("Guest restore error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to restore guest" 
+      });
     }
   });
 
@@ -630,14 +664,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { id } = req.params;
       const itemData = insertMenuItemSchema.partial().parse(req.body);
+      
       // Verify the menu item belongs to current hotel
       const existingItem = await storage.getMenuItem(id);
       if (!existingItem || existingItem.hotelId !== user.hotelId) {
         return res.status(404).json({ message: "Menu item not found" });
       }
+      
+      // CRITICAL: Price changes require manager approval
+      if ('price' in itemData && itemData.price !== undefined && String(itemData.price) !== String(existingItem.price)) {
+        const canChangePrice = ['manager', 'owner', 'restaurant_bar_manager', 'super_admin'].includes(user.role?.name || '');
+        
+        if (!canChangePrice) {
+          return res.status(403).json({ 
+            message: "Only managers can change menu item prices" 
+          });
+        }
+        
+        // Log price change for audit trail
+        await storage.createPriceChangeLog({
+          hotelId: user.hotelId,
+          itemId: id,
+          itemType: 'menu_item',
+          itemName: existingItem.name || 'Unknown Item',
+          previousPrice: existingItem.price || '0',
+          newPrice: itemData.price,
+          changedBy: user.id
+        });
+      }
+      
       const item = await storage.updateMenuItem(id, itemData);
       res.json(item);
     } catch (error) {
+      console.error("Menu item update error:", error);
       res.status(400).json({ message: "Failed to update menu item" });
     }
   });
@@ -1950,14 +2009,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/hotels/current/taxes", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      // CRITICAL: Only owner can modify tax settings to prevent tax evasion
+      if (user.role?.name !== 'owner' && user.role?.name !== 'super_admin') {
+        return res.status(403).json({ 
+          message: "Only the hotel owner can modify tax settings" 
+        });
+      }
+      
       const { taxType, percent, isActive } = req.body;
+      
+      // Log tax configuration changes for audit trail
+      const existingTax = await storage.getHotelTax(user.hotelId, taxType);
+      await storage.createTaxChangeLog({
+        hotelId: user.hotelId,
+        taxType,
+        previousPercent: existingTax?.percent || null,
+        newPercent: percent !== undefined ? percent : null,
+        previousActive: existingTax?.isActive ?? undefined,
+        newActive: isActive,
+        changedBy: user.id
+      });
+      
       const tax = await storage.updateHotelTax(user.hotelId, taxType, isActive, percent);
       res.json(tax);
     } catch (error) {
+      console.error("Tax update error:", error);
       res.status(400).json({ message: "Failed to update tax" });
     }
   });
@@ -2764,6 +2849,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { hotelId: _, createdBy: __, ...sanitizedBody } = req.body;
+      
+      // CRITICAL: Validate vendor payments - prevent unauthorized payments
+      const isVendorPayment = sanitizedBody.vendorId || 
+        (sanitizedBody.purpose && String(sanitizedBody.purpose).toLowerCase().includes('vendor'));
+      
+      if (isVendorPayment) {
+        // Require invoice or PO reference for vendor payments
+        if (!sanitizedBody.reference) {
+          return res.status(400).json({ 
+            message: "Vendor payments require invoice or purchase order reference" 
+          });
+        }
+        
+        // Only manager or owner can approve vendor payments
+        const canApprove = ['manager', 'owner', 'super_admin'].includes(currentUser.role?.name || '');
+        if (!canApprove) {
+          return res.status(403).json({ 
+            message: "Only managers can approve vendor payments" 
+          });
+        }
+        
+        // Large vendor payments require additional verification
+        const amount = Number(sanitizedBody.amount || 0);
+        if (amount > 10000) {
+          const details = sanitizedBody.details || {};
+          if (!details.approvalDocuments || !Array.isArray(details.approvalDocuments) || details.approvalDocuments.length === 0) {
+            return res.status(400).json({ 
+              message: "Vendor payments over Rs. 10,000 require supporting documentation" 
+            });
+          }
+        }
+      }
+      
       const transactionData = insertTransactionSchema.parse({
         ...sanitizedBody,
         hotelId: currentUser.hotelId,
@@ -3723,13 +3841,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/hotels/:hotelId/taxes/:taxType", async (req, res) => {
+  app.put("/api/hotels/:hotelId/taxes/:taxType", requireActiveUser, async (req, res) => {
     try {
       const { hotelId, taxType } = req.params;
       const { isActive, percent } = req.body;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      // CRITICAL: Only owner can modify tax settings to prevent tax evasion
+      if (currentUser.role?.name !== 'owner' && currentUser.role?.name !== 'super_admin') {
+        return res.status(403).json({ 
+          message: "Only the hotel owner can modify tax settings" 
+        });
+      }
+      
+      // Log tax configuration changes for audit trail
+      const existingTax = await storage.getHotelTax(hotelId, taxType);
+      await storage.createTaxChangeLog({
+        hotelId,
+        taxType,
+        previousPercent: existingTax?.percent || null,
+        newPercent: percent !== undefined ? percent : null,
+        previousActive: existingTax?.isActive ?? undefined,
+        newActive: isActive,
+        changedBy: currentUser.id
+      });
+      
       const tax = await storage.updateHotelTax(hotelId, taxType, isActive, percent);
       res.json(tax);
     } catch (error) {
+      console.error("Tax update error:", error);
       res.status(400).json({ message: "Failed to update tax" });
     }
   });
