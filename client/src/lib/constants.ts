@@ -239,6 +239,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Users', label: 'Guest Management', id: 'guests' },
     { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
+    { icon: 'ClipboardCheck', label: 'Attendance Reports', id: 'attendance' },
     { icon: 'CreditCard', label: 'Vendor Payments', id: 'payments' },
     { icon: 'Tag', label: 'Discount Vouchers', id: 'vouchers' },
     { icon: 'DoorOpen', label: 'Room Setup', id: 'rooms' },

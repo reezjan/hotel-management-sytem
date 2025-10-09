@@ -44,6 +44,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'guests': '/guests',
         'hall-bookings': '/hall-bookings',
         'staff': '/manager/staff',
+        'attendance': '/manager/attendance-reports',
         'payments': '/manager/vendor-payments',
         'vouchers': '/manager/discount-vouchers',
         'rooms': '/manager/room-setup',
