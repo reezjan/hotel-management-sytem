@@ -139,6 +139,18 @@ export const rooms = pgTable("rooms", {
   deletedAt: timestamp("deleted_at", { withTimezone: true })
 });
 
+// Room Status Logs Table
+export const roomStatusLogs = pgTable("room_status_logs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  roomId: uuid("room_id").references(() => rooms.id),
+  roomNumber: text("room_number"),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status"),
+  reason: text("reason"),
+  changedBy: uuid("changed_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
 // Halls Table
 export const halls = pgTable("halls", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -514,6 +526,18 @@ export const vehicleLogs = pgTable("vehicle_logs", {
   checkIn: timestamp("check_in", { withTimezone: true }).defaultNow(),
   checkOut: timestamp("check_out", { withTimezone: true }),
   recordedBy: uuid("recorded_by").references(() => users.id)
+});
+
+// Security Alerts Table
+export const securityAlerts = pgTable("security_alerts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id),
+  type: text("type").notNull(),
+  description: text("description").notNull(),
+  vehicleLogId: uuid("vehicle_log_id").references(() => vehicleLogs.id),
+  performedBy: uuid("performed_by").references(() => users.id),
+  overriddenBy: uuid("overridden_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
 // Room Service Orders Table
@@ -923,6 +947,11 @@ export const insertRoomSchema = createInsertSchema(rooms).omit({
   deletedAt: true
 });
 
+export const insertRoomStatusLogSchema = createInsertSchema(roomStatusLogs).omit({
+  id: true,
+  createdAt: true
+});
+
 export const insertMenuItemSchema = createInsertSchema(menuItems).omit({
   id: true,
   createdAt: true
@@ -1050,6 +1079,11 @@ export const insertVehicleLogSchema = createInsertSchema(vehicleLogs).omit({
   hotelId: true,
   recordedBy: true,
   checkIn: true
+});
+
+export const insertSecurityAlertSchema = createInsertSchema(securityAlerts).omit({
+  id: true,
+  createdAt: true
 });
 
 export const insertMealPlanSchema = createInsertSchema(mealPlans).omit({
@@ -1198,6 +1232,8 @@ export type Hotel = typeof hotels.$inferSelect;
 export type InsertHotel = z.infer<typeof insertHotelSchema>;
 export type Room = typeof rooms.$inferSelect;
 export type InsertRoom = z.infer<typeof insertRoomSchema>;
+export type RoomStatusLog = typeof roomStatusLogs.$inferSelect;
+export type InsertRoomStatusLog = z.infer<typeof insertRoomStatusLogSchema>;
 export type MenuItem = typeof menuItems.$inferSelect;
 export type InsertMenuItem = z.infer<typeof insertMenuItemSchema>;
 export type Task = typeof tasks.$inferSelect;
@@ -1219,6 +1255,8 @@ export type HotelTax = typeof hotelTaxes.$inferSelect;
 export type Voucher = typeof vouchers.$inferSelect;
 export type VehicleLog = typeof vehicleLogs.$inferSelect;
 export type InsertVehicleLog = z.infer<typeof insertVehicleLogSchema>;
+export type SecurityAlert = typeof securityAlerts.$inferSelect;
+export type InsertSecurityAlert = z.infer<typeof insertSecurityAlertSchema>;
 export type RoomServiceOrder = typeof roomServiceOrders.$inferSelect;
 export type RoomType = typeof roomTypes.$inferSelect;
 export type InsertRoomType = z.infer<typeof insertRoomTypeSchema>;

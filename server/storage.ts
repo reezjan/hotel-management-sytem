@@ -108,7 +108,13 @@ import {
   type InsertAttendance,
   checkoutOverrideLogs,
   type CheckoutOverrideLog,
-  type InsertCheckoutOverrideLog
+  type InsertCheckoutOverrideLog,
+  roomStatusLogs,
+  type RoomStatusLog,
+  type InsertRoomStatusLog,
+  securityAlerts,
+  type SecurityAlert,
+  type InsertSecurityAlert
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, not, isNull, desc, asc, sql, gte, lte, gt, lt, ne, inArray } from "drizzle-orm";
@@ -150,6 +156,7 @@ export interface IStorage {
   createRoom(room: InsertRoom): Promise<Room>;
   updateRoom(id: string, room: Partial<InsertRoom>): Promise<Room>;
   deleteRoom(id: string): Promise<void>;
+  createRoomStatusLog(log: InsertRoomStatusLog): Promise<RoomStatusLog>;
 
   // Room reservation operations
   createRoomReservation(reservation: InsertRoomReservation): Promise<RoomReservation>;
@@ -275,6 +282,9 @@ export interface IStorage {
   createVehicleLog(log: any): Promise<VehicleLog>;
   updateVehicleLog(id: string, log: Partial<VehicleLog>): Promise<VehicleLog>;
   getVehicleLog(id: string): Promise<VehicleLog | undefined>;
+  
+  // Security alert operations
+  createSecurityAlert(alert: InsertSecurityAlert): Promise<SecurityAlert>;
   
   // Room service operations
   getRoomServiceOrdersByHotel(hotelId: string): Promise<RoomServiceOrder[]>;
@@ -665,6 +675,14 @@ export class DatabaseStorage implements IStorage {
       .update(rooms)
       .set({ deletedAt: new Date() })
       .where(eq(rooms.id, id));
+  }
+
+  async createRoomStatusLog(logData: InsertRoomStatusLog): Promise<RoomStatusLog> {
+    const [log] = await db
+      .insert(roomStatusLogs)
+      .values(logData)
+      .returning();
+    return log;
   }
 
   // Room reservation operations
@@ -1906,6 +1924,15 @@ export class DatabaseStorage implements IStorage {
       .from(vehicleLogs)
       .where(eq(vehicleLogs.id, id));
     return result;
+  }
+
+  // Security alert operations
+  async createSecurityAlert(alertData: InsertSecurityAlert): Promise<SecurityAlert> {
+    const [alert] = await db
+      .insert(securityAlerts)
+      .values(alertData)
+      .returning();
+    return alert;
   }
 
   // Room service operations

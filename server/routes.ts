@@ -2457,16 +2457,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/rooms/:id", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
       const { id } = req.params;
+      const updateData = req.body;
       
       // Get existing room to detect checkout
       const existingRoom = await storage.getRoom(id);
-      if (!existingRoom) {
+      if (!existingRoom || existingRoom.hotelId !== currentUser.hotelId) {
         return res.status(404).json({ message: "Room not found" });
       }
       
+      // CRITICAL: Status changes require authorization
+      const isStatusChange = 'status' in updateData && updateData.status !== existingRoom.status;
+      
+      if (isStatusChange) {
+        const canChangeStatus = ['manager', 'owner', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+        
+        if (!canChangeStatus) {
+          return res.status(403).json({ 
+            message: "Only supervisors can change room status" 
+          });
+        }
+        
+        // 'maintenance' status requires reason
+        if (updateData.status === 'maintenance' && !updateData.maintenanceReason) {
+          return res.status(400).json({ 
+            message: "Maintenance status requires a reason" 
+          });
+        }
+      }
+      
       // Extract occupantDetails separately since it's a jsonb field that may not validate properly
-      const { occupantDetails, ...restBody } = req.body;
+      const { occupantDetails, maintenanceReason, statusChangeReason, ...restBody } = updateData;
       const validatedData = insertRoomSchema.partial().parse(restBody);
       // Add occupantDetails back if it exists
       const roomData = occupantDetails !== undefined 
@@ -2494,7 +2520,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Update room first
       const room = await storage.updateRoom(id, roomData);
+      
+      // Log status change AFTER successful update
+      if (isStatusChange) {
+        await storage.createRoomStatusLog({
+          roomId: id,
+          roomNumber: existingRoom.roomNumber || 'Unknown',
+          previousStatus: existingRoom.status || '',
+          newStatus: updateData.status,
+          reason: updateData.maintenanceReason || updateData.statusChangeReason || null,
+          changedBy: currentUser.id
+        });
+      }
+      
       res.json(room);
     } catch (error) {
       console.error("Room update error:", error);
@@ -4921,28 +4961,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
       }
-      const user = req.user as any;
-      const { id } = req.params;
       
-      // Verify the log exists
-      const existingLog = await storage.getVehicleLog(id);
-      if (!existingLog) {
+      const currentUser = req.user as any;
+      const { id } = req.params;
+      const { checkoutTime } = req.body;
+      
+      const log = await storage.getVehicleLog(id);
+      if (!log || log.hotelId !== currentUser.hotelId) {
         return res.status(404).json({ message: "Vehicle log not found" });
       }
       
+      if (log.checkOut) {
+        return res.status(400).json({ message: "Vehicle already checked out" });
+      }
+      
       // Check authorization (only creator or Security Head can checkout)
-      const userRole = user.role?.name || '';
-      const isAuthorized = existingLog.recordedBy === user.id || userRole === 'security_head';
+      const userRole = currentUser.role?.name || '';
+      const isAuthorized = log.recordedBy === currentUser.id || userRole === 'security_head';
       
       if (!isAuthorized) {
         return res.status(403).json({ message: "Unauthorized to checkout this vehicle" });
       }
       
-      const updatedLog = await storage.updateVehicleLog(id, { checkOut: new Date() });
+      // CRITICAL: Prevent immediate checkout (suspicious pattern)
+      const checkinTime = log.checkIn ? new Date(log.checkIn) : new Date();
+      const checkout = checkoutTime ? new Date(checkoutTime) : new Date();
+      const minutesDiff = (checkout.getTime() - checkinTime.getTime()) / (1000 * 60);
+      
+      // If checkout is less than 5 minutes after checkin
+      if (minutesDiff < 5) {
+        const canOverride = ['manager', 'owner', 'security_head'].includes(currentUser.role?.name || '');
+        
+        if (!canOverride) {
+          return res.status(400).json({ 
+            message: "Suspicious checkout timing. Vehicle was checked in less than 5 minutes ago. Contact security supervisor." 
+          });
+        }
+        
+        // Log quick checkout for review
+        await storage.createSecurityAlert({
+          hotelId: log.hotelId,
+          type: 'quick_vehicle_checkout',
+          description: `Vehicle ${log.vehicleNumber} checked out ${minutesDiff.toFixed(1)} minutes after check-in`,
+          vehicleLogId: id,
+          performedBy: currentUser.id,
+          overriddenBy: currentUser.id
+        });
+      }
+      
+      const updatedLog = await storage.updateVehicleLog(id, { checkOut: checkout });
       res.json(updatedLog);
     } catch (error) {
       console.error("Vehicle checkout error:", error);
-      res.status(400).json({ message: "Failed to checkout vehicle" });
+      res.status(500).json({ message: "Failed to checkout vehicle" });
     }
   });
 

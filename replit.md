@@ -100,6 +100,19 @@ The system is built as a full-stack application using React and TypeScript for t
 - **Solution**: Added type checking to reject non-string inputs before processing, preventing `TypeError: input.replace is not a function`
 - **Testing**: Comprehensive attack suite validates SQL injection, XSS, type coercion, and edge case protection
 
+#### 7. Room Status Manipulation Prevention with Audit Logging (October 2025)
+- **Authorization Control**: Only managers, owners, and housekeeping supervisors can change room status
+- **Maintenance Reason Enforcement**: Changing status to 'maintenance' requires a mandatory reason
+- **Audit Trail**: All room status changes are logged in `room_status_logs` table with:
+  - Previous and new status
+  - Timestamp of change
+  - User who made the change
+  - Reason for change (if provided)
+- **Hotel Ownership Verification**: Users can only modify rooms in their own hotel
+- **Accurate Logging**: Status changes are logged only AFTER successful database update to prevent false audit entries
+- **Protected Endpoint**: `PUT /api/rooms/:id` - Room status updates with role-based access control
+- **Database Schema**: `roomStatusLogs` table with foreign keys to rooms and users for complete traceability
+
 ## External Dependencies
 -   **PostgreSQL**: Relational database for all application data.
 -   **Vite**: Frontend build tool.
