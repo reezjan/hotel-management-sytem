@@ -36,7 +36,7 @@ export default function OwnerDashboard() {
 
   // Calculate real metrics without fake trends
   const totalRevenue = transactions
-    .filter(t => t.txnType === 'cash_in' || t.txnType === 'pos_in' || t.txnType === 'fonepay_in')
+    .filter(t => t.txnType === 'revenue')
     .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
   
   const occupiedRooms = rooms.filter(r => r.isOccupied).length;
@@ -192,12 +192,14 @@ export default function OwnerDashboard() {
                 {transactions.slice(0, 5).map((transaction, index) => (
                   <div key={transaction.id || index} className="flex justify-between items-center p-2 border-b">
                     <div>
-                      <div className="text-sm font-medium">{transaction.txnType?.replace(/_/g, ' ')}</div>
+                      <div className="text-sm font-medium">{transaction.purpose || transaction.txnType?.replace(/_/g, ' ')}</div>
                       <div className="text-xs text-muted-foreground">
-                        {new Date(transaction.createdAt).toLocaleDateString()}
+                        {new Date(transaction.createdAt).toLocaleDateString()} • {transaction.paymentMethod?.replace(/_/g, ' ')}
                       </div>
                     </div>
-                    <div className="text-sm font-bold">
+                    <div className={`text-sm font-bold ${
+                      transaction.txnType === 'revenue' ? 'text-green-600' : 'text-red-600'
+                    }`}>
                       {formatCurrency(Number(transaction.amount))}
                     </div>
                   </div>
