@@ -17,6 +17,7 @@ import OwnerStaffManagement from "@/pages/dashboard/owner/staff-management";
 import OwnerReports from "@/pages/dashboard/owner/reports";
 import ManagerDashboard from "@/pages/dashboard/manager";
 import StaffManagement from "@/pages/dashboard/manager/staff-management";
+import AttendanceReports from "@/pages/dashboard/manager/attendance-reports";
 import VendorPayments from "@/pages/dashboard/manager/vendor-payments";
 import DiscountVouchers from "@/pages/dashboard/manager/discount-vouchers";
 import RoomSetup from "@/pages/dashboard/manager/room-setup";
@@ -105,6 +106,7 @@ function Router() {
       
       <ProtectedRoute path="/manager" component={ManagerDashboard} allowedRoles={["manager"]} />
       <ProtectedRoute path="/manager/staff" component={StaffManagement} allowedRoles={["manager", "owner"]} />
+      <ProtectedRoute path="/manager/attendance-reports" component={AttendanceReports} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/vendor-payments" component={VendorPayments} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/discount-vouchers" component={DiscountVouchers} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/room-setup" component={RoomSetup} allowedRoles={["manager", "owner"]} />

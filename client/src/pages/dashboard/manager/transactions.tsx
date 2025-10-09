@@ -44,7 +44,8 @@ export default function TransactionsPage() {
         throw new Error("Failed to fetch transactions");
       }
       return response.json();
-    }
+    },
+    refetchInterval: 3000
   });
 
   // Create transaction mutation

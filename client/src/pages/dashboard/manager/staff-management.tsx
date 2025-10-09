@@ -35,7 +35,8 @@ export default function StaffManagement() {
         throw new Error("Failed to fetch staff");
       }
       return response.json();
-    }
+    },
+    refetchInterval: 3000
   });
 
   // Fetch available roles that manager can create
@@ -47,11 +48,13 @@ export default function StaffManagement() {
         throw new Error("Failed to fetch roles");
       }
       return response.json();
-    }
+    },
+    refetchInterval: 3000
   });
 
   const { data: dailyAttendance = [] } = useQuery<any[]>({
-    queryKey: ["/api/attendance/daily"]
+    queryKey: ["/api/attendance/daily"],
+    refetchInterval: 3000
   });
 
   // Roles that a manager can create (based on server authorization)

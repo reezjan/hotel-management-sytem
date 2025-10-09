@@ -44,7 +44,8 @@ export default function DiscountVouchers() {
       const response = await fetch("/api/user", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch user");
       return response.json();
-    }
+    },
+    refetchInterval: 3000
   });
 
   // Fetch vouchers for this hotel
@@ -54,7 +55,8 @@ export default function DiscountVouchers() {
       const response = await fetch("/api/hotels/current/vouchers", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch vouchers");
       return response.json();
-    }
+    },
+    refetchInterval: 3000
   });
 
   // Create voucher mutation

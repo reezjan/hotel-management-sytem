@@ -66,7 +66,8 @@ export default function VendorPayments() {
       const response = await fetch("/api/user", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch user");
       return response.json();
-    }
+    },
+    refetchInterval: 3000
   });
 
   // Fetch vendors for this hotel
@@ -76,7 +77,8 @@ export default function VendorPayments() {
       const response = await fetch("/api/hotels/current/vendors", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch vendors");
       return response.json();
-    }
+    },
+    refetchInterval: 3000
   });
 
   // Fetch vendor payments (transactions with vendorId)
@@ -88,7 +90,8 @@ export default function VendorPayments() {
       const allTransactions = await response.json();
       // Filter to only vendor payments
       return allTransactions.filter((t: Transaction) => t.vendorId && t.txnType === "vendor_payment");
-    }
+    },
+    refetchInterval: 3000
   });
 
   // Create payment mutation

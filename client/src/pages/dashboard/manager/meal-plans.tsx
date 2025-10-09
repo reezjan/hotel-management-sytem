@@ -48,7 +48,8 @@ export default function MealPlansPage() {
   });
 
   const { data: user } = useQuery<{ hotelId?: string }>({
-    queryKey: ['/api/user']
+    queryKey: ['/api/user'],
+    refetchInterval: 3000
   });
 
   const queryClientInstance = useQueryClient();
@@ -61,7 +62,8 @@ export default function MealPlansPage() {
 
   const { data: mealPlans = [], isLoading } = useQuery<MealPlan[]>({
     queryKey: ['/api/hotels', hotelId, 'meal-plans'],
-    enabled: !!hotelId
+    enabled: !!hotelId,
+    refetchInterval: 3000
   });
 
   const createMutation = useMutation({

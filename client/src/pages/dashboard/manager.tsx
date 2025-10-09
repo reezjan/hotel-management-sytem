@@ -11,23 +11,28 @@ export default function ManagerDashboard() {
   const [, setLocation] = useLocation();
   
   const { data: staff = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/users"]
+    queryKey: ["/api/hotels/current/users"],
+    refetchInterval: 3000
   });
 
   const { data: dailyAttendance = [] } = useQuery<any[]>({
-    queryKey: ["/api/attendance/daily"]
+    queryKey: ["/api/attendance/daily"],
+    refetchInterval: 3000
   });
 
   const { data: transactions = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/transactions"]
+    queryKey: ["/api/hotels/current/transactions"],
+    refetchInterval: 3000
   });
 
   const { data: vouchers = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/vouchers"]
+    queryKey: ["/api/hotels/current/vouchers"],
+    refetchInterval: 3000
   });
 
   const { data: rooms = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/rooms"]
+    queryKey: ["/api/hotels/current/rooms"],
+    refetchInterval: 3000
   });
 
   const cashTransactions = transactions.filter(t => t.paymentMethod === 'cash').reduce((sum, t) => sum + Number(t.amount), 0);

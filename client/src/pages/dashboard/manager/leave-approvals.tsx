@@ -28,7 +28,8 @@ export default function LeaveApprovals() {
       });
       if (!response.ok) throw new Error("Failed to fetch pending leave requests");
       return response.json();
-    }
+    },
+    refetchInterval: 3000
   });
 
   // Fetch all leave requests for overview
@@ -40,7 +41,8 @@ export default function LeaveApprovals() {
       });
       if (!response.ok) throw new Error("Failed to fetch leave requests");
       return response.json();
-    }
+    },
+    refetchInterval: 3000
   });
 
   // Approve leave request mutation
