@@ -62,7 +62,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'tasks': '/housekeeping-supervisor/task-assignment',
         'maintenance': '/housekeeping-supervisor/maintenance-requests',
         'tracking': '/housekeeping-supervisor/staff-tracking',
-        'leave-approvals': '/housekeeping-supervisor/leave-approvals'
+        'leave': '/housekeeping-supervisor/leave-requests'
       },
       'restaurant_bar_manager': {
         'dashboard': '/restaurant-bar-manager',
