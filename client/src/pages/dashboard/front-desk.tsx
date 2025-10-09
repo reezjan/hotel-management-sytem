@@ -403,14 +403,13 @@ export default function FrontDeskDashboard() {
         throw new Error('Please select a payment method (Cash, POS, or Fonepay) before checking out');
       }
 
-      // Update room occupancy
-      await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
-        isOccupied: false,
-        occupantDetails: null
-      });
+      // Check if this is a reservation-based checkout
+      const room = rooms.find(r => r.id === data.roomId);
+      const reservationId = room?.currentReservationId || (room?.occupantDetails as any)?.reservationId;
 
-      // Create checkout transaction with detailed billing breakdown
-      if (data.finalAmount > 0) {
+      if (reservationId) {
+        // Use reservation-based checkout with balance validation
+        // First record the payment to update paidAmount
         await apiRequest("POST", "/api/transactions", {
           hotelId: user?.hotelId,
           txnType: selectedCheckoutPaymentMethod === 'cash' ? 'cash_in' : selectedCheckoutPaymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
@@ -433,21 +432,92 @@ export default function FrontDeskDashboard() {
             discountAmount: data.discountAmount,
             voucherCode: validatedVoucher?.code || null,
             grandTotal: data.finalAmount,
-            paymentMethod: selectedCheckoutPaymentMethod
+            paymentMethod: selectedCheckoutPaymentMethod,
+            reservationId
           },
           createdBy: user?.id
         });
-      }
 
-      // Update voucher used count if voucher was used
-      if (data.voucherId) {
-        await apiRequest("POST", `/api/vouchers/redeem`, { voucherId: data.voucherId });
+        // Update reservation paidAmount
+        await apiRequest("PATCH", `/api/reservations/${reservationId}`, {
+          paidAmount: String(data.finalAmount)
+        });
+
+        // Now attempt checkout - this will validate balance
+        try {
+          await apiRequest("POST", `/api/reservations/${reservationId}/check-out`, {});
+        } catch (error: any) {
+          // If balance due error, show option to override for managers
+          if (error.message && error.message.includes('outstanding balance')) {
+            const isManager = user?.role?.name === 'manager' || user?.role?.name === 'owner';
+            if (isManager) {
+              const confirmOverride = confirm(`${error.message}\n\nAs a manager, do you want to override and check out anyway?`);
+              if (confirmOverride) {
+                await apiRequest("POST", `/api/reservations/${reservationId}/check-out`, {
+                  overrideBalance: true,
+                  overrideReason: 'Manager override from front desk'
+                });
+              } else {
+                throw new Error('Checkout cancelled - payment required');
+              }
+            } else {
+              throw error;
+            }
+          } else {
+            throw error;
+          }
+        }
+
+        // Update voucher used count if voucher was used
+        if (data.voucherId) {
+          await apiRequest("POST", `/api/vouchers/redeem`, { voucherId: data.voucherId });
+        }
+      } else {
+        // Legacy checkout flow for non-reservation guests
+        await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
+          isOccupied: false,
+          occupantDetails: null
+        });
+
+        if (data.finalAmount > 0) {
+          await apiRequest("POST", "/api/transactions", {
+            hotelId: user?.hotelId,
+            txnType: selectedCheckoutPaymentMethod === 'cash' ? 'cash_in' : selectedCheckoutPaymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
+            amount: String(data.finalAmount),
+            paymentMethod: selectedCheckoutPaymentMethod,
+            purpose: 'room_checkout_payment',
+            reference: `Checkout - Room ${data.roomNumber} - ${data.guestName}${data.voucherId ? ` (Voucher Applied)` : ''}`,
+            details: {
+              roomNumber: data.roomNumber,
+              guestName: data.guestName,
+              checkInDate: selectedRoom?.occupantDetails?.checkInDate,
+              checkOutDate: selectedRoom?.occupantDetails?.checkOutDate,
+              numberOfDays: data.billingDetails?.numberOfDays || 1,
+              subtotal: data.billingDetails?.subtotal || 0,
+              roomCharges: data.billingDetails?.totalRoomCharges || 0,
+              mealPlanCharges: data.billingDetails?.totalMealPlanCharges || 0,
+              foodCharges: data.billingDetails?.totalFoodCharges || 0,
+              taxBreakdown: data.billingDetails?.taxBreakdown || {},
+              totalTax: data.billingDetails?.totalTax || 0,
+              discountAmount: data.discountAmount,
+              voucherCode: validatedVoucher?.code || null,
+              grandTotal: data.finalAmount,
+              paymentMethod: selectedCheckoutPaymentMethod
+            },
+            createdBy: user?.id
+          });
+        }
+
+        if (data.voucherId) {
+          await apiRequest("POST", `/api/vouchers/redeem`, { voucherId: data.voucherId });
+        }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "vouchers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/reservations"] });
       toast({ title: "Guest checked out successfully" });
       
       // Print receipt automatically before clearing room data
@@ -704,28 +774,27 @@ export default function FrontDeskDashboard() {
     setIsExtendStayModalOpen(true);
   };
 
+  const checkInFromReservationMutation = useMutation({
+    mutationFn: async (reservationId: string) => {
+      await apiRequest("POST", `/api/reservations/${reservationId}/check-in`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/reservations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
+      toast({ title: "Guest checked in successfully from reservation" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Check-in failed", 
+        description: error.message || "Failed to check in guest from reservation",
+        variant: "destructive" 
+      });
+    }
+  });
+
   const handleCheckInFromReservation = (reservation: any) => {
-    const room = rooms.find(r => r.id === reservation.roomId);
-    setSelectedRoom(room);
-    setGuestType("walkin");
-    setOfficeName("");
-    
-    // Pre-fill form with reservation data
-    checkInForm.reset({
-      guestName: reservation.guestName || "",
-      guestEmail: reservation.guestEmail || "",
-      guestPhone: reservation.guestPhone || "",
-      idNumber: "",
-      nationality: "",
-      checkInDate: reservation.checkInDate ? new Date(reservation.checkInDate).toISOString().split('T')[0] : "",
-      checkOutDate: reservation.checkOutDate ? new Date(reservation.checkOutDate).toISOString().split('T')[0] : "",
-      roomId: reservation.roomId || "",
-      advancePayment: "",
-      mealPlanId: reservation.mealPlanId || "",
-      numberOfPersons: String(reservation.numberOfPersons || 1)
-    });
-    
-    setIsCheckInModalOpen(true);
+    // Directly check in from reservation using the proper API endpoint
+    checkInFromReservationMutation.mutate(reservation.id);
   };
 
   // Filter today's and upcoming reservations
