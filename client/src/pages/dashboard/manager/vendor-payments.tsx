@@ -7,9 +7,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, DollarSign, Calendar, User, FileText } from "lucide-react";
+import { Ban, Plus, DollarSign, Calendar, User, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface Vendor {
   id: string;
@@ -32,10 +40,17 @@ interface Transaction {
   createdBy: string;
   createdAt: string;
   deletedAt: string | null;
+  isVoided: boolean;
+  voidedBy: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
 }
 
 export default function VendorPayments() {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showVoidDialog, setShowVoidDialog] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [voidReason, setVoidReason] = useState("");
   const [vendorName, setVendorName] = useState("");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -107,21 +122,30 @@ export default function VendorPayments() {
     }
   });
 
-  // Delete payment mutation
-  const deletePayment = useMutation({
-    mutationFn: async (transactionId: string) => {
-      const response = await fetch(`/api/transactions/${transactionId}`, {
-        method: "DELETE",
-        credentials: "include"
+  // Void payment mutation
+  const voidPayment = useMutation({
+    mutationFn: async ({ transactionId, reason }: { transactionId: string; reason: string }) => {
+      const response = await fetch(`/api/transactions/${transactionId}/void`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason })
       });
-      if (!response.ok) throw new Error("Failed to delete payment");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to void payment");
+      }
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
-      toast.success("Payment deleted successfully");
+      toast.success("Payment voided successfully");
+      setShowVoidDialog(false);
+      setVoidReason("");
+      setSelectedTransaction(null);
     },
     onError: (error: Error) => {
-      toast.error(error.message || "Failed to delete payment");
+      toast.error(error.message || "Failed to void payment");
     }
   });
 
@@ -401,15 +425,23 @@ export default function VendorPayments() {
                   
                   <div className="text-right">
                     <p className="font-semibold text-lg">{formatCurrency(transaction.amount)}</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deletePayment.mutate(transaction.id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      disabled={deletePayment.isPending}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {transaction.isVoided ? (
+                      <Badge variant="destructive" className="mt-2">VOIDED</Badge>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedTransaction(transaction);
+                          setShowVoidDialog(true);
+                        }}
+                        className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                        disabled={voidPayment.isPending}
+                        data-testid={`button-void-${transaction.id}`}
+                      >
+                        <Ban className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -418,6 +450,71 @@ export default function VendorPayments() {
         </CardContent>
       </Card>
     </div>
+
+    {/* Void Transaction Dialog */}
+    <Dialog open={showVoidDialog} onOpenChange={setShowVoidDialog}>
+      <DialogContent data-testid="dialog-void-transaction">
+        <DialogHeader>
+          <DialogTitle>Void Payment Transaction</DialogTitle>
+          <DialogDescription>
+            Voiding a payment transaction is permanent and creates an audit trail. 
+            Please provide a detailed reason (minimum 15 characters).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="void-reason">Reason for Voiding</Label>
+            <Textarea
+              id="void-reason"
+              placeholder="e.g., Duplicate payment entry, incorrect amount, payment reversal requested..."
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              rows={4}
+              data-testid="input-void-reason"
+            />
+            <p className="text-sm text-gray-500">
+              {voidReason.length}/15 characters minimum
+            </p>
+          </div>
+          {selectedTransaction && (
+            <div className="p-3 bg-gray-50 rounded-lg space-y-1">
+              <p className="text-sm font-medium">Transaction Details:</p>
+              <p className="text-sm text-gray-600">Amount: {formatCurrency(selectedTransaction.amount)}</p>
+              <p className="text-sm text-gray-600">Vendor: {getVendorName(selectedTransaction.vendorId!)}</p>
+              <p className="text-sm text-gray-600">Purpose: {selectedTransaction.purpose}</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowVoidDialog(false);
+              setVoidReason("");
+              setSelectedTransaction(null);
+            }}
+            data-testid="button-cancel-void"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => {
+              if (selectedTransaction && voidReason.trim().length >= 15) {
+                voidPayment.mutate({
+                  transactionId: selectedTransaction.id,
+                  reason: voidReason.trim()
+                });
+              }
+            }}
+            disabled={voidReason.trim().length < 15 || voidPayment.isPending}
+            data-testid="button-confirm-void"
+          >
+            {voidPayment.isPending ? "Voiding..." : "Void Transaction"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </DashboardLayout>
   );
 }
