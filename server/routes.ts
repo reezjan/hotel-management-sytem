@@ -178,6 +178,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      // CRITICAL VALIDATION: Validate vendor data
+      const { name } = req.body;
+      if (!name || name.trim().length === 0) {
+        return res.status(400).json({ message: "Vendor name is required" });
+      }
+      
       const vendorData = insertVendorSchema.parse({
         ...req.body,
         hotelId: user.hotelId
@@ -505,12 +512,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       const { name } = req.body;
-      if (!name) {
+      if (!name || name.trim().length === 0) {
         return res.status(400).json({ message: "Category name is required" });
       }
+      
+      // CRITICAL SECURITY: Prevent XSS by rejecting HTML tags
+      const htmlTagPattern = /<[^>]*>/g;
+      if (htmlTagPattern.test(name)) {
+        return res.status(400).json({ message: "Category name cannot contain HTML tags" });
+      }
+      
       const category = await storage.createMenuCategory({
         hotelId: user.hotelId,
-        name
+        name: name.trim()
       });
       res.status(201).json(category);
     } catch (error) {
@@ -529,8 +543,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const { id } = req.params;
       const { name } = req.body;
-      if (!name) {
+      if (!name || name.trim().length === 0) {
         return res.status(400).json({ message: "Category name is required" });
+      }
+      
+      // CRITICAL SECURITY: Prevent XSS by rejecting HTML tags
+      const htmlTagPattern = /<[^>]*>/g;
+      if (htmlTagPattern.test(name)) {
+        return res.status(400).json({ message: "Category name cannot contain HTML tags" });
       }
       
       // Verify category belongs to user's hotel
@@ -540,7 +560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Category not found" });
       }
       
-      const category = await storage.updateMenuCategory(id, { name });
+      const category = await storage.updateMenuCategory(id, { name: name.trim() });
       if (!category) {
         return res.status(404).json({ message: "Category not found" });
       }
@@ -653,9 +673,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      // CRITICAL VALIDATION: Validate table data
+      const { name, capacity, status } = req.body;
+      
+      // Validate name is required and non-empty
+      if (!name || name.trim().length === 0) {
+        return res.status(400).json({ message: "Table name is required" });
+      }
+      
+      // Validate capacity is a positive integer
+      const capacityNum = Number(capacity);
+      if (!Number.isInteger(capacityNum) || capacityNum <= 0) {
+        return res.status(400).json({ message: "Capacity must be a positive integer" });
+      }
+      
+      // Validate status is one of the allowed values
+      const validStatuses = ['available', 'occupied', 'reserved'];
+      if (status && !validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          message: `Status must be one of: ${validStatuses.join(', ')}` 
+        });
+      }
+      
       const tableData = {
         ...req.body,
-        hotelId: user.hotelId
+        hotelId: user.hotelId,
+        status: status || 'available' // Default to available if not provided
       };
       const table = await storage.createRestaurantTable(tableData);
       res.status(201).json(table);
@@ -674,13 +718,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       const { id } = req.params;
-      const tableData = req.body;
+      const { name, capacity, status } = req.body;
+      
       // Verify the table belongs to current hotel
       const existingTable = await storage.getRestaurantTable(id);
       if (!existingTable || existingTable.hotelId !== user.hotelId) {
         return res.status(404).json({ message: "Table not found" });
       }
-      const table = await storage.updateRestaurantTable(id, tableData);
+      
+      // CRITICAL VALIDATION: Validate update data
+      // Validate name if provided
+      if (name !== undefined && (!name || name.trim().length === 0)) {
+        return res.status(400).json({ message: "Table name cannot be empty" });
+      }
+      
+      // Validate capacity if provided
+      if (capacity !== undefined) {
+        const capacityNum = Number(capacity);
+        if (!Number.isInteger(capacityNum) || capacityNum <= 0) {
+          return res.status(400).json({ message: "Capacity must be a positive integer" });
+        }
+      }
+      
+      // Validate status if provided
+      if (status !== undefined) {
+        const validStatuses = ['available', 'occupied', 'reserved'];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ 
+            message: `Status must be one of: ${validStatuses.join(', ')}` 
+          });
+        }
+      }
+      
+      const table = await storage.updateRestaurantTable(id, req.body);
       res.json(table);
     } catch (error) {
       res.status(400).json({ message: "Failed to update table" });
@@ -1201,6 +1271,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      // CRITICAL VALIDATION: Validate inventory item data
+      const { name, sku, unit, baseStockQty, costPerUnit } = req.body;
+      
+      // Validate required fields
+      if (!name || name.trim().length === 0) {
+        return res.status(400).json({ message: "Item name is required" });
+      }
+      
+      if (!sku || sku.trim().length === 0) {
+        return res.status(400).json({ message: "SKU is required" });
+      }
+      
+      if (!unit || unit.trim().length === 0) {
+        return res.status(400).json({ message: "Unit is required" });
+      }
+      
+      // Validate stock quantity is non-negative
+      if (baseStockQty !== undefined && baseStockQty !== null) {
+        const stockNum = Number(baseStockQty);
+        if (!Number.isFinite(stockNum) || stockNum < 0) {
+          return res.status(400).json({ message: "Stock quantity must be a non-negative number" });
+        }
+      }
+      
+      // Validate cost per unit is non-negative
+      if (costPerUnit !== undefined && costPerUnit !== null) {
+        const costNum = Number(costPerUnit);
+        if (!Number.isFinite(costNum) || costNum < 0) {
+          return res.status(400).json({ message: "Cost per unit must be a non-negative number" });
+        }
+      }
+      
       const itemData = {
         ...req.body,
         hotelId: user.hotelId
@@ -3323,34 +3426,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
       }
+      
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
-
-      // Validate and create wastage with server-side fields
-      const wastageData = insertWastageSchema.parse({
-        ...req.body,
-        hotelId: user.hotelId,
-        recordedBy: user.id
-      });
-
-      // Verify the inventory item exists and belongs to the user's hotel
-      if (!wastageData.itemId) {
-        return res.status(400).json({ message: "Item ID is required" });
+      
+      const wastageData = req.body;
+      
+      // Validate required fields (check specifically for undefined/null, not falsy values like 0)
+      if (!wastageData.itemId || wastageData.qty === undefined || wastageData.qty === null || !wastageData.reason) {
+        return res.status(400).json({ 
+          message: "Item, quantity, and reason are required" 
+        });
       }
+      
+      // Validate itemId is a valid UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(wastageData.itemId)) {
+        return res.status(400).json({ 
+          message: "Invalid inventory item selected" 
+        });
+      }
+      
+      // CRITICAL SECURITY: Validate qty is a positive number
+      const qty = Number(wastageData.qty);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        return res.status(400).json({ 
+          message: "Quantity must be a positive number" 
+        });
+      }
+      
+      // Require detailed reason (minimum 15 characters)
+      if (!wastageData.reason || wastageData.reason.trim().length < 15) {
+        return res.status(400).json({ 
+          message: "Wastage reason must be detailed (minimum 15 characters)" 
+        });
+      }
+      
+      // Get inventory item to check value
       const inventoryItem = await storage.getInventoryItem(wastageData.itemId);
       if (!inventoryItem || inventoryItem.hotelId !== user.hotelId) {
         return res.status(404).json({ message: "Inventory item not found" });
       }
-
-      const wastage = await storage.createWastage(wastageData);
+      
+      const wastageQty = Number(wastageData.qty);
+      const itemCost = Number(inventoryItem.costPerUnit || 0);
+      const wastageValue = wastageQty * itemCost;
+      
+      // CRITICAL: High-value wastage requires immediate manager approval
+      const highValueThreshold = 1000; // Adjust based on your needs
+      
+      const isManager = ['manager', 'owner'].includes(user.role?.name || '');
+      
+      if (wastageValue > highValueThreshold && !isManager) {
+        // Create wastage with 'pending_approval' status - DO NOT deduct stock yet
+        const finalWastageData = {
+          ...wastageData,
+          hotelId: user.hotelId,
+          recordedBy: user.id,
+          status: 'pending_approval',
+          estimatedValue: wastageValue
+        };
+        
+        const wastage = await storage.createWastage(finalWastageData);
+        
+        // Notify manager
+        const managerRole = await storage.getRoleByName('manager');
+        if (managerRole) {
+          const managers = await storage.getUsersByRole(managerRole.id);
+          const hotelManagers = managers.filter(m => m.hotelId === user.hotelId);
+          
+          for (const manager of hotelManagers) {
+            await storage.createNotification({
+              userId: manager.id,
+              title: 'High-Value Wastage Approval Required',
+              message: `${user.username} reported wastage of ${wastageData.qty} ${wastageData.unit || inventoryItem.unit} ${inventoryItem.name} (Value: Rs. ${wastageValue.toFixed(2)}). Reason: ${wastageData.reason}`,
+              type: 'wastage_approval',
+              relatedId: wastage.id,
+              hotelId: user.hotelId
+            });
+          }
+        }
+        
+        return res.status(201).json({ 
+          ...wastage,
+          message: "High-value wastage requires manager approval" 
+        });
+      }
+      
+      // Low-value wastage or manager reporting - auto-approve
+      const finalWastageData = {
+        ...wastageData,
+        hotelId: user.hotelId,
+        recordedBy: user.id,
+        status: 'approved',
+        approvedBy: user.id,
+        approvedAt: new Date(),
+        estimatedValue: wastageValue
+      };
+      
+      const wastage = await storage.createWastage(finalWastageData);
       res.status(201).json(wastage);
     } catch (error: any) {
-      if (error.name === 'ZodError') {
-        return res.status(400).json({ message: error.errors[0]?.message || "Invalid wastage data" });
-      }
-      res.status(400).json({ message: "Failed to record wastage" });
+      console.error("Wastage creation error:", error);
+      res.status(400).json({ message: error.message || "Failed to report wastage" });
     }
   });
 
@@ -3367,6 +3547,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(wastages);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch wastages" });
+    }
+  });
+
+  app.post("/api/wastages/:id/approve", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      const { id } = req.params;
+      const { approved, rejectionReason } = req.body;
+      
+      // Only managers can approve wastage
+      const canApprove = ['manager', 'owner'].includes(currentUser.role?.name || '');
+      if (!canApprove) {
+        return res.status(403).json({ 
+          message: "Only managers can approve wastage" 
+        });
+      }
+      
+      const wastage = await storage.getWastage(id);
+      if (!wastage || wastage.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Wastage report not found" });
+      }
+      
+      if (wastage.status !== 'pending_approval') {
+        return res.status(400).json({ message: "Wastage already processed" });
+      }
+      
+      if (approved) {
+        const approvedWastage = await storage.approveWastage(id, currentUser.id);
+        
+        // Notify the reporter
+        await storage.createNotification({
+          userId: wastage.recordedBy,
+          title: 'Wastage Approved',
+          message: `Your wastage report has been approved by ${currentUser.username}.`,
+          type: 'wastage_approved',
+          relatedId: id,
+          hotelId: currentUser.hotelId
+        });
+        
+        res.json(approvedWastage);
+      } else {
+        if (!rejectionReason || rejectionReason.trim().length < 10) {
+          return res.status(400).json({ 
+            message: "Rejection reason required (minimum 10 characters)" 
+          });
+        }
+        
+        const rejectedWastage = await storage.rejectWastage(id, currentUser.id, rejectionReason);
+        
+        // Notify the reporter
+        await storage.createNotification({
+          userId: wastage.recordedBy,
+          title: 'Wastage Rejected',
+          message: `Your wastage report has been rejected by ${currentUser.username}. Reason: ${rejectionReason}`,
+          type: 'wastage_rejected',
+          relatedId: id,
+          hotelId: currentUser.hotelId
+        });
+        
+        res.json(rejectedWastage);
+      }
+    } catch (error: any) {
+      console.error("Wastage approval error:", error);
+      res.status(500).json({ message: error.message || "Failed to process wastage approval" });
     }
   });
 

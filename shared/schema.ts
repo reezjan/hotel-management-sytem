@@ -218,6 +218,11 @@ export const wastages = pgTable("wastages", {
   unit: text("unit"),
   reason: text("reason").notNull(),
   recordedBy: uuid("recorded_by").references(() => users.id),
+  status: text("status").default('pending_approval'),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  estimatedValue: numeric("estimated_value", { precision: 12, scale: 2 }),
+  rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 

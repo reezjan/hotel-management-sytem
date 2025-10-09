@@ -232,6 +232,9 @@ export interface IStorage {
   // Wastage operations
   createWastage(wastageData: any): Promise<any>;
   getWastagesByHotel(hotelId: string): Promise<any[]>;
+  getWastage(id: string): Promise<any | undefined>;
+  approveWastage(id: string, approvedBy: string): Promise<any>;
+  rejectWastage(id: string, rejectedBy: string, rejectionReason: string): Promise<any>;
   
   // Inventory operations
   getInventoryItemsByHotel(hotelId: string): Promise<InventoryItem[]>;
@@ -1506,6 +1509,11 @@ export class DatabaseStorage implements IStorage {
     }
 
     const wastageQty = Number(wastageData.qty);
+    
+    // CRITICAL SECURITY: Guard against invalid quantities
+    if (!Number.isFinite(wastageQty) || wastageQty <= 0) {
+      throw new Error('Quantity must be a positive number');
+    }
     const wastageUnit = wastageData.unit || inventoryItem.baseUnit;
     const baseUnit = (inventoryItem.baseUnit || inventoryItem.unit) as any;
     const category = (inventoryItem.measurementCategory || 'weight') as any;
@@ -1534,46 +1542,48 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Insufficient stock. Current stock: ${currentStock} ${baseUnit}, requested wastage: ${wastageQty} ${wastageUnit} (${wastageQtyInBaseUnits.toFixed(3)} ${baseUnit})`);
     }
     
-    const newQuantity = currentStock - wastageQtyInBaseUnits;
+    // Only deduct stock if status is 'approved'
+    if (wastageData.status === 'approved') {
+      const newQuantity = currentStock - wastageQtyInBaseUnits;
 
-    await db
-      .update(inventoryItems)
-      .set({ 
-        baseStockQty: String(newQuantity),
-        stockQty: String(newQuantity),
-        updatedAt: new Date()
-      })
-      .where(eq(inventoryItems.id, wastageData.itemId));
+      await db
+        .update(inventoryItems)
+        .set({ 
+          baseStockQty: String(newQuantity),
+          stockQty: String(newQuantity),
+          updatedAt: new Date()
+        })
+        .where(eq(inventoryItems.id, wastageData.itemId));
+
+      await db
+        .insert(inventoryConsumptions)
+        .values({
+          hotelId: wastageData.hotelId,
+          itemId: wastageData.itemId,
+          qty: String(wastageQtyInBaseUnits),
+          unit: baseUnit,
+          reason: `Wastage: ${wastageData.reason}`,
+          referenceEntity: 'wastage',
+          createdBy: wastageData.recordedBy
+        });
+
+      await db
+        .insert(inventoryTransactions)
+        .values({
+          hotelId: wastageData.hotelId,
+          itemId: wastageData.itemId,
+          transactionType: 'wastage',
+          qtyBase: String(wastageQtyInBaseUnits),
+          notes: wastageData.reason,
+          recordedBy: wastageData.recordedBy
+        });
+    }
 
     const [wastage] = await db
       .insert(wastages)
       .values({
         ...wastageData,
         unit: wastageUnit
-      })
-      .returning();
-
-    await db
-      .insert(inventoryConsumptions)
-      .values({
-        hotelId: wastageData.hotelId,
-        itemId: wastageData.itemId,
-        qty: String(wastageQtyInBaseUnits),
-        unit: baseUnit,
-        reason: `Wastage: ${wastageData.reason}`,
-        referenceEntity: 'wastage',
-        createdBy: wastageData.recordedBy
-      });
-
-    const [transaction] = await db
-      .insert(inventoryTransactions)
-      .values({
-        hotelId: wastageData.hotelId,
-        itemId: wastageData.itemId,
-        transactionType: 'wastage',
-        qtyBase: String(wastageQtyInBaseUnits),
-        notes: wastageData.reason,
-        recordedBy: wastageData.recordedBy
       })
       .returning();
 
@@ -1586,6 +1596,131 @@ export class DatabaseStorage implements IStorage {
       .from(wastages)
       .where(eq(wastages.hotelId, hotelId))
       .orderBy(desc(wastages.createdAt));
+  }
+
+  async getWastage(id: string): Promise<any | undefined> {
+    const [wastage] = await db
+      .select()
+      .from(wastages)
+      .where(eq(wastages.id, id));
+    return wastage;
+  }
+
+  async approveWastage(id: string, approvedBy: string): Promise<any> {
+    const wastage = await this.getWastage(id);
+    if (!wastage) {
+      throw new Error('Wastage not found');
+    }
+
+    const inventoryItem = await this.getInventoryItem(wastage.itemId);
+    if (!inventoryItem) {
+      throw new Error('Inventory item not found');
+    }
+
+    const wastageQty = Number(wastage.qty);
+    
+    // CRITICAL SECURITY: Guard against invalid quantities
+    if (!Number.isFinite(wastageQty) || wastageQty <= 0) {
+      throw new Error('Quantity must be a positive number');
+    }
+    const wastageUnit = wastage.unit || inventoryItem.baseUnit;
+    const baseUnit = (inventoryItem.baseUnit || inventoryItem.unit) as any;
+    const category = (inventoryItem.measurementCategory || 'weight') as any;
+    const conversionProfile = inventoryItem.conversionProfile as any;
+
+    let wastageQtyInBaseUnits = wastageQty;
+    if (wastageUnit !== baseUnit) {
+      const { convertToBase } = await import('@shared/measurements');
+      try {
+        wastageQtyInBaseUnits = convertToBase(
+          wastageQty,
+          wastageUnit as any,
+          baseUnit,
+          category,
+          conversionProfile
+        );
+      } catch (error) {
+        console.error(`Unit conversion error:`, error);
+        throw new Error(`Cannot convert from ${wastageUnit} to ${baseUnit}`);
+      }
+    }
+
+    const currentStock = Number(inventoryItem.baseStockQty || inventoryItem.stockQty || 0);
+    
+    if (wastageQtyInBaseUnits > currentStock) {
+      throw new Error(`Insufficient stock. Current stock: ${currentStock} ${baseUnit}, requested wastage: ${wastageQty} ${wastageUnit}`);
+    }
+    
+    const newQuantity = currentStock - wastageQtyInBaseUnits;
+
+    // Deduct from inventory
+    await db
+      .update(inventoryItems)
+      .set({ 
+        baseStockQty: String(newQuantity),
+        stockQty: String(newQuantity),
+        updatedAt: new Date()
+      })
+      .where(eq(inventoryItems.id, wastage.itemId));
+
+    // Record consumption
+    await db
+      .insert(inventoryConsumptions)
+      .values({
+        hotelId: wastage.hotelId,
+        itemId: wastage.itemId,
+        qty: String(wastageQtyInBaseUnits),
+        unit: baseUnit,
+        reason: `Wastage: ${wastage.reason}`,
+        referenceEntity: 'wastage',
+        createdBy: wastage.recordedBy
+      });
+
+    // Record transaction
+    await db
+      .insert(inventoryTransactions)
+      .values({
+        hotelId: wastage.hotelId,
+        itemId: wastage.itemId,
+        transactionType: 'wastage',
+        qtyBase: String(wastageQtyInBaseUnits),
+        notes: wastage.reason,
+        recordedBy: wastage.recordedBy
+      });
+
+    // Update wastage status
+    const [approvedWastage] = await db
+      .update(wastages)
+      .set({
+        status: 'approved',
+        approvedBy,
+        approvedAt: new Date()
+      })
+      .where(eq(wastages.id, id))
+      .returning();
+
+    return approvedWastage;
+  }
+
+  async rejectWastage(id: string, rejectedBy: string, rejectionReason: string): Promise<any> {
+    const wastage = await this.getWastage(id);
+    if (!wastage) {
+      throw new Error('Wastage not found');
+    }
+
+    // No need to return inventory - it was never deducted for pending approvals
+    const [rejectedWastage] = await db
+      .update(wastages)
+      .set({
+        status: 'rejected',
+        approvedBy: rejectedBy,
+        approvedAt: new Date(),
+        rejectionReason
+      })
+      .where(eq(wastages.id, id))
+      .returning();
+
+    return rejectedWastage;
   }
 
   // Inventory operations
