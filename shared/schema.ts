@@ -918,7 +918,14 @@ export const insertMenuItemSchema = createInsertSchema(menuItems).omit({
   id: true,
   createdAt: true
 }).extend({
-  price: z.union([z.string(), z.number()]).transform((val) => String(val))
+  price: z.union([z.string(), z.number()])
+    .transform((val) => String(val))
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 99999999;
+    }, {
+      message: "Price must be a non-negative number (max 99,999,999)"
+    })
 });
 
 export const insertTaskSchema = createInsertSchema(tasks).omit({
@@ -1041,7 +1048,14 @@ export const insertMealPlanSchema = createInsertSchema(mealPlans).omit({
   createdAt: true,
   updatedAt: true
 }).extend({
-  pricePerPerson: z.union([z.string(), z.number()]).transform((val) => String(val))
+  pricePerPerson: z.union([z.string(), z.number()])
+    .transform((val) => String(val))
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 99999999;
+    }, {
+      message: "Price per person must be a non-negative number (max 99,999,999)"
+    })
 });
 
 export const insertMealVoucherSchema = createInsertSchema(mealVouchers).omit({
@@ -1092,11 +1106,43 @@ export const insertHallBookingSchema = createInsertSchema(hallBookings).omit({
 }).extend({
   bookingStartTime: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val)),
   bookingEndTime: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val)),
-  numberOfPeople: z.union([z.string(), z.number()]).transform((val) => Number(val)),
-  hallBasePrice: z.union([z.string(), z.number()]).transform((val) => String(val)),
-  totalAmount: z.union([z.string(), z.number()]).transform((val) => String(val)),
-  advancePaid: z.union([z.string(), z.number()]).transform((val) => String(val)),
-  balanceDue: z.union([z.string(), z.number()]).transform((val) => String(val))
+  numberOfPeople: z.union([z.string(), z.number()])
+    .transform((val) => Number(val))
+    .refine((val) => val >= 1 && val <= 100000, {
+      message: "Number of people must be between 1 and 100,000"
+    }),
+  hallBasePrice: z.union([z.string(), z.number()])
+    .transform((val) => String(val))
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 99999999;
+    }, {
+      message: "Hall base price must be a non-negative number (max 99,999,999)"
+    }),
+  totalAmount: z.union([z.string(), z.number()])
+    .transform((val) => String(val))
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 99999999;
+    }, {
+      message: "Total amount must be a non-negative number (max 99,999,999)"
+    }),
+  advancePaid: z.union([z.string(), z.number()])
+    .transform((val) => String(val))
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= 0 && num <= 99999999;
+    }, {
+      message: "Advance paid must be a non-negative number (max 99,999,999)"
+    }),
+  balanceDue: z.union([z.string(), z.number()])
+    .transform((val) => String(val))
+    .refine((val) => {
+      const num = parseFloat(val);
+      return !isNaN(num) && num >= -99999999 && num <= 99999999;
+    }, {
+      message: "Balance due must be a valid number (between -99,999,999 and 99,999,999)"
+    })
 });
 
 export type InsertHallBooking = z.infer<typeof insertHallBookingSchema>;

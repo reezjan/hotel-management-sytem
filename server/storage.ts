@@ -2559,21 +2559,50 @@ export class DatabaseStorage implements IStorage {
   }
 
   async redeemMealVoucher(id: string, redeemedBy: string, notes?: string): Promise<MealVoucher | null> {
-    const [voucher] = await db
-      .update(mealVouchers)
-      .set({
-        status: 'used',
-        usedAt: new Date(),
-        redeemedBy,
-        notes
-      })
-      .where(and(
-        eq(mealVouchers.id, id),
-        eq(mealVouchers.status, 'unused')
-      ))
-      .returning();
-    
-    return voucher || null;
+    // CRITICAL: Use transaction for atomic operation
+    try {
+      return await db.transaction(async (tx) => {
+        // Lock the voucher row
+        const [voucher] = await tx
+          .select()
+          .from(mealVouchers)
+          .where(eq(mealVouchers.id, id))
+          .for('update'); // Row lock
+        
+        if (!voucher) {
+          throw new Error('Meal voucher not found');
+        }
+        
+        // Check if already used
+        if (voucher.status !== 'unused') {
+          throw new Error('Meal voucher has already been used');
+        }
+        
+        // Redeem the voucher
+        const [redeemed] = await tx
+          .update(mealVouchers)
+          .set({
+            status: 'used',
+            usedAt: new Date(),
+            redeemedBy,
+            notes
+          })
+          .where(and(
+            eq(mealVouchers.id, id),
+            eq(mealVouchers.status, 'unused') // Double-check in update
+          ))
+          .returning();
+        
+        if (!redeemed) {
+          throw new Error('Failed to redeem voucher - may have been used by another request');
+        }
+        
+        return redeemed;
+      });
+    } catch (error) {
+      console.error('Meal voucher redemption error:', error);
+      return null;
+    }
   }
 
   // Guest operations
