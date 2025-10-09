@@ -1482,6 +1482,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Alias route for consistency with other endpoints
+  app.get("/api/hotels/current/halls", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const halls = await storage.getHallsByHotel(user.hotelId);
+      res.json(halls);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch halls" });
+    }
+  });
+
   app.get("/api/halls/:id", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {

@@ -126,6 +126,7 @@ export interface IStorage {
   getUsersByRole(roleId: number): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User>;
+  updateUserSecure(id: string, user: Partial<InsertUser>, options?: { allowReactivation?: boolean }): Promise<User>;
   deleteUser(id: string): Promise<void>;
   updateUserOnlineStatus(id: string, isOnline: boolean): Promise<void>;
   
@@ -484,12 +485,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUser(id: string, userData: Partial<InsertUser>): Promise<User> {
+    // CRITICAL SECURITY: Check current user state BEFORE any updates
+    const currentUser = await this.getUser(id);
+    if (!currentUser) {
+      throw new Error('User not found');
+    }
+    
+    // Block setting isOnline=true if user is CURRENTLY deactivated
+    // This check uses the CURRENT state, not the new state being applied
+    if ('isOnline' in userData && userData.isOnline === true && !currentUser.isActive) {
+      throw new Error('Cannot set online status for deactivated user');
+    }
+    
     const [user] = await db
       .update(users)
       .set({ ...userData, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     return user;
+  }
+
+  async updateUserSecure(id: string, userData: Partial<InsertUser>, options?: { allowReactivation?: boolean }): Promise<User> {
+    // This method is for use by API routes that have already checked permissions
+    return this.updateUser(id, userData);
   }
 
   async deleteUser(id: string): Promise<void> {
@@ -500,6 +518,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUserOnlineStatus(id: string, isOnline: boolean): Promise<void> {
+    // CRITICAL SECURITY: Prevent deactivated users from going online
+    if (isOnline) {
+      const user = await this.getUser(id);
+      if (!user || !user.isActive) {
+        throw new Error('Cannot set online status for deactivated user');
+      }
+    }
+    
     await db
       .update(users)
       .set({ 
@@ -2785,11 +2811,67 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createHallBooking(bookingData: InsertHallBooking): Promise<SelectHallBooking> {
-    const [booking] = await db
-      .insert(hallBookings)
-      .values(bookingData)
-      .returning();
-    return booking;
+    // CRITICAL: Use database transaction with row locking to prevent double booking
+    return await db.transaction(async (tx) => {
+      const { hallId, bookingStartTime, bookingEndTime } = bookingData;
+      
+      // Lock the hall for update
+      const [hall] = await tx
+        .select()
+        .from(halls)
+        .where(eq(halls.id, hallId))
+        .for('update'); // PostgreSQL row lock
+      
+      if (!hall) {
+        throw new Error('Hall not found');
+      }
+      
+      // Check for existing bookings with time overlap
+      const overlapping = await tx
+        .select()
+        .from(hallBookings)
+        .where(
+          and(
+            eq(hallBookings.hallId, hallId),
+            or(
+              eq(hallBookings.status, 'confirmed'),
+              eq(hallBookings.status, 'pending'),
+              eq(hallBookings.status, 'quotation')
+            ),
+            // Time overlap check: new booking overlaps with existing booking
+            or(
+              // New booking starts during existing booking
+              and(
+                lte(hallBookings.bookingStartTime, bookingStartTime),
+                gt(hallBookings.bookingEndTime, bookingStartTime)
+              ),
+              // New booking ends during existing booking
+              and(
+                lt(hallBookings.bookingStartTime, bookingEndTime),
+                gte(hallBookings.bookingEndTime, bookingEndTime)
+              ),
+              // New booking completely contains existing booking
+              and(
+                gte(hallBookings.bookingStartTime, bookingStartTime),
+                lte(hallBookings.bookingEndTime, bookingEndTime)
+              )
+            )
+          )
+        )
+        .limit(1);
+      
+      if (overlapping.length > 0) {
+        throw new Error('Hall is already booked for the selected time period');
+      }
+      
+      // Create booking
+      const [booking] = await tx
+        .insert(hallBookings)
+        .values(bookingData)
+        .returning();
+      
+      return booking;
+    });
   }
 
   async updateHallBooking(id: string, bookingData: Partial<InsertHallBooking>): Promise<SelectHallBooking> {
