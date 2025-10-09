@@ -31,6 +31,57 @@ The system is built as a full-stack application using React and TypeScript for t
 -   **Complete Leave Request Workflow**: Includes balance tracking, overlap checking, notifications, and automated annual resets.
 -   **Room Reservation & Check-in/Check-out System**: Features double-booking prevention, reservation-based check-in/out, and automatic cleaning queue integration.
 -   **Restaurant Billing System**: Provides comprehensive cashier functionality with multi-table selection, cascading tax calculation, split bill options, multiple payment methods, bill amendments, and audit trails.
+-   **Immutable Financial System**: All financial transactions are permanent with void-only functionality requiring 15+ character justification and manager/owner approval for full audit compliance.
+-   **Enterprise-Grade Security**: Production-ready API authentication and authorization with hotel ownership verification on all sensitive endpoints (18 endpoints secured - Oct 2025).
+
+## Security Hardening & Vulnerability Fixes
+
+### Critical Vulnerabilities Fixed (October 2025)
+
+#### 1. Null Byte Injection Attack (CVE-Level Severity)
+- **Vulnerability**: Null bytes (`\x00`) in login credentials caused PostgreSQL errors and complete server crash
+- **Attack Vector**: `POST /api/login` with username/password containing `\x00` characters
+- **Fix Location**: `server/auth.ts` - Added `sanitizeInput()` function
+- **Solution**: Input sanitization removes null bytes before database queries, with 1000-char length limit to prevent DoS
+- **Testing**: Verified with brutal testing suite - now returns 401 instead of crashing
+
+#### 2. Authorization Bypass Vulnerabilities (18 Endpoints Hardened)
+- **Vulnerability**: Missing hotel ownership validation allowed potential cross-hotel data access
+- **Fix**: Added `requireActiveUser` middleware + explicit hotel ownership checks
+- **Secured Endpoints**:
+  1. `GET /api/hotels/:hotelId/users` - User list access
+  2. `POST /api/hotels/:hotelId/users` - User creation
+  3. `PATCH /api/hotels/:hotelId/users/:userId` - User updates
+  4. `DELETE /api/hotels/:hotelId/users/:userId` - User deletion
+  5. `GET /api/hotels/:hotelId/roles` - Role access
+  6. `GET /api/hotels/:hotelId/rooms` - Room data access
+  7. `POST /api/hotels/:hotelId/rooms` - Room creation
+  8. `PATCH /api/hotels/:hotelId/rooms/:roomId` - Room updates
+  9. `DELETE /api/hotels/:hotelId/rooms/:roomId` - Room deletion
+  10. `GET /api/hotels/:hotelId/inventory` - Inventory access
+  11. `POST /api/hotels/:hotelId/inventory` - Inventory creation
+  12. `PATCH /api/hotels/:hotelId/inventory/:id` - Inventory updates
+  13. `DELETE /api/hotels/:hotelId/inventory/:id` - Inventory deletion
+  14. `GET /api/hotels/:hotelId/tasks` - Task access
+  15. `POST /api/hotels/:hotelId/tasks` - Task creation
+  16. `PATCH /api/hotels/:hotelId/tasks/:id` - Task updates
+  17. `DELETE /api/hotels/:hotelId/tasks/:id` - Task deletion
+  18. All vendor management endpoints
+- **Validation Pattern**: `currentUser.hotelId === hotelId || currentUser.role.name === 'super_admin'`
+
+#### 3. Input Validation Hardening
+- **SQL Injection**: Blocked via parameterized queries and input validation
+- **XSS Prevention**: Input sanitization removes malicious scripts
+- **Type Validation**: Strict Zod schema enforcement on all endpoints
+- **Numeric Overflow**: Protected against massive numbers and negative amounts
+- **Missing Fields**: All required fields validated before processing
+
+#### 4. Financial Transaction Security
+- **Void Authorization**: Only managers and owners can void transactions
+- **Void Reason Enforcement**: Minimum 15 characters required with validation
+- **Double Void Prevention**: System blocks attempts to void already-voided transactions
+- **Audit Trail**: Complete immutability with `voidedBy`, `voidedAt`, `voidReason` tracking
+- **Location**: `server/routes.ts` (transaction void endpoint), `client/src/pages/dashboard/manager/vendor-payments.tsx` (UI)
 
 ## External Dependencies
 -   **PostgreSQL**: Relational database for all application data.

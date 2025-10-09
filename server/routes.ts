@@ -1834,9 +1834,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single hotel by ID (after all /current routes to avoid conflicts)
-  app.get("/api/hotels/:id", async (req, res) => {
+  app.get("/api/hotels/:id", requireActiveUser, async (req, res) => {
     try {
       const { id } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== id) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const hotel = await storage.getHotel(id);
       if (!hotel) {
         return res.status(404).json({ message: "Hotel not found" });
@@ -1848,9 +1855,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  app.get("/api/hotels/:hotelId/users", async (req, res) => {
+  app.get("/api/hotels/:hotelId/users", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's users
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const users = await storage.getUsersByHotel(hotelId);
       const sanitizedUsers = users.map(user => {
         const { passwordHash: _, ...sanitizedUser } = user;
@@ -2174,9 +2188,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Room routes
-  app.get("/api/hotels/:hotelId/rooms", async (req, res) => {
+  app.get("/api/hotels/:hotelId/rooms", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's rooms
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const rooms = await storage.getRoomsByHotel(hotelId);
       res.json(rooms);
     } catch (error) {
@@ -2442,9 +2463,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Menu routes
-  app.get("/api/hotels/:hotelId/menu-items", async (req, res) => {
+  app.get("/api/hotels/:hotelId/menu-items", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's menu items
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const menuItems = await storage.getMenuItemsByHotel(hotelId);
       res.json(menuItems);
     } catch (error) {
@@ -2452,9 +2480,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/hotels/:hotelId/menu-categories", async (req, res) => {
+  app.get("/api/hotels/:hotelId/menu-categories", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's menu categories
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const categories = await storage.getMenuCategoriesByHotel(hotelId);
       res.json(categories);
     } catch (error) {
@@ -2562,9 +2597,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Transaction routes
-  app.get("/api/hotels/:hotelId/transactions", async (req, res) => {
+  app.get("/api/hotels/:hotelId/transactions", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's transactions
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const transactions = await storage.getTransactionsByHotel(hotelId);
       res.json(transactions);
     } catch (error) {
@@ -2606,45 +2648,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.delete("/api/transactions/:id", requireActiveUser, async (req, res) => {
+    return res.status(403).json({ 
+      message: "Transactions cannot be deleted. Use void functionality instead." 
+    });
+  });
+
+  app.post("/api/transactions/:id/void", requireActiveUser, async (req, res) => {
     try {
       const currentUser = req.user as any;
       const { id } = req.params;
+      const { reason } = req.body;
       
-      // Get transaction to verify hotel
-      const transaction = await db.query.transactions.findFirst({
-        where: (transactions, { eq }) => eq(transactions.id, id)
-      });
-      
-      if (!transaction) {
-        return res.status(404).json({ message: "Transaction not found" });
-      }
-
-      // CRITICAL: Verify transaction belongs to user's hotel
-      if (transaction.hotelId !== currentUser.hotelId) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-
-      // CRITICAL: Only managers and owners can delete transactions
-      const currentRole = currentUser.role?.name || '';
-      const canDeleteTransactions = ['owner', 'manager', 'finance'].includes(currentRole);
-      
-      if (!canDeleteTransactions) {
+      // Only managers and owners can void transactions
+      const canVoid = ['manager', 'owner'].includes(currentUser.role?.name || '');
+      if (!canVoid) {
         return res.status(403).json({ 
-          message: "You don't have permission to delete transactions" 
+          message: "Only managers and owners can void transactions" 
         });
       }
-
-      await storage.deleteTransaction(id);
-      res.status(204).send();
+      
+      // Require detailed reason
+      if (!reason || reason.trim().length < 15) {
+        return res.status(400).json({ 
+          message: "Void reason required (minimum 15 characters)" 
+        });
+      }
+      
+      const transaction = await storage.getTransaction(id);
+      if (!transaction || transaction.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      if (transaction.isVoided) {
+        return res.status(400).json({ message: "Transaction already voided" });
+      }
+      
+      // Void the transaction
+      const voidedTransaction = await storage.voidTransaction(id, currentUser.id, reason);
+      
+      res.json({ success: true, transaction: voidedTransaction });
     } catch (error) {
-      res.status(400).json({ message: "Failed to delete transaction" });
+      console.error("Transaction void error:", error);
+      res.status(500).json({ message: "Failed to void transaction" });
     }
   });
 
   // Maintenance routes
-  app.get("/api/hotels/:hotelId/maintenance-requests", async (req, res) => {
+  app.get("/api/hotels/:hotelId/maintenance-requests", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's maintenance requests
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const requests = await storage.getMaintenanceRequestsByHotel(hotelId);
       res.json(requests);
     } catch (error) {
@@ -3241,9 +3300,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/hotels/:hotelId/inventory", async (req, res) => {
+  app.get("/api/hotels/:hotelId/inventory", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's inventory
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const items = await storage.getInventoryItemsByHotel(hotelId);
       res.json(items);
     } catch (error) {
@@ -3251,9 +3317,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/hotels/:hotelId/inventory/low-stock", async (req, res) => {
+  app.get("/api/hotels/:hotelId/inventory/low-stock", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's inventory
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const items = await storage.getLowStockItems(hotelId);
       res.json(items);
     } catch (error) {
@@ -3262,9 +3335,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Vendor routes
-  app.get("/api/hotels/:hotelId/vendors", async (req, res) => {
+  app.get("/api/hotels/:hotelId/vendors", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's vendors
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const vendors = await storage.getVendorsByHotel(hotelId);
       res.json(vendors);
     } catch (error) {
@@ -3273,9 +3353,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Restaurant table routes
-  app.get("/api/hotels/:hotelId/restaurant-tables", async (req, res) => {
+  app.get("/api/hotels/:hotelId/restaurant-tables", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's restaurant tables
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const tables = await storage.getRestaurantTablesByHotel(hotelId);
       res.json(tables);
     } catch (error) {
@@ -3284,9 +3371,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Tax routes
-  app.get("/api/hotels/:hotelId/taxes", async (req, res) => {
+  app.get("/api/hotels/:hotelId/taxes", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's taxes
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const taxes = await storage.getHotelTaxes(hotelId);
       res.json(taxes);
     } catch (error) {
@@ -3306,9 +3400,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Voucher routes
-  app.get("/api/hotels/:hotelId/vouchers", async (req, res) => {
+  app.get("/api/hotels/:hotelId/vouchers", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's vouchers
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const vouchers = await storage.getVouchersByHotel(hotelId);
       res.json(vouchers);
     } catch (error) {
@@ -3552,9 +3653,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/hotels/:hotelId/vehicle-logs", async (req, res) => {
+  app.get("/api/hotels/:hotelId/vehicle-logs", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's vehicle logs
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const logs = await storage.getVehicleLogsByHotel(hotelId);
       res.json(logs);
     } catch (error) {
@@ -3579,9 +3687,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/hotels/:hotelId/room-service-orders", async (req, res) => {
+  app.get("/api/hotels/:hotelId/room-service-orders", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's room service orders
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const orders = await storage.getRoomServiceOrdersByHotel(hotelId);
       res.json(orders);
     } catch (error) {
@@ -4613,9 +4728,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/hotels/:hotelId/meal-plans", async (req, res) => {
+  app.get("/api/hotels/:hotelId/meal-plans", requireActiveUser, async (req, res) => {
     try {
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's meal plans
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const plans = await storage.getMealPlansByHotel(hotelId);
       res.json(plans);
     } catch (error) {
@@ -4845,12 +4967,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/hotels/:hotelId/hall-bookings", async (req, res) => {
+  app.get("/api/hotels/:hotelId/hall-bookings", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const { hotelId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify user can access this hotel's hall bookings
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const bookings = await storage.getHallBookingsByHotel(hotelId);
       res.json(bookings);
     } catch (error) {
@@ -4859,12 +4985,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/halls/:hallId/bookings", async (req, res) => {
+  app.get("/api/halls/:hallId/bookings", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
       const { hallId } = req.params;
+      const currentUser = req.user as any;
+      
+      // SECURITY: Verify hall belongs to user's hotel
+      const hall = await storage.getHall(hallId);
+      if (!hall) {
+        return res.status(404).json({ message: "Hall not found" });
+      }
+      
+      if (currentUser.role?.name !== 'super_admin' && currentUser.hotelId !== hall.hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
       const bookings = await storage.getHallBookingsByHall(hallId);
       res.json(bookings);
     } catch (error) {

@@ -209,9 +209,10 @@ export interface IStorage {
   
   // Transaction operations
   getTransactionsByHotel(hotelId: string): Promise<Transaction[]>;
+  getTransaction(id: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransaction(id: string, transaction: Partial<InsertTransaction>): Promise<Transaction>;
-  deleteTransaction(id: string): Promise<void>;
+  voidTransaction(id: string, voidedBy: string, reason: string): Promise<Transaction>;
   
   // Maintenance operations
   getMaintenanceRequestsByHotel(hotelId: string): Promise<MaintenanceRequest[]>;
@@ -1127,6 +1128,14 @@ export class DatabaseStorage implements IStorage {
     return transaction;
   }
 
+  async getTransaction(id: string): Promise<Transaction | undefined> {
+    const [transaction] = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id));
+    return transaction;
+  }
+
   async updateTransaction(id: string, transactionData: Partial<InsertTransaction>): Promise<Transaction> {
     const [transaction] = await db
       .update(transactions)
@@ -1136,11 +1145,19 @@ export class DatabaseStorage implements IStorage {
     return transaction;
   }
 
-  async deleteTransaction(id: string): Promise<void> {
-    await db
+  async voidTransaction(id: string, voidedBy: string, reason: string): Promise<Transaction> {
+    const [voided] = await db
       .update(transactions)
-      .set({ deletedAt: new Date() })
-      .where(eq(transactions.id, id));
+      .set({
+        isVoided: true,
+        voidedBy,
+        voidedAt: new Date(),
+        voidReason: reason
+      })
+      .where(eq(transactions.id, id))
+      .returning();
+    
+    return voided;
   }
 
   // Maintenance operations

@@ -13,6 +13,19 @@ function sanitizeUser(user: SelectUser): Omit<SelectUser, 'passwordHash'> {
   return sanitizedUser;
 }
 
+// Sanitize input to prevent null byte attacks and other injection attempts
+function sanitizeInput(input: string | null | undefined): string {
+  if (!input) return '';
+  
+  // Remove null bytes (\x00) that crash PostgreSQL
+  let sanitized = input.replace(/\x00/g, '');
+  
+  // Limit length to prevent DoS
+  sanitized = sanitized.substring(0, 1000);
+  
+  return sanitized.trim();
+}
+
 // Middleware to ensure user is active
 export function requireActiveUser(req: any, res: any, next: any) {
   if (!req.isAuthenticated()) {
@@ -71,9 +84,18 @@ export function setupAuth(app: Express) {
 
   passport.use(
     new LocalStrategy(async (username, password, done) => {
-      const user = await storage.getUserByUsername(username);
-      if (!user || !(await comparePasswords(password, user.passwordHash))) {
-        return done(null, false);
+      // SECURITY: Sanitize input to prevent null byte attacks and injection
+      const sanitizedUsername = sanitizeInput(username);
+      const sanitizedPassword = sanitizeInput(password);
+      
+      // Validate credentials
+      if (!sanitizedUsername || !sanitizedPassword) {
+        return done(null, false, { message: "Missing credentials" });
+      }
+      
+      const user = await storage.getUserByUsername(sanitizedUsername);
+      if (!user || !(await comparePasswords(sanitizedPassword, user.passwordHash))) {
+        return done(null, false, { message: "Invalid username or password" });
       }
       
       // CRITICAL: Block deactivated users from logging in

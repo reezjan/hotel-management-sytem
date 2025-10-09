@@ -259,7 +259,11 @@ export const transactions = pgTable("transactions", {
   details: jsonb("details"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  deletedAt: timestamp("deleted_at", { withTimezone: true })
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  isVoided: boolean("is_voided").default(false),
+  voidedBy: uuid("voided_by").references(() => users.id),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidReason: text("void_reason")
 });
 
 // Maintenance Requests Table
