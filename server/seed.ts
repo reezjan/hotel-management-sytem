@@ -1,5 +1,5 @@
 import { db } from './db';
-import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls } from '@shared/schema';
+import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls, guests } from '@shared/schema';
 import { hashPassword } from './auth';
 import { eq } from 'drizzle-orm';
 
@@ -159,6 +159,8 @@ async function seed() {
     const housekeepingSupervisorRole = await db.select().from(roles).where(eq(roles.name, 'housekeeping_supervisor'));
     const housekeepingStaffRole = await db.select().from(roles).where(eq(roles.name, 'housekeeping_staff'));
     const financeRole = await db.select().from(roles).where(eq(roles.name, 'finance'));
+    const securityHeadRole = await db.select().from(roles).where(eq(roles.name, 'security_head'));
+    const surveillanceOfficerRole = await db.select().from(roles).where(eq(roles.name, 'surveillance_officer'));
 
     // Create test users
     console.log('\n👥 Creating test users...');
@@ -235,6 +237,18 @@ async function seed() {
         password: 'finance',
         roleId: financeRole[0].id,
         email: 'finance@testhotel.local'
+      },
+      {
+        username: 'securityhead',
+        password: 'securityhead',
+        roleId: securityHeadRole[0].id,
+        email: 'securityhead@testhotel.local'
+      },
+      {
+        username: 'surveillance',
+        password: 'surveillance',
+        roleId: surveillanceOfficerRole[0].id,
+        email: 'surveillance@testhotel.local'
       }
     ];
 
@@ -463,10 +477,54 @@ async function seed() {
       }
     }
 
+    // Create guests
+    console.log('\n👥 Creating guests...');
+    
+    // Get front desk user for createdBy field
+    const frontDeskUser = await db.select().from(users).where(eq(users.username, 'sita'));
+    
+    const guestData = [
+      { firstName: 'John', lastName: 'Smith', email: 'john.smith@email.com', phone: '+1-555-0101', address: '123 Main St', city: 'New York', country: 'USA', idType: 'Passport', idNumber: 'US123456789', nationality: 'American', dateOfBirth: new Date('1985-03-15') },
+      { firstName: 'Emma', lastName: 'Johnson', email: 'emma.j@email.com', phone: '+44-20-1234567', address: '45 Baker Street', city: 'London', country: 'UK', idType: 'Passport', idNumber: 'UK987654321', nationality: 'British', dateOfBirth: new Date('1990-07-22') },
+      { firstName: 'Raj', lastName: 'Sharma', email: 'raj.sharma@email.com', phone: '+91-98765-43210', address: '789 MG Road', city: 'Mumbai', country: 'India', idType: 'Passport', idNumber: 'IN456789123', nationality: 'Indian', dateOfBirth: new Date('1988-11-30') },
+      { firstName: 'Maria', lastName: 'Garcia', email: 'maria.g@email.com', phone: '+34-91-234-5678', address: 'Calle Mayor 12', city: 'Madrid', country: 'Spain', idType: 'National ID', idNumber: 'ES789456123', nationality: 'Spanish', dateOfBirth: new Date('1992-05-18') },
+      { firstName: 'Chen', lastName: 'Wei', email: 'chen.wei@email.com', phone: '+86-10-8765-4321', address: '56 Beijing Road', city: 'Shanghai', country: 'China', idType: 'Passport', idNumber: 'CN147258369', nationality: 'Chinese', dateOfBirth: new Date('1987-09-10') },
+      { firstName: 'Sarah', lastName: 'Williams', email: 'sarah.w@email.com', phone: '+1-555-0202', address: '789 Oak Avenue', city: 'Los Angeles', country: 'USA', idType: 'Driver License', idNumber: 'DL987654321', nationality: 'American', dateOfBirth: new Date('1995-12-05') },
+      { firstName: 'Mohammed', lastName: 'Al-Rashid', email: 'mohammed.ar@email.com', phone: '+971-4-123-4567', address: 'Sheikh Zayed Road', city: 'Dubai', country: 'UAE', idType: 'Emirates ID', idNumber: 'UAE123456789', nationality: 'Emirati', dateOfBirth: new Date('1983-04-25') },
+      { firstName: 'Sophie', lastName: 'Dubois', email: 'sophie.d@email.com', phone: '+33-1-2345-6789', address: '23 Rue de Rivoli', city: 'Paris', country: 'France', idType: 'National ID', idNumber: 'FR456789123', nationality: 'French', dateOfBirth: new Date('1991-08-14') },
+      { firstName: 'Yuki', lastName: 'Tanaka', email: 'yuki.t@email.com', phone: '+81-3-1234-5678', address: '1-2-3 Shibuya', city: 'Tokyo', country: 'Japan', idType: 'Passport', idNumber: 'JP789123456', nationality: 'Japanese', dateOfBirth: new Date('1989-02-28') },
+      { firstName: 'David', lastName: 'Brown', email: 'david.b@email.com', phone: '+61-2-9876-5432', address: '456 George Street', city: 'Sydney', country: 'Australia', idType: 'Passport', idNumber: 'AU321654987', nationality: 'Australian', dateOfBirth: new Date('1986-10-12') },
+      { firstName: 'Anna', lastName: 'Kowalski', email: 'anna.k@email.com', phone: '+48-22-123-4567', address: 'ul. Nowy Świat 15', city: 'Warsaw', country: 'Poland', idType: 'National ID', idNumber: 'PL654987321', nationality: 'Polish', dateOfBirth: new Date('1993-06-20') },
+      { firstName: 'Carlos', lastName: 'Rodriguez', email: 'carlos.r@email.com', phone: '+52-55-8765-4321', address: 'Avenida Reforma 100', city: 'Mexico City', country: 'Mexico', idType: 'Passport', idNumber: 'MX852963741', nationality: 'Mexican', dateOfBirth: new Date('1984-01-08') },
+      { firstName: 'Lisa', lastName: 'Anderson', email: 'lisa.a@email.com', phone: '+1-555-0303', address: '321 Pine Street', city: 'Chicago', country: 'USA', idType: 'Passport', idNumber: 'US741852963', nationality: 'American', dateOfBirth: new Date('1994-03-17') },
+      { firstName: 'Ahmed', lastName: 'Hassan', email: 'ahmed.h@email.com', phone: '+20-2-3456-7890', address: 'Tahrir Square', city: 'Cairo', country: 'Egypt', idType: 'National ID', idNumber: 'EG963852741', nationality: 'Egyptian', dateOfBirth: new Date('1990-09-05') },
+      { firstName: 'Olivia', lastName: 'Taylor', email: 'olivia.t@email.com', phone: '+1-416-987-6543', address: '789 King Street', city: 'Toronto', country: 'Canada', idType: 'Passport', idNumber: 'CA159753486', nationality: 'Canadian', dateOfBirth: new Date('1992-11-22') },
+      { firstName: 'Lars', lastName: 'Nielsen', email: 'lars.n@email.com', phone: '+45-33-12-34-56', address: 'Strøget 25', city: 'Copenhagen', country: 'Denmark', idType: 'Passport', idNumber: 'DK357159486', nationality: 'Danish', dateOfBirth: new Date('1988-07-30') },
+      { firstName: 'Priya', lastName: 'Patel', email: 'priya.p@email.com', phone: '+91-22-9876-5432', address: 'Linking Road', city: 'Mumbai', country: 'India', idType: 'Aadhaar', idNumber: 'IN753951486', nationality: 'Indian', dateOfBirth: new Date('1996-04-12') },
+      { firstName: 'Thomas', lastName: 'Mueller', email: 'thomas.m@email.com', phone: '+49-30-1234-5678', address: 'Unter den Linden 10', city: 'Berlin', country: 'Germany', idType: 'Passport', idNumber: 'DE951357486', nationality: 'German', dateOfBirth: new Date('1987-12-03') },
+      { firstName: 'Isabella', lastName: 'Rossi', email: 'isabella.r@email.com', phone: '+39-06-8765-4321', address: 'Via Veneto 50', city: 'Rome', country: 'Italy', idType: 'National ID', idNumber: 'IT486159753', nationality: 'Italian', dateOfBirth: new Date('1991-02-14') },
+      { firstName: 'Kim', lastName: 'Min-Ho', email: 'kim.minho@email.com', phone: '+82-2-1234-5678', address: 'Gangnam-gu', city: 'Seoul', country: 'South Korea', idType: 'Passport', idNumber: 'KR753486159', nationality: 'Korean', dateOfBirth: new Date('1989-08-25') }
+    ];
+
+    for (const guest of guestData) {
+      const existing = await db.select().from(guests).where(eq(guests.email, guest.email || ''));
+      if (existing.length === 0) {
+        await db.insert(guests).values({
+          hotelId: testHotel.id,
+          ...guest,
+          createdBy: frontDeskUser[0].id
+        });
+        console.log(`  ✓ Created guest: ${guest.firstName} ${guest.lastName} (${guest.nationality})`);
+      } else {
+        console.log(`  → Guest already exists: ${guest.firstName} ${guest.lastName}`);
+      }
+    }
+
     console.log('\n✅ Database seeded successfully!');
     console.log('\n📝 Summary:');
     console.log('  - Hotel: Test Hotel');
-    console.log('  - Users: owner, manager, barista, store, sita');
+    console.log('  - Users: 14 users (including securityhead, surveillance)');
+    console.log('  - Guests: 20 international guests');
     console.log('  - Rooms: 101, 102, 103, 201, 202, 301');
     console.log('  - Meal Plans: EP, CP, MAP, AP');
     console.log('  - Discount Code: DISCOUNT1000 (Rs. 1000 off)');

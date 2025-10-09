@@ -304,6 +304,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const guestData = insertGuestSchema.parse(bodyData);
       const guest = await storage.createGuest(guestData);
+      
+      // Broadcast guest creation to relevant users
+      wsEvents.guestCreated(user.hotelId, guest);
+      
       res.status(201).json(guest);
     } catch (error) {
       console.error("Guest creation error:", error);
@@ -330,6 +334,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const guestData = insertGuestSchema.partial().parse(bodyData);
       const guest = await storage.updateGuest(id, guestData);
+      
+      // Broadcast guest update to relevant users
+      wsEvents.guestUpdated(user.hotelId, guest);
+      
       res.json(guest);
     } catch (error) {
       console.error("Guest update error:", error);
@@ -3090,6 +3098,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdBy: currentUser.id
       });
       const transaction = await storage.createTransaction(transactionData);
+      
+      // Broadcast transaction creation to relevant users
+      wsEvents.transactionCreated(currentUser.hotelId, transaction);
+      
       res.status(201).json(transaction);
     } catch (error) {
       console.error("Transaction creation error:", error);
@@ -3102,6 +3114,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const updateData = req.body;
       const updatedTransaction = await storage.updateTransaction(id, updateData);
+      
+      // Broadcast transaction update to relevant users
+      if (updatedTransaction && (req.user as any)?.hotelId) {
+        wsEvents.transactionUpdated((req.user as any).hotelId, updatedTransaction);
+      }
+      
       res.json(updatedTransaction);
     } catch (error) {
       console.error("Transaction update error:", error);

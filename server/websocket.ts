@@ -138,6 +138,9 @@ export const wsEvents = {
   // Transaction updates
   transactionCreated: (hotelId: string, transaction: any) => 
     broadcastToRole(hotelId, ['finance', 'cashier', 'manager', 'owner'], 'transaction:created', transaction),
+  
+  transactionUpdated: (hotelId: string, transaction: any) => 
+    broadcastToRole(hotelId, ['finance', 'cashier', 'manager', 'owner'], 'transaction:updated', transaction),
 
   // Maintenance request updates
   maintenanceUpdated: (hotelId: string, request: any) => 
@@ -146,6 +149,13 @@ export const wsEvents = {
   // Vehicle log updates
   vehicleLogUpdated: (hotelId: string, log: any) => 
     broadcastToRole(hotelId, ['surveillance_officer', 'security_head', 'security_guard'], 'vehicle:updated', log),
+
+  // Guest updates
+  guestCreated: (hotelId: string, guest: any) => 
+    broadcastToRole(hotelId, ['front_desk', 'manager', 'owner'], 'guest:created', guest),
+  
+  guestUpdated: (hotelId: string, guest: any) => 
+    broadcastToRole(hotelId, ['front_desk', 'manager', 'owner'], 'guest:updated', guest),
 
   // General notification
   notification: (userId: string, notification: any) => 
