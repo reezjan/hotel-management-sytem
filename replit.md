@@ -113,6 +113,24 @@ The system is built as a full-stack application using React and TypeScript for t
 - **Protected Endpoint**: `PUT /api/rooms/:id` - Room status updates with role-based access control
 - **Database Schema**: `roomStatusLogs` table with foreign keys to rooms and users for complete traceability
 
+#### 8. Password Change Authorization Vulnerability (October 2025)
+- **Vulnerability**: Managers could change other users' passwords by sending `passwordHash` field in PUT requests
+- **Attack Vector**: 
+  - `PUT /api/users/:id` with `{passwordHash: "..."}` in request body
+  - `PUT /api/hotels/current/users/:id` with `{passwordHash: "..."}` in request body
+- **Risk**: Managers could bypass authentication by changing passwords of other users, including owner accounts
+- **Fix Location**: `server/routes.ts` (lines 1265-1271 and 2316-2322)
+- **Solution**: Added explicit `passwordHash` field blocking on both user update endpoints
+- **Security Model**: Passwords can ONLY be changed via `/api/reset-password` endpoint which requires:
+  - User authentication (req.user)
+  - Current password verification
+  - User can only change their own password
+- **Error Response**: Returns 403 with message "Cannot change passwords through this endpoint. Use the password reset functionality."
+- **Protected Endpoints**:
+  - `PUT /api/users/:id` - User updates (general endpoint)
+  - `PUT /api/hotels/current/users/:id` - Hotel-scoped user updates
+- **Testing**: Verified managers and owners cannot inject passwordHash into user update requests
+
 ## External Dependencies
 -   **PostgreSQL**: Relational database for all application data.
 -   **Vite**: Frontend build tool.

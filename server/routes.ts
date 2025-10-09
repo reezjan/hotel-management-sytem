@@ -1259,6 +1259,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const userData = req.body;
       
+      // CRITICAL SECURITY: Block password changes through this endpoint
+      // Passwords can ONLY be changed via /api/reset-password with old password verification
+      if ('passwordHash' in userData) {
+        return res.status(403).json({ 
+          message: "Cannot change passwords through this endpoint. Use the password reset functionality." 
+        });
+      }
+      
       // Verify the user belongs to current hotel
       const existingUser = await storage.getUser(id);
       if (!existingUser || existingUser.hotelId !== currentUser.hotelId) {
@@ -2310,6 +2318,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const userData = insertUserSchema.partial().parse(req.body);
       
+      // CRITICAL SECURITY: Block password changes through this endpoint
+      // Passwords can ONLY be changed via /api/reset-password with old password verification
+      if ('passwordHash' in userData) {
+        return res.status(403).json({ 
+          message: "Cannot change passwords through this endpoint. Use the password reset functionality." 
+        });
+      }
+      
       // Get target user to verify hotel and role
       const targetUser = await storage.getUser(id);
       if (!targetUser) {
@@ -2436,6 +2452,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: true });
     } catch (error) {
       res.status(400).json({ message: "Failed to update duty status" });
+    }
+  });
+
+  // Manager password reset endpoint (for when staff forget their password)
+  app.post("/api/manager/reset-staff-password", async (req, res) => {
+    try {
+      // CRITICAL: Require authentication
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const currentUser = req.user as any;
+      const { targetUserId, newPassword } = req.body;
+
+      // Validate required fields
+      if (!targetUserId || !newPassword) {
+        return res.status(400).json({ 
+          message: "Target user ID and new password are required" 
+        });
+      }
+
+      // CRITICAL: Only managers and owners can reset staff passwords
+      const currentRole = currentUser.role?.name || '';
+      if (!['manager', 'owner'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only managers and owners can reset staff passwords" 
+        });
+      }
+
+      // Get target user
+      const targetUser = await storage.getUser(targetUserId);
+      if (!targetUser) {
+        return res.status(404).json({ message: "Target user not found" });
+      }
+
+      // CRITICAL: Hotel isolation - can only reset passwords within same hotel
+      if (currentRole !== 'super_admin' && targetUser.hotelId !== currentUser.hotelId) {
+        return res.status(403).json({ 
+          message: "Cannot reset passwords for users in other hotels" 
+        });
+      }
+
+      // CRITICAL: Define which roles can be reset by managers and owners
+      const targetRole = targetUser.role?.name || '';
+      const managerCanReset = ['waiter', 'kitchen_staff', 'housekeeping_staff', 'security_guard', 'cashier', 'front_desk'];
+      const ownerCanReset = [...managerCanReset, 'manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head', 'finance', 'storekeeper'];
+
+      let canResetThisRole = false;
+      if (currentRole === 'owner') {
+        canResetThisRole = ownerCanReset.includes(targetRole);
+      } else if (currentRole === 'manager') {
+        canResetThisRole = managerCanReset.includes(targetRole);
+      }
+
+      if (!canResetThisRole) {
+        return res.status(403).json({ 
+          message: `You do not have permission to reset passwords for ${targetRole} role` 
+        });
+      }
+
+      // Validate new password
+      if (newPassword.length < 8) {
+        return res.status(400).json({ 
+          message: "New password must be at least 8 characters" 
+        });
+      }
+
+      // Hash the new password
+      const { hashPassword } = await import("./auth.js");
+      const hashedPassword = await hashPassword(newPassword);
+
+      // Update target user's password
+      await storage.updateUser(targetUserId, { passwordHash: hashedPassword });
+
+      // Log successful password reset
+      await logAudit({
+        userId: currentUser.id,
+        hotelId: currentUser.hotelId || undefined,
+        action: 'manager_reset_staff_password',
+        resourceType: 'user',
+        resourceId: targetUserId,
+        details: { 
+          managerUsername: currentUser.username,
+          targetUsername: targetUser.username,
+          targetRole: targetRole
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: true
+      });
+
+      res.json({ 
+        message: "Password reset successfully",
+        username: targetUser.username
+      });
+    } catch (error) {
+      console.error("Manager password reset error:", error);
+      res.status(500).json({ message: "Failed to reset password" });
     }
   });
 
