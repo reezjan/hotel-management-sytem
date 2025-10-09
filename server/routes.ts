@@ -3203,6 +3203,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Inventory routes
+  app.get("/api/hotels/current/inventory", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const items = await storage.getInventoryItemsByHotel(user.hotelId);
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch inventory items" });
+    }
+  });
+
   app.get("/api/hotels/:hotelId/inventory", async (req, res) => {
     try {
       const { hotelId } = req.params;
@@ -3525,6 +3541,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Room service routes
+  app.get("/api/hotels/current/room-service-orders", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const orders = await storage.getRoomServiceOrdersByHotel(user.hotelId);
+      res.json(orders);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch room service orders" });
+    }
+  });
+
   app.get("/api/hotels/:hotelId/room-service-orders", async (req, res) => {
     try {
       const { hotelId } = req.params;
@@ -3991,6 +4023,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Stock request routes
+  app.get("/api/hotels/current/stock-requests", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const userRole = user.role?.name || '';
+      const canViewAll = ['manager', 'owner', 'storekeeper'].includes(userRole);
+      
+      if (!canViewAll) {
+        return res.status(403).json({ message: "Only manager, owner, or storekeeper can view all stock requests" });
+      }
+      
+      const requests = await storage.getStockRequestsByHotel(user.hotelId);
+      res.json(requests);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch stock requests" });
+    }
+  });
+
   app.get("/api/hotels/current/stock-requests/my-requests", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -4114,46 +4170,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
       }
+      
       const user = req.user as any;
+      const { id } = req.params;
       
-      console.log('[Stock Request Approval] User:', {
-        id: user?.id,
-        username: user?.username,
-        hotelId: user?.hotelId,
-        roleId: user?.roleId,
-        roleName: user?.role?.name
-      });
-      
-      if (!user || !user.hotelId) {
-        return res.status(400).json({ message: "User not associated with a hotel" });
-      }
-      
-      const userRole = user.role?.name || '';
-      if (userRole !== 'storekeeper') {
+      // Only storekeeper, manager, and owner can approve
+      const canApprove = ['storekeeper', 'manager', 'owner'].includes(user.role?.name || '');
+      if (!canApprove) {
         return res.status(403).json({ 
-          message: `Only storekeeper can approve stock requests. Your role: ${userRole}` 
+          message: "Only storekeeper, manager, or owner can approve stock requests" 
         });
       }
       
-      const { id } = req.params;
-      const existingRequest = await storage.getStockRequest(id);
-      if (!existingRequest) {
+      const stockRequest = await storage.getStockRequest(id);
+      if (!stockRequest) {
         return res.status(404).json({ message: "Stock request not found" });
       }
       
-      if (existingRequest.hotelId !== user.hotelId) {
-        return res.status(403).json({ message: "Stock request belongs to different hotel" });
+      if (stockRequest.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Stock request not found" });
       }
       
-      const request = await storage.approveStockRequest(id, user.id);
-      console.log('[Stock Request Approval] Success:', request.id);
-      res.json(request);
+      if (stockRequest.status !== 'pending') {
+        return res.status(400).json({ message: "Only pending requests can be approved" });
+      }
+      
+      // CRITICAL: Verify sufficient inventory before approval
+      const inventoryItem = await storage.getInventoryItem(stockRequest.itemId);
+      if (!inventoryItem) {
+        return res.status(404).json({ message: "Inventory item not found" });
+      }
+      
+      const currentStock = Number(inventoryItem.baseStockQty || inventoryItem.stockQty || 0);
+      const requestedQty = Number(stockRequest.quantity || 0);
+      
+      // Convert units if needed
+      let requestedInBaseUnit = requestedQty;
+      if (stockRequest.unit && stockRequest.unit !== inventoryItem.baseUnit) {
+        const { convertToBase } = await import('@shared/measurements');
+        const category = (inventoryItem.measurementCategory || 'weight') as any;
+        
+        try {
+          requestedInBaseUnit = convertToBase(
+            requestedQty,
+            stockRequest.unit as any,
+            (inventoryItem.baseUnit || 'kg') as any,
+            category,
+            inventoryItem.conversionProfile as any
+          );
+        } catch (error) {
+          console.error('Unit conversion error:', error);
+        }
+      }
+      
+      if (requestedInBaseUnit > currentStock) {
+        return res.status(400).json({ 
+          message: `Insufficient inventory. Available: ${currentStock} ${inventoryItem.baseUnit}, Requested: ${requestedInBaseUnit} ${inventoryItem.baseUnit}`,
+          availableStock: currentStock,
+          requestedStock: requestedInBaseUnit,
+          unit: inventoryItem.baseUnit
+        });
+      }
+      
+      // Approve the request
+      const approvedRequest = await storage.approveStockRequest(id, user.id);
+      
+      res.json(approvedRequest);
     } catch (error) {
       console.error("Stock request approval error:", error);
-      res.status(400).json({ 
-        message: "Failed to approve stock request",
-        error: error instanceof Error ? error.message : String(error)
-      });
+      res.status(500).json({ message: "Failed to approve stock request" });
     }
   });
 
@@ -4490,6 +4575,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Meal plan routes
+  app.get("/api/hotels/current/meal-plans", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const plans = await storage.getMealPlansByHotel(user.hotelId);
+      res.json(plans);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch meal plans" });
+    }
+  });
+
   app.get("/api/hotels/:hotelId/meal-plans", async (req, res) => {
     try {
       const { hotelId } = req.params;
@@ -4619,6 +4720,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/hotels/current/meal-vouchers", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const { status, date } = req.query;
+      
+      const vouchers = await storage.getMealVouchers(user.hotelId, {
+        status: status as string,
+        date: date ? new Date(date as string) : undefined
+      });
+      
+      res.json(vouchers);
+    } catch (error) {
+      console.error("Get meal vouchers error:", error);
+      res.status(500).json({ message: "Failed to get meal vouchers" });
+    }
+  });
+
   app.get("/api/hotels/:hotelId/meal-vouchers", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -4680,6 +4806,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Hall booking routes
+  app.get("/api/hotels/current/hall-bookings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const bookings = await storage.getHallBookingsByHotel(user.hotelId);
+      res.json(bookings);
+    } catch (error) {
+      console.error("Get hall bookings error:", error);
+      res.status(500).json({ message: "Failed to get hall bookings" });
+    }
+  });
+
   app.get("/api/hotels/:hotelId/hall-bookings", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
