@@ -29,7 +29,7 @@ export default function InventoryTracking() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [sku, setSku] = useState("");
-  const [baseUnit, setBaseUnit] = useState("piece");
+  const [unit, setUnit] = useState("piece");
   const [reorderLevel, setReorderLevel] = useState("");
   const [storageLocation, setStorageLocation] = useState("");
   const [costPerUnit, setCostPerUnit] = useState("");
@@ -49,7 +49,7 @@ export default function InventoryTracking() {
       setName(selectedItem.name || "");
       setDescription(selectedItem.description || "");
       setSku(selectedItem.sku || "");
-      setBaseUnit(selectedItem.baseUnit || "piece");
+      setUnit(selectedItem.unit || selectedItem.baseUnit || "piece");
       setReorderLevel(selectedItem.reorderLevel || "");
       setStorageLocation(selectedItem.storageLocation || "");
       setCostPerUnit(selectedItem.costPerUnit || "");
@@ -64,7 +64,7 @@ export default function InventoryTracking() {
     setName("");
     setDescription("");
     setSku("");
-    setBaseUnit("piece");
+    setUnit("piece");
     setReorderLevel("");
     setStorageLocation("");
     setCostPerUnit("");
@@ -142,8 +142,8 @@ export default function InventoryTracking() {
       hotelId: user?.hotelId,
       name,
       description: description || null,
-      sku: sku || null,
-      baseUnit: baseUnit || "piece",
+      sku: sku || "AUTO",
+      unit: unit || "piece",
       packageUnit: null,
       baseUnitsPerPackage: "0",
       packageStockQty: "0",
@@ -202,11 +202,17 @@ export default function InventoryTracking() {
       render: (value: any, row: any) => {
         const baseStock = Number(value || 0).toFixed(2);
         const packageStock = Number(row.packageStockQty || 0).toFixed(2);
-        return `${baseStock} ${row.baseUnit}${row.packageUnit ? ` (${packageStock} ${row.packageUnit})` : ''}`;
+        const displayUnit = row.unit || row.baseUnit || "piece";
+        return `${baseStock} ${displayUnit}${row.packageUnit ? ` (${packageStock} ${row.packageUnit})` : ''}`;
       }
     },
     { key: "reorderLevel", label: "Reorder Level", sortable: true },
-    { key: "baseUnit", label: "Unit", sortable: true },
+    { 
+      key: "unit", 
+      label: "Unit", 
+      sortable: true,
+      render: (value: any, row: any) => value || row.baseUnit || "piece"
+    },
     { 
       key: "costPerUnit", 
       label: "Cost/Unit", 
@@ -348,7 +354,7 @@ export default function InventoryTracking() {
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="stock-qty">Current Stock ({selectedItem?.baseUnit})</Label>
+                <Label htmlFor="stock-qty">Current Stock ({selectedItem?.unit || selectedItem?.baseUnit || 'units'})</Label>
                 <Input
                   id="stock-qty"
                   type="number"
@@ -409,13 +415,13 @@ export default function InventoryTracking() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-base-unit">Base Unit</Label>
+                  <Label htmlFor="edit-unit">Unit</Label>
                   <Input
-                    id="edit-base-unit"
-                    value={baseUnit}
-                    onChange={(e) => setBaseUnit(e.target.value)}
+                    id="edit-unit"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
                     placeholder="e.g., piece, kg, liter"
-                    data-testid="input-base-unit"
+                    data-testid="input-unit"
                   />
                 </div>
                 <div className="space-y-2">
@@ -524,13 +530,13 @@ export default function InventoryTracking() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="add-base-unit">Base Unit</Label>
+                  <Label htmlFor="add-unit">Unit</Label>
                   <Input
-                    id="add-base-unit"
-                    value={baseUnit}
-                    onChange={(e) => setBaseUnit(e.target.value)}
+                    id="add-unit"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
                     placeholder="e.g., piece, kg, liter"
-                    data-testid="input-base-unit"
+                    data-testid="input-unit"
                   />
                 </div>
                 <div className="space-y-2">

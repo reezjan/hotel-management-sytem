@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { DataTable } from "@/components/tables/data-table";
 import { StatsCard } from "@/components/dashboard/stats-card";
@@ -47,6 +47,8 @@ export default function StaffManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<any>(null);
 
   const { data: staff = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"]
@@ -74,6 +76,32 @@ export default function StaffManagement() {
       confirmPassword: ""
     }
   });
+
+  // Form for staff editing
+  const editForm = useForm<Omit<StaffFormData, 'password' | 'confirmPassword'>>({
+    defaultValues: {
+      username: "",
+      email: "",
+      firstName: "",
+      lastName: "",
+      phone: "",
+      role: ""
+    }
+  });
+
+  // Update edit form when selectedStaff changes
+  useEffect(() => {
+    if (selectedStaff && isEditModalOpen) {
+      editForm.reset({
+        username: selectedStaff.username || "",
+        email: selectedStaff.email || "",
+        firstName: selectedStaff.firstName || "",
+        lastName: selectedStaff.lastName || "",
+        phone: selectedStaff.phone || "",
+        role: selectedStaff.role?.name || ""
+      });
+    }
+  }, [selectedStaff, isEditModalOpen, editForm]);
 
   const createStaffMutation = useMutation({
     mutationFn: async (data: StaffFormData) => {
@@ -103,8 +131,16 @@ export default function StaffManagement() {
     mutationFn: async (userId: string) => {
       const response = await fetch(`/api/users/${userId}`, {
         method: "DELETE",
+        credentials: "include"
       });
-      if (!response.ok) throw new Error("Failed to delete staff member");
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: "Failed to delete staff member" }));
+        throw new Error(error.message);
+      }
+      // 204 No Content - don't try to parse JSON
+      if (response.status === 204) {
+        return null;
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -114,10 +150,81 @@ export default function StaffManagement() {
         description: "Staff member removed successfully",
       });
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove staff member",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ userId, isActive }: { userId: string; isActive: boolean }) => {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
+      });
+      if (!response.ok) throw new Error("Failed to toggle status");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/users"] });
+      toast({
+        title: "Success",
+        description: "Staff status updated successfully",
+      });
+    },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to remove staff member",
+        description: "Failed to update staff status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const editStaffMutation = useMutation({
+    mutationFn: async (data: any) => {
+      // Convert role name to roleId
+      const role = roles.find(r => r.name === data.role);
+      if (!role) {
+        throw new Error("Invalid role selected");
+      }
+      
+      const { role: _, ...updateData } = data;
+      const payload = {
+        ...updateData,
+        roleId: role.id,
+        hotelId: user?.hotelId
+      };
+      
+      const response = await fetch(`/api/users/${selectedStaff?.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to update staff member");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/users"] });
+      toast({
+        title: "Success",
+        description: "Staff member updated successfully",
+      });
+      editForm.reset();
+      setIsEditModalOpen(false);
+      setSelectedStaff(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update staff member",
         variant: "destructive",
       });
     },
@@ -138,7 +245,7 @@ export default function StaffManagement() {
   }, {} as Record<string, any[]>);
 
   const staffColumns = [
-    { key: "username", label: "Name", sortable: true },
+    { key: "username", label: "Username", sortable: true },
     { 
       key: "role", 
       label: "Role", 
@@ -187,11 +294,17 @@ export default function StaffManagement() {
   const staffActions = [
     { 
       label: "Edit", 
-      action: (row: any) => console.log("Edit staff:", row) 
+      action: (row: any) => {
+        setSelectedStaff(row);
+        setIsEditModalOpen(true);
+      } 
     },
     { 
       label: "Toggle Status", 
-      action: (row: any) => console.log("Toggle status:", row) 
+      action: (row: any) => {
+        const newStatus = !row.isActive;
+        toggleStatusMutation.mutate({ userId: row.id, isActive: newStatus });
+      } 
     },
     { 
       label: "Remove", 
@@ -260,30 +373,6 @@ export default function StaffManagement() {
                   </div>
                 );
               })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-4">
-              <Button onClick={() => setIsCreateModalOpen(true)}>
-                <UserPlus className="h-4 w-4 mr-2" />
-                Add Staff Member
-              </Button>
-              <Button variant="outline">
-                Import Staff
-              </Button>
-              <Button variant="outline">
-                Export Staff List
-              </Button>
-              <Button variant="outline">
-                Send Bulk Message
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -465,6 +554,147 @@ export default function StaffManagement() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
                     Create Staff Member
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Staff Modal */}
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <Users className="h-5 w-5 text-blue-500" />
+                <span>Edit Staff Member</span>
+              </DialogTitle>
+            </DialogHeader>
+            
+            <Form {...editForm}>
+              <form onSubmit={editForm.handleSubmit((data) => editStaffMutation.mutate(data))} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>First Name *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter first name" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={editForm.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Name *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter last name" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Username *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Enter username" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={editForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email *</FormLabel>
+                        <FormControl>
+                          <Input type="email" placeholder="staff@example.com" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={editForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Phone number" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={editForm.control}
+                    name="role"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Role *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a role" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {roles.filter(role => role.name !== 'super_admin' && role.name !== 'owner').map((role) => (
+                              <SelectItem key={role.id} value={role.name}>
+                                {role.name.split('_').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      editForm.reset();
+                      setIsEditModalOpen(false);
+                      setSelectedStaff(null);
+                    }}
+                    disabled={editStaffMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={editStaffMutation.isPending}
+                  >
+                    {editStaffMutation.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Update Staff Member
                   </Button>
                 </div>
               </form>
