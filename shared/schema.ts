@@ -299,9 +299,25 @@ export const maintenanceRequests = pgTable("maintenance_requests", {
   priority: text("priority").default('medium'),
   status: text("status").default('pending'),
   assignedTo: uuid("assigned_to").references(() => users.id),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  declinedBy: uuid("declined_by").references(() => users.id),
+  declinedAt: timestamp("declined_at", { withTimezone: true }),
+  declineReason: text("decline_reason"),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+});
+
+// Maintenance Request Status History Table
+export const maintenanceStatusHistory = pgTable("maintenance_status_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: uuid("request_id").references(() => maintenanceRequests.id, { onDelete: "cascade" }),
+  previousStatus: text("previous_status"),
+  newStatus: text("new_status").notNull(),
+  changedBy: uuid("changed_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
 // Tasks Table
@@ -1023,7 +1039,14 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
 export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequests).omit({
   id: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
+  approvedAt: true,
+  declinedAt: true
+});
+
+export const insertMaintenanceStatusHistorySchema = createInsertSchema(maintenanceStatusHistory).omit({
+  id: true,
+  createdAt: true
 });
 
 export const insertVoucherSchema = createInsertSchema(vouchers).omit({
@@ -1254,6 +1277,8 @@ export type Transaction = typeof transactions.$inferSelect;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type MaintenanceRequest = typeof maintenanceRequests.$inferSelect;
 export type InsertMaintenanceRequest = z.infer<typeof insertMaintenanceRequestSchema>;
+export type MaintenanceStatusHistory = typeof maintenanceStatusHistory.$inferSelect;
+export type InsertMaintenanceStatusHistory = z.infer<typeof insertMaintenanceStatusHistorySchema>;
 export type InsertVoucher = z.infer<typeof insertVoucherSchema>;
 export type KotOrder = typeof kotOrders.$inferSelect;
 export type KotItem = typeof kotItems.$inferSelect;

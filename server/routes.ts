@@ -5,8 +5,8 @@ import { setupAuth, requireActiveUser } from "./auth";
 import { logAudit } from "./audit";
 import { db } from "./db";
 import { wsEvents } from "./websocket";
-import { users, roles, auditLogs } from "@shared/schema";
-import { eq, and, isNull, asc, sql, ne } from "drizzle-orm";
+import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors } from "@shared/schema";
+import { eq, and, isNull, asc, desc, sql, ne } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
 import {
   insertUserSchema,
@@ -6613,6 +6613,377 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Audit log fetch error:", error);
       res.status(500).json({ message: "Failed to fetch audit logs" });
+    }
+  });
+
+  // Maintenance Request Status History
+  app.get("/api/maintenance-requests/:id/history", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      const canView = ['manager', 'owner', 'super_admin'].includes(currentUser.role?.name || '');
+      if (!canView) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const history = await db
+        .select({
+          id: maintenanceStatusHistory.id,
+          previousStatus: maintenanceStatusHistory.previousStatus,
+          newStatus: maintenanceStatusHistory.newStatus,
+          notes: maintenanceStatusHistory.notes,
+          createdAt: maintenanceStatusHistory.createdAt,
+          changedBy: {
+            id: users.id,
+            username: users.username,
+            email: users.email,
+            role: roles.name
+          }
+        })
+        .from(maintenanceStatusHistory)
+        .leftJoin(users, eq(maintenanceStatusHistory.changedBy, users.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
+        .where(eq(maintenanceStatusHistory.requestId, req.params.id))
+        .orderBy(desc(maintenanceStatusHistory.createdAt));
+      
+      res.json(history);
+    } catch (error) {
+      console.error("Fetch maintenance history error:", error);
+      res.status(500).json({ message: "Failed to fetch maintenance history" });
+    }
+  });
+
+  // Price Change History
+  app.get("/api/price-change-logs", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      const canView = ['manager', 'owner', 'super_admin', 'finance'].includes(currentUser.role?.name || '');
+      if (!canView) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const { itemType, startDate, endDate, limit } = req.query;
+      const conditions: any[] = [eq(priceChangeLogs.hotelId, currentUser.hotelId)];
+      
+      if (itemType && typeof itemType === 'string') {
+        conditions.push(eq(priceChangeLogs.itemType, itemType));
+      }
+      if (startDate && typeof startDate === 'string') {
+        conditions.push(sql`${priceChangeLogs.createdAt} >= ${new Date(startDate)}`);
+      }
+      if (endDate && typeof endDate === 'string') {
+        conditions.push(sql`${priceChangeLogs.createdAt} <= ${new Date(endDate)}`);
+      }
+      
+      const maxLimit = limit && typeof limit === 'string' ? Math.min(parseInt(limit), 500) : 100;
+      
+      const logs = await db
+        .select({
+          id: priceChangeLogs.id,
+          itemId: priceChangeLogs.itemId,
+          itemType: priceChangeLogs.itemType,
+          itemName: priceChangeLogs.itemName,
+          previousPrice: priceChangeLogs.previousPrice,
+          newPrice: priceChangeLogs.newPrice,
+          createdAt: priceChangeLogs.createdAt,
+          changedBy: {
+            id: users.id,
+            username: users.username,
+            email: users.email,
+            role: roles.name
+          }
+        })
+        .from(priceChangeLogs)
+        .leftJoin(users, eq(priceChangeLogs.changedBy, users.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
+        .where(and(...conditions))
+        .orderBy(desc(priceChangeLogs.createdAt))
+        .limit(maxLimit);
+      
+      res.json(logs);
+    } catch (error) {
+      console.error("Fetch price change logs error:", error);
+      res.status(500).json({ message: "Failed to fetch price change logs" });
+    }
+  });
+
+  // Tax Change History
+  app.get("/api/tax-change-logs", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      const canView = ['manager', 'owner', 'super_admin', 'finance'].includes(currentUser.role?.name || '');
+      if (!canView) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const logs = await db
+        .select({
+          id: taxChangeLogs.id,
+          taxType: taxChangeLogs.taxType,
+          previousPercent: taxChangeLogs.previousPercent,
+          newPercent: taxChangeLogs.newPercent,
+          previousActive: taxChangeLogs.previousActive,
+          newActive: taxChangeLogs.newActive,
+          createdAt: taxChangeLogs.createdAt,
+          changedBy: {
+            id: users.id,
+            username: users.username,
+            email: users.email,
+            role: roles.name
+          }
+        })
+        .from(taxChangeLogs)
+        .leftJoin(users, eq(taxChangeLogs.changedBy, users.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
+        .where(eq(taxChangeLogs.hotelId, currentUser.hotelId))
+        .orderBy(desc(taxChangeLogs.createdAt))
+        .limit(100);
+      
+      res.json(logs);
+    } catch (error) {
+      console.error("Fetch tax change logs error:", error);
+      res.status(500).json({ message: "Failed to fetch tax change logs" });
+    }
+  });
+
+  // Inventory Movement Tracking
+  app.get("/api/inventory-movement-logs", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      const canView = ['manager', 'owner', 'super_admin', 'storekeeper', 'finance'].includes(currentUser.role?.name || '');
+      if (!canView) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const { itemId, startDate, endDate, transactionType, limit } = req.query;
+      const conditions: any[] = [eq(inventoryTransactions.hotelId, currentUser.hotelId)];
+      
+      if (itemId && typeof itemId === 'string') {
+        conditions.push(eq(inventoryTransactions.itemId, itemId));
+      }
+      if (transactionType && typeof transactionType === 'string') {
+        conditions.push(eq(inventoryTransactions.transactionType, transactionType));
+      }
+      if (startDate && typeof startDate === 'string') {
+        conditions.push(sql`${inventoryTransactions.createdAt} >= ${new Date(startDate)}`);
+      }
+      if (endDate && typeof endDate === 'string') {
+        conditions.push(sql`${inventoryTransactions.createdAt} <= ${new Date(endDate)}`);
+      }
+      
+      const maxLimit = limit && typeof limit === 'string' ? Math.min(parseInt(limit), 500) : 100;
+      
+      const logs = await db
+        .select({
+          id: inventoryTransactions.id,
+          transactionType: inventoryTransactions.transactionType,
+          qtyPackage: inventoryTransactions.qtyPackage,
+          qtyBase: inventoryTransactions.qtyBase,
+          department: inventoryTransactions.department,
+          notes: inventoryTransactions.notes,
+          createdAt: inventoryTransactions.createdAt,
+          item: {
+            id: inventoryItems.id,
+            name: inventoryItems.name,
+            sku: inventoryItems.sku,
+            unit: inventoryItems.unit
+          },
+          recordedBy: {
+            id: users.id,
+            username: users.username,
+            role: roles.name
+          },
+          issuedTo: {
+            id: sql<string>`issued_user.id`,
+            username: sql<string>`issued_user.username`,
+            role: sql<string>`issued_role.name`
+          }
+        })
+        .from(inventoryTransactions)
+        .leftJoin(inventoryItems, eq(inventoryTransactions.itemId, inventoryItems.id))
+        .leftJoin(users, eq(inventoryTransactions.recordedBy, users.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
+        .leftJoin(sql`users AS issued_user`, sql`${inventoryTransactions.issuedToUserId} = issued_user.id`)
+        .leftJoin(sql`roles AS issued_role`, sql`issued_user.role_id = issued_role.id`)
+        .where(and(...conditions))
+        .orderBy(desc(inventoryTransactions.createdAt))
+        .limit(maxLimit);
+      
+      res.json(logs);
+    } catch (error) {
+      console.error("Fetch inventory movement logs error:", error);
+      res.status(500).json({ message: "Failed to fetch inventory movement logs" });
+    }
+  });
+
+  // Staff Activity Summary
+  app.get("/api/staff-activity-summary", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      const canView = ['manager', 'owner', 'super_admin'].includes(currentUser.role?.name || '');
+      if (!canView) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const { userId, startDate, endDate } = req.query;
+      const conditions: any[] = [eq(auditLogs.hotelId, currentUser.hotelId)];
+      
+      if (userId && typeof userId === 'string') {
+        conditions.push(eq(auditLogs.userId, userId));
+      }
+      if (startDate && typeof startDate === 'string') {
+        conditions.push(sql`${auditLogs.createdAt} >= ${new Date(startDate)}`);
+      }
+      if (endDate && typeof endDate === 'string') {
+        conditions.push(sql`${auditLogs.createdAt} <= ${new Date(endDate)}`);
+      }
+      
+      const activityLogs = await db
+        .select({
+          userId: auditLogs.userId,
+          username: users.username,
+          role: roles.name,
+          action: auditLogs.action,
+          resourceType: auditLogs.resourceType,
+          count: sql<number>`COUNT(*)::int`,
+          lastActivity: sql<Date>`MAX(${auditLogs.createdAt})`
+        })
+        .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.userId, users.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
+        .where(and(...conditions))
+        .groupBy(auditLogs.userId, users.username, roles.name, auditLogs.action, auditLogs.resourceType)
+        .orderBy(desc(sql`MAX(${auditLogs.createdAt})`))
+        .limit(200);
+      
+      res.json(activityLogs);
+    } catch (error) {
+      console.error("Fetch staff activity summary error:", error);
+      res.status(500).json({ message: "Failed to fetch staff activity summary" });
+    }
+  });
+
+  // Financial Transaction Details with Creator Info
+  app.get("/api/transactions/:id/details", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      const canView = ['manager', 'owner', 'super_admin', 'finance'].includes(currentUser.role?.name || '');
+      if (!canView) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const transaction = await db
+        .select({
+          id: transactions.id,
+          txnType: transactions.txnType,
+          amount: transactions.amount,
+          currency: transactions.currency,
+          paymentMethod: transactions.paymentMethod,
+          purpose: transactions.purpose,
+          reference: transactions.reference,
+          details: transactions.details,
+          createdAt: transactions.createdAt,
+          isVoided: transactions.isVoided,
+          voidReason: transactions.voidReason,
+          voidedAt: transactions.voidedAt,
+          vendor: {
+            id: vendors.id,
+            name: vendors.name,
+            contact: vendors.contact
+          },
+          createdBy: {
+            id: sql<string>`creator.id`,
+            username: sql<string>`creator.username`,
+            email: sql<string>`creator.email`,
+            role: sql<string>`creator_role.name`
+          },
+          voidedBy: {
+            id: sql<string>`voider.id`,
+            username: sql<string>`voider.username`,
+            role: sql<string>`voider_role.name`
+          }
+        })
+        .from(transactions)
+        .leftJoin(vendors, eq(transactions.vendorId, vendors.id))
+        .leftJoin(sql`users AS creator`, sql`${transactions.createdBy} = creator.id`)
+        .leftJoin(sql`roles AS creator_role`, sql`creator.role_id = creator_role.id`)
+        .leftJoin(sql`users AS voider`, sql`${transactions.voidedBy} = voider.id`)
+        .leftJoin(sql`roles AS voider_role`, sql`voider.role_id = voider_role.id`)
+        .where(eq(transactions.id, req.params.id))
+        .limit(1);
+      
+      if (!transaction || transaction.length === 0) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      res.json(transaction[0]);
+    } catch (error) {
+      console.error("Fetch transaction details error:", error);
+      res.status(500).json({ message: "Failed to fetch transaction details" });
+    }
+  });
+
+  // Room Status Change History
+  app.get("/api/rooms/:roomId/status-history", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      const canView = ['manager', 'owner', 'super_admin', 'front_desk', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+      if (!canView) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+      
+      const history = await db
+        .select({
+          id: roomStatusLogs.id,
+          roomNumber: roomStatusLogs.roomNumber,
+          previousStatus: roomStatusLogs.previousStatus,
+          newStatus: roomStatusLogs.newStatus,
+          reason: roomStatusLogs.reason,
+          createdAt: roomStatusLogs.createdAt,
+          changedBy: {
+            id: users.id,
+            username: users.username,
+            role: roles.name
+          }
+        })
+        .from(roomStatusLogs)
+        .leftJoin(users, eq(roomStatusLogs.changedBy, users.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
+        .where(eq(roomStatusLogs.roomId, req.params.roomId))
+        .orderBy(desc(roomStatusLogs.createdAt))
+        .limit(100);
+      
+      res.json(history);
+    } catch (error) {
+      console.error("Fetch room status history error:", error);
+      res.status(500).json({ message: "Failed to fetch room status history" });
     }
   });
 
