@@ -115,6 +115,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'guests': '/guests',
         'hall-bookings': '/hall-bookings',
         'request-stock': '/front-desk/request-stock',
+        'maintenance': '/front-desk/maintenance-requests',
         'leave': '/leave-requests'
       },
       'surveillance_officer': {
