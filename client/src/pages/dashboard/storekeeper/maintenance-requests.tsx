@@ -27,7 +27,7 @@ export default function StorekeeperMaintenanceRequests() {
   const { data: myRequests = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/maintenance-requests"],
     select: (data: any) => {
-      return data.filter((req: any) => req.reportedBy === user?.id);
+      return data.filter((req: any) => req.reportedBy?.id === user?.id);
     }
   });
 

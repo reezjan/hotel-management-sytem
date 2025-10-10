@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Bed, Users, TrendingUp, Package, AlertTriangle, Building2, Settings, Receipt } from "lucide-react";
+import { DollarSign, Bed, Users, TrendingUp, Package, AlertTriangle, Building2, Settings, Receipt, Shield } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
 export default function OwnerDashboard() {
@@ -84,9 +84,9 @@ export default function OwnerDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-hall-bookings" onClick={() => setLocation("/hall-bookings")}>
-                <Building2 className="h-6 w-6 mb-2" />
-                <span className="text-sm">Hall Bookings</span>
+              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-audit" onClick={() => setLocation("/owner/audit-transparency")}>
+                <Shield className="h-6 w-6 mb-2" />
+                <span className="text-sm">Audit & Transparency</span>
               </Button>
               <Button variant="outline" className="h-20 flex flex-col" data-testid="button-financial" onClick={() => setLocation("/owner/financial")}>
                 <Receipt className="h-6 w-6 mb-2" />
