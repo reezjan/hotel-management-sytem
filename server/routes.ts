@@ -2091,6 +2091,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { taxType, percent, isActive } = req.body;
       
+      console.log("Tax update request:", { taxType, percent, isActive, percentType: typeof percent });
+      
       // Log tax configuration changes for audit trail
       const existingTax = await storage.getHotelTax(user.hotelId, taxType);
       await storage.createTaxChangeLog({

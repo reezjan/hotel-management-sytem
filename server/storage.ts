@@ -1834,13 +1834,13 @@ export class DatabaseStorage implements IStorage {
         hotelId,
         taxType,
         isActive,
-        percent: percent?.toString()
+        percent: percent !== undefined ? percent.toString() : null
       })
       .onConflictDoUpdate({
         target: [hotelTaxes.hotelId, hotelTaxes.taxType],
         set: {
           isActive,
-          percent: percent?.toString()
+          percent: percent !== undefined ? percent.toString() : null
         }
       })
       .returning();
@@ -1853,8 +1853,8 @@ export class DatabaseStorage implements IStorage {
       .values({
         hotelId: log.hotelId,
         taxType: log.taxType,
-        previousPercent: log.previousPercent !== undefined ? String(log.previousPercent) : null,
-        newPercent: log.newPercent !== undefined ? String(log.newPercent) : null,
+        previousPercent: log.previousPercent !== undefined && log.previousPercent !== null ? String(log.previousPercent) : null,
+        newPercent: log.newPercent !== undefined && log.newPercent !== null ? String(log.newPercent) : null,
         previousActive: log.previousActive,
         newActive: log.newActive,
         changedBy: log.changedBy
