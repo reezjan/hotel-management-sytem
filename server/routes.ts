@@ -2519,8 +2519,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // CRITICAL: Define which roles can be reset by managers and owners
       const targetRole = targetUser.role?.name || '';
-      const managerCanReset = ['waiter', 'kitchen_staff', 'housekeeping_staff', 'security_guard', 'cashier', 'front_desk'];
-      const ownerCanReset = [...managerCanReset, 'manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head', 'finance', 'storekeeper'];
+      const managerCanReset = ['waiter', 'kitchen_staff', 'housekeeping_staff', 'security_guard', 'cashier', 'front_desk', 'storekeeper'];
+      const ownerCanReset = [...managerCanReset, 'manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head', 'finance'];
 
       let canResetThisRole = false;
       if (currentRole === 'owner') {
