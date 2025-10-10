@@ -52,6 +52,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'pricing': '/manager/room-pricing',
         'amenities': '/manager/amenities',
         'meal-plans': '/manager/meal-plans',
+        'maintenance-requests': '/manager/maintenance-requests',
         'leave-approvals': '/manager/leave-approvals',
         'transactions': '/manager/transactions'
       },
@@ -91,6 +92,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'cashflow': '/finance/cashflow',
         'reconciliation': '/finance/reconciliation',
         'reports': '/finance/reports',
+        'maintenance-requests': '/finance/maintenance-requests',
         'leave': '/leave-requests'
       },
       'waiter': {
