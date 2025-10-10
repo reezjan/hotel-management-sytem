@@ -37,6 +37,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'taxes': '/owner/taxes',
         'staff': '/owner/staff',
         'leave-approvals': '/owner/leave-approvals',
+        'report': '/owner/report',
         'reports': '/owner/reports'
       },
       'manager': {
