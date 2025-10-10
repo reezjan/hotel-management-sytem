@@ -1202,6 +1202,7 @@ export class DatabaseStorage implements IStorage {
         photo: maintenanceRequests.photo,
         priority: maintenanceRequests.priority,
         status: maintenanceRequests.status,
+        reportedBy: maintenanceRequests.reportedBy,
         assignedTo: maintenanceRequests.assignedTo,
         resolvedAt: maintenanceRequests.resolvedAt,
         createdAt: maintenanceRequests.createdAt,
@@ -1217,6 +1218,31 @@ export class DatabaseStorage implements IStorage {
       .where(eq(maintenanceRequests.hotelId, hotelId))
       .orderBy(desc(maintenanceRequests.createdAt));
     
+    // Fetch all unique assignee IDs
+    const assigneeIds = Array.from(new Set(results.map(r => r.assignedTo).filter(Boolean)));
+    
+    // Fetch assignee user data
+    const assignees = assigneeIds.length > 0 ? await db
+      .select({
+        id: users.id,
+        username: users.username,
+        roleId: roles.id,
+        roleName: roles.name
+      })
+      .from(users)
+      .leftJoin(roles, eq(users.roleId, roles.id))
+      .where(inArray(users.id, assigneeIds as string[]))
+      : [];
+    
+    // Create a map for quick lookup
+    const assigneeMap = new Map(
+      assignees.map(a => [a.id, {
+        id: a.id,
+        username: a.username,
+        role: a.roleId ? { id: a.roleId, name: a.roleName } : null
+      }])
+    );
+    
     // Transform the flat results into the expected structure
     return results.map(result => ({
       id: result.id,
@@ -1227,7 +1253,6 @@ export class DatabaseStorage implements IStorage {
       photo: result.photo,
       priority: result.priority,
       status: result.status,
-      assignedTo: result.assignedTo,
       resolvedAt: result.resolvedAt,
       createdAt: result.createdAt,
       updatedAt: result.updatedAt,
@@ -1238,7 +1263,8 @@ export class DatabaseStorage implements IStorage {
           id: result.reportedByRoleId,
           name: result.reportedByRoleName
         } : null
-      } : null
+      } : null,
+      assignedTo: result.assignedTo ? assigneeMap.get(result.assignedTo) || null : null
     }));
   }
 
