@@ -1054,7 +1054,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let assignedTo = req.body.assignedTo;
       const userRole = user.role?.name || '';
       const rolesAssignedToSecurityHead = ['waiter', 'kitchen_staff', 'bartender', 'barista', 'security_guard', 'surveillance_officer'];
-      const rolesAssignedToManager = ['front_desk'];
+      const rolesAssignedToManager = ['front_desk', 'storekeeper'];
       const rolesAssignedToHousekeepingSupervisor = ['housekeeping_staff'];
       
       if (rolesAssignedToSecurityHead.includes(userRole)) {
