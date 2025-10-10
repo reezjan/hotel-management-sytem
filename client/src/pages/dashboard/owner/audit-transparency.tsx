@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -7,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { CalendarIcon, FileText, DollarSign, Package, Users, Settings, History, TrendingUp } from "lucide-react";
+import { CalendarIcon, FileText, DollarSign, Package, Users, Settings, History, TrendingUp, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AuditTransparencyPage() {
+  const [, setLocation] = useLocation();
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined
@@ -37,12 +39,27 @@ export default function AuditTransparencyPage() {
     queryKey: ['/api/staff-activity-summary', dateRange.from, dateRange.to]
   });
 
+  const { data: financialTransactions } = useQuery({
+    queryKey: ['/api/hotels/current/transactions', dateRange.from, dateRange.to],
+    enabled: !!dateRange.from && !!dateRange.to
+  });
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold" data-testid="heading-audit-transparency">Audit & Transparency</h1>
-          <p className="text-muted-foreground">Complete visibility into all hotel operations and changes</p>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setLocation("/owner")}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold" data-testid="heading-audit-transparency">Audit & Transparency</h1>
+            <p className="text-muted-foreground">Complete visibility into all hotel operations and changes</p>
+          </div>
         </div>
         <Popover>
           <PopoverTrigger asChild>
@@ -354,9 +371,37 @@ export default function AuditTransparencyPage() {
               <CardDescription>Track who approved/declined each maintenance request</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Maintenance approval history is available when viewing individual maintenance requests. Click on any request to see its complete approval timeline.
-              </p>
+              <div className="space-y-4">
+                {Array.isArray(auditLogs) && auditLogs
+                  .filter((log: any) => log.resourceType === 'maintenance_request' && ['approved', 'declined', 'resolved'].includes(log.action))
+                  .map((log: any) => (
+                  <div key={log.id} className="flex items-start justify-between border-b pb-4" data-testid={`maintenance-approval-${log.id}`}>
+                    <div className="space-y-1 flex-1">
+                      <p className="text-sm font-medium" data-testid={`text-request-title-${log.id}`}>
+                        {log.details?.requestTitle || 'Maintenance Request'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Location: {log.details?.requestLocation || 'N/A'}
+                      </p>
+                      <p className="text-xs text-muted-foreground" data-testid={`text-approval-by-${log.id}`}>
+                        {log.action.charAt(0).toUpperCase() + log.action.slice(1)} by: {log.user?.username || 'Unknown'} ({log.user?.role?.name?.replace(/_/g, ' ')}) on{" "}
+                        {new Date(log.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <Badge 
+                      variant={log.action === 'approved' ? 'default' : log.action === 'declined' ? 'destructive' : 'secondary'}
+                      data-testid={`badge-approval-status-${log.id}`}
+                    >
+                      {log.action.toUpperCase()}
+                    </Badge>
+                  </div>
+                ))}
+                {(!Array.isArray(auditLogs) || auditLogs.filter((log: any) => log.resourceType === 'maintenance_request' && ['approved', 'declined', 'resolved'].includes(log.action)).length === 0) && (
+                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-approvals">
+                    No maintenance approvals recorded. Select a date range to view approval history.
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

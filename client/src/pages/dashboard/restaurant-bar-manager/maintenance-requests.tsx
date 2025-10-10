@@ -4,7 +4,7 @@ import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Wrench, AlertCircle, CheckCircle, Clock, Send } from "lucide-react";
+import { Wrench, AlertCircle, CheckCircle, Clock, ThumbsUp, ThumbsDown } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -27,12 +27,12 @@ export default function MaintenanceRequests() {
 
   // Update maintenance request status
   const updateRequestMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const response = await fetch(`/api/hotels/current/maintenance-requests/${id}`, {
+    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
+      const response = await fetch(`/api/maintenance-requests/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, notes })
       });
       if (!response.ok) throw new Error("Failed to update request");
       return response.json();
@@ -49,8 +49,10 @@ export default function MaintenanceRequests() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'approved': return 'bg-blue-100 text-blue-800';
       case 'in_progress': return 'bg-blue-100 text-blue-800';
       case 'resolved': return 'bg-green-100 text-green-800';
+      case 'declined': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -117,43 +119,47 @@ export default function MaintenanceRequests() {
       render: (_: any, row: any) => (
         <div className="flex gap-2">
           {row.status === 'pending' && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => updateRequestMutation.mutate({ id: row.id, status: 'in_progress' })}
-            >
-              <Clock className="h-4 w-4 mr-1" />
-              In Progress
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                onClick={() => updateRequestMutation.mutate({ id: row.id, status: 'approved' })}
+                data-testid={`button-approve-${row.id}`}
+              >
+                <ThumbsUp className="h-4 w-4 mr-1" />
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                onClick={() => updateRequestMutation.mutate({ id: row.id, status: 'declined' })}
+                data-testid={`button-decline-${row.id}`}
+              >
+                <ThumbsDown className="h-4 w-4 mr-1" />
+                Decline
+              </Button>
+            </>
           )}
-          {row.status === 'in_progress' && (
+          {row.status === 'approved' && (
             <Button
               size="sm"
               variant="outline"
               onClick={() => updateRequestMutation.mutate({ id: row.id, status: 'resolved' })}
+              data-testid={`button-resolve-${row.id}`}
             >
               <CheckCircle className="h-4 w-4 mr-1" />
               Resolve
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              // Forward to finance - update assignedTo to finance role
-              toast.success("Request forwarded to finance");
-            }}
-          >
-            <Send className="h-4 w-4 mr-1" />
-            Forward to Finance
-          </Button>
         </div>
       )
     }
   ];
 
   const pendingRequests = maintenanceRequests.filter(r => r.status === 'pending');
-  const inProgressRequests = maintenanceRequests.filter(r => r.status === 'in_progress');
+  const approvedRequests = maintenanceRequests.filter(r => r.status === 'approved');
   const resolvedRequests = maintenanceRequests.filter(r => r.status === 'resolved');
 
   return (
@@ -173,11 +179,11 @@ export default function MaintenanceRequests() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-            <Clock className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium">Approved</CardTitle>
+            <ThumbsUp className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{inProgressRequests.length}</div>
+            <div className="text-2xl font-bold">{approvedRequests.length}</div>
             <p className="text-xs text-muted-foreground">Being handled</p>
           </CardContent>
         </Card>
