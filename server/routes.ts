@@ -1122,7 +1122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // CRITICAL: Reassignment requires supervisor approval
       if ('assignedTo' in updateData && updateData.assignedTo !== existingRequest.assignedTo) {
-        const canReassign = ['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+        const canReassign = ['manager', 'owner', 'security_head', 'housekeeping_supervisor', 'restaurant_bar_manager'].includes(currentUser.role?.name || '');
         
         if (!canReassign) {
           return res.status(403).json({ 
@@ -1133,11 +1133,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Log reassignment for audit
         await storage.createAuditLog({
           hotelId: currentUser.hotelId,
-          entity: 'maintenance_request',
-          entityId: id,
+          resourceType: 'maintenance_request',
+          resourceId: id,
           action: 'reassigned',
-          changedBy: currentUser.id,
-          payload: {
+          userId: currentUser.id,
+          details: {
             previousAssignee: existingRequest.assignedTo,
             newAssignee: updateData.assignedTo,
             timestamp: new Date()
@@ -1147,7 +1147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Verify assigned user can update their own requests
       const isAssigned = existingRequest.assignedTo === currentUser.id;
-      const isSupervisor = ['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+      const isSupervisor = ['manager', 'owner', 'security_head', 'housekeeping_supervisor', 'restaurant_bar_manager'].includes(currentUser.role?.name || '');
       
       if (!isAssigned && !isSupervisor) {
         return res.status(403).json({ 
@@ -3225,7 +3225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // CRITICAL: Reassignment requires supervisor approval
       if ('assignedTo' in updateData && updateData.assignedTo !== existingRequest.assignedTo) {
-        const canReassign = ['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+        const canReassign = ['manager', 'owner', 'security_head', 'housekeeping_supervisor', 'restaurant_bar_manager'].includes(currentUser.role?.name || '');
         
         if (!canReassign) {
           return res.status(403).json({ 
@@ -3236,11 +3236,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Log reassignment for audit
         await storage.createAuditLog({
           hotelId: currentUser.hotelId,
-          entity: 'maintenance_request',
-          entityId: id,
+          resourceType: 'maintenance_request',
+          resourceId: id,
           action: 'reassigned',
-          changedBy: currentUser.id,
-          payload: {
+          userId: currentUser.id,
+          details: {
             previousAssignee: existingRequest.assignedTo,
             newAssignee: updateData.assignedTo,
             timestamp: new Date()
@@ -3250,11 +3250,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Verify assigned user can update their own requests
       const isAssigned = existingRequest.assignedTo === currentUser.id;
-      const isSupervisor = ['manager', 'owner', 'security_head', 'housekeeping_supervisor'].includes(currentUser.role?.name || '');
+      const isSupervisor = ['manager', 'owner', 'security_head', 'housekeeping_supervisor', 'restaurant_bar_manager'].includes(currentUser.role?.name || '');
       
       if (!isAssigned && !isSupervisor) {
         return res.status(403).json({ 
           message: "You can only update requests assigned to you" 
+        });
+      }
+      
+      // Log status changes (approve/decline) for audit
+      if ('status' in updateData && updateData.status !== existingRequest.status) {
+        const statusActions: { [key: string]: string } = {
+          'approved': 'approved',
+          'declined': 'declined',
+          'resolved': 'resolved',
+          'in_progress': 'started'
+        };
+        
+        const action = statusActions[updateData.status] || 'updated';
+        
+        await storage.createAuditLog({
+          hotelId: currentUser.hotelId,
+          resourceType: 'maintenance_request',
+          resourceId: id,
+          action,
+          userId: currentUser.id,
+          details: {
+            previousStatus: existingRequest.status,
+            newStatus: updateData.status,
+            requestTitle: existingRequest.title,
+            requestLocation: existingRequest.location,
+            timestamp: new Date()
+          }
         });
       }
       
@@ -3630,11 +3657,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Create audit log for amendment
         await storage.createAuditLog({
           hotelId: user.hotelId,
-          entity: 'restaurant_bill',
-          entityId: id,
+          resourceType: 'restaurant_bill',
+          resourceId: id,
           action: 'amendment',
-          changedBy: user.id,
-          payload: {
+          userId: user.id,
+          details: {
             originalStatus: existingBill.status,
             changes: req.body,
             amendmentNote: req.body.amendmentNote,
@@ -6603,8 +6630,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const maxLimit = limit && typeof limit === 'string' ? Math.min(parseInt(limit), 1000) : 500;
       
       const logs = await db
-        .select()
+        .select({
+          id: auditLogs.id,
+          hotelId: auditLogs.hotelId,
+          userId: auditLogs.userId,
+          action: auditLogs.action,
+          resourceType: auditLogs.resourceType,
+          resourceId: auditLogs.resourceId,
+          details: auditLogs.details,
+          ipAddress: auditLogs.ipAddress,
+          userAgent: auditLogs.userAgent,
+          success: auditLogs.success,
+          errorMessage: auditLogs.errorMessage,
+          createdAt: auditLogs.createdAt,
+          user: sql`json_build_object(
+            'id', ${users.id},
+            'username', ${users.username},
+            'role', json_build_object(
+              'id', ${roles.id},
+              'name', ${roles.name}
+            )
+          )`
+        })
         .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.userId, users.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
         .where(and(...conditions))
         .orderBy(sql`${auditLogs.createdAt} DESC`)
         .limit(maxLimit);

@@ -380,7 +380,7 @@ export interface IStorage {
   canClockIn(userId: string): Promise<{ canClockIn: boolean; reason?: string }>;
   
   // Audit log operations
-  createAuditLog(log: { hotelId: string; entity: string; entityId: string; action: string; changedBy: string; payload: any }): Promise<any>;
+  createAuditLog(log: { hotelId: string; resourceType: string; resourceId: string; action: string; userId: string; details: any }): Promise<any>;
   
   // Price change log operations
   createPriceChangeLog(log: { hotelId: string; itemId: string; itemType: string; itemName: string; previousPrice: string | number; newPrice: string | number; changedBy: string }): Promise<any>;
@@ -3472,16 +3472,17 @@ export class DatabaseStorage implements IStorage {
     return { canClockIn: true };
   }
 
-  async createAuditLog(log: { hotelId: string; entity: string; entityId: string; action: string; changedBy: string; payload: any }): Promise<any> {
+  async createAuditLog(log: { hotelId: string; resourceType: string; resourceId: string; action: string; userId: string; details: any }): Promise<any> {
     const [auditLog] = await db
       .insert(auditLogs)
       .values({
         hotelId: log.hotelId,
-        entity: log.entity,
-        entityId: log.entityId,
+        resourceType: log.resourceType,
+        resourceId: log.resourceId,
         action: log.action,
-        changedBy: log.changedBy,
-        payload: log.payload
+        userId: log.userId,
+        details: log.details,
+        success: true
       })
       .returning();
     
