@@ -1142,12 +1142,38 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Transaction operations
-  async getTransactionsByHotel(hotelId: string): Promise<Transaction[]> {
-    return await db
-      .select()
+  async getTransactionsByHotel(hotelId: string): Promise<any[]> {
+    const results = await db
+      .select({
+        id: transactions.id,
+        hotelId: transactions.hotelId,
+        txnType: transactions.txnType,
+        amount: transactions.amount,
+        currency: transactions.currency,
+        paymentMethod: transactions.paymentMethod,
+        vendorId: transactions.vendorId,
+        purpose: transactions.purpose,
+        reference: transactions.reference,
+        details: transactions.details,
+        createdBy: transactions.createdBy,
+        createdAt: transactions.createdAt,
+        deletedAt: transactions.deletedAt,
+        isVoided: transactions.isVoided,
+        voidedBy: transactions.voidedBy,
+        voidedAt: transactions.voidedAt,
+        voidReason: transactions.voidReason,
+        creator: {
+          id: users.id,
+          username: users.username,
+          role: roles.name
+        }
+      })
       .from(transactions)
+      .leftJoin(users, eq(transactions.createdBy, users.id))
+      .leftJoin(roles, eq(users.roleId, roles.id))
       .where(and(eq(transactions.hotelId, hotelId), isNull(transactions.deletedAt)))
       .orderBy(desc(transactions.createdAt));
+    return results;
   }
 
   async createTransaction(transactionData: InsertTransaction): Promise<Transaction> {
