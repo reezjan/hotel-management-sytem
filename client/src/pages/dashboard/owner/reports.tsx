@@ -1123,7 +1123,7 @@ export default function Reports() {
                                 <TableCell>{member.fullName || '-'}</TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="capitalize">
-                                    {member.role?.replace(/_/g, ' ')}
+                                    {member.role?.name?.replace(/_/g, ' ')}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-sm">{member.email || '-'}</TableCell>

@@ -331,7 +331,7 @@ export default function HallBookings() {
 
   // Role-based permissions
   const userRole = user?.role?.name || '';
-  const canManage = ['manager', 'owner', 'super_admin', 'front_desk'].includes(userRole);
+  const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
   const isFinance = userRole === 'finance';
   const isCashier = userRole === 'cashier';
   const canViewOnly = isCashier;

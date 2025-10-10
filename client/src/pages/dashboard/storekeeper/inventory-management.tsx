@@ -503,84 +503,64 @@ export default function StorekeeperInventoryManagement() {
         </TabsContent>
       </Tabs>
 
-      {/* Add Item Modal */}
+      {/* Add Item Modal - Simplified for Storekeepers */}
       <Dialog open={isAddItemModalOpen} onOpenChange={setIsAddItemModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add New Inventory Item</DialogTitle>
+            <DialogTitle className="text-xl">Add New Item to Store</DialogTitle>
+            <p className="text-sm text-muted-foreground mt-1">Fill in the basic details below</p>
           </DialogHeader>
           <Form {...addItemForm}>
-            <form onSubmit={addItemForm.handleSubmit(onAddItem)} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={addItemForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Item Name *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="e.g., All-Purpose Flour" data-testid="input-item-name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={addItemForm.control}
-                  name="sku"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>SKU</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="e.g., FLR-001" data-testid="input-item-sku" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
+            <form onSubmit={addItemForm.handleSubmit(onAddItem)} className="space-y-5">
+              {/* Item Name - Most Important */}
               <FormField
                 control={addItemForm.control}
-                name="description"
+                name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel className="text-base font-semibold">1. What is the item called? *</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder="Item details..." data-testid="input-item-description" />
+                      <Input 
+                        {...field} 
+                        placeholder="Example: Rice, Soap, Towels" 
+                        className="text-base h-11"
+                        data-testid="input-item-name" 
+                      />
                     </FormControl>
+                    <FormDescription className="text-sm">Write the name of the item you want to add</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
+              {/* Who uses it */}
               <FormField
                 control={addItemForm.control}
                 name="departments"
                 render={() => (
                   <FormItem>
-                    <FormLabel>Visible to Departments *</FormLabel>
-                    <FormDescription className="text-xs">
-                      Select which departments can view and use this inventory item
+                    <FormLabel className="text-base font-semibold">2. Who will use this item? *</FormLabel>
+                    <FormDescription className="text-sm mb-3">
+                      Check the boxes for departments that need this item
                     </FormDescription>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
+                    <div className="grid grid-cols-2 gap-3 bg-muted/30 p-4 rounded-lg">
                       {[
+                        { value: 'all', label: '✓ Everyone (All Departments)', highlight: true },
+                        { value: 'kitchen', label: 'Kitchen' },
                         { value: 'restaurant', label: 'Restaurant' },
                         { value: 'bar', label: 'Bar' },
-                        { value: 'kitchen', label: 'Kitchen' },
-                        { value: 'housekeeping', label: 'Housekeeping' },
+                        { value: 'housekeeping', label: 'Housekeeping/Cleaning' },
                         { value: 'laundry', label: 'Laundry' },
-                        { value: 'maintenance', label: 'Maintenance' },
+                        { value: 'maintenance', label: 'Maintenance/Repair' },
                         { value: 'front_desk', label: 'Front Desk' },
-                        { value: 'security', label: 'Security' },
-                        { value: 'all', label: 'All Departments' }
+                        { value: 'security', label: 'Security' }
                       ].map((dept) => (
                         <FormField
                           key={dept.value}
                           control={addItemForm.control}
                           name="departments"
                           render={({ field }) => (
-                            <FormItem className="flex items-center space-x-2 space-y-0">
+                            <FormItem className={`flex items-center space-x-3 space-y-0 p-2 rounded ${dept.highlight ? 'bg-primary/10 border border-primary/20' : ''}`}>
                               <FormControl>
                                 <Checkbox
                                   checked={field.value?.includes(dept.value)}
@@ -602,9 +582,10 @@ export default function StorekeeperInventoryManagement() {
                                     }
                                   }}
                                   data-testid={`checkbox-dept-${dept.value}`}
+                                  className="h-5 w-5"
                                 />
                               </FormControl>
-                              <FormLabel className="text-sm font-normal cursor-pointer">
+                              <FormLabel className="text-sm font-normal cursor-pointer leading-tight">
                                 {dept.label}
                               </FormLabel>
                             </FormItem>
@@ -617,132 +598,184 @@ export default function StorekeeperInventoryManagement() {
                 )}
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <FormField
-                  control={addItemForm.control}
-                  name="baseUnit"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Base Unit *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-base-unit">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="kg">Kilograms (kg)</SelectItem>
-                          <SelectItem value="g">Grams (g)</SelectItem>
-                          <SelectItem value="L">Liters (L)</SelectItem>
-                          <SelectItem value="ml">Milliliters (ml)</SelectItem>
-                          <SelectItem value="piece">Pieces (piece)</SelectItem>
-                          <SelectItem value="dozen">Dozen</SelectItem>
-                          <SelectItem value="pack">Packs</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={addItemForm.control}
-                  name="packageUnit"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Package Unit (optional)</FormLabel>
+              {/* How to measure */}
+              <FormField
+                control={addItemForm.control}
+                name="baseUnit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-base font-semibold">3. How do you count/measure this? *</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <Input {...field} placeholder="e.g., sack, box, packet" data-testid="input-package-unit" />
+                        <SelectTrigger className="text-base h-11" data-testid="select-base-unit">
+                          <SelectValue placeholder="Choose how to measure" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={addItemForm.control}
-                  name="baseUnitsPerPackage"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Units per Package</FormLabel>
-                      <FormControl>
-                        <Input 
-                          {...field} 
-                          type="number"
-                          step="0.001"
-                          placeholder="e.g., 50"
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                          data-testid="input-base-units-per-package"
-                        />
-                      </FormControl>
-                      <FormDescription className="text-xs">
-                        How many base units in 1 package?
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                      <SelectContent>
+                        <SelectItem value="piece">Pieces (1, 2, 3...)</SelectItem>
+                        <SelectItem value="kg">Kilograms (kg) - for heavy items</SelectItem>
+                        <SelectItem value="g">Grams (g) - for light items</SelectItem>
+                        <SelectItem value="L">Liters (L) - for liquids</SelectItem>
+                        <SelectItem value="ml">Milliliters (ml) - for small liquid amounts</SelectItem>
+                        <SelectItem value="pack">Packs/Packets</SelectItem>
+                        <SelectItem value="dozen">Dozen (12 pieces)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="text-sm">Select how you will count or weigh this item</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <FormField
-                  control={addItemForm.control}
-                  name="reorderLevel"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reorder Level</FormLabel>
-                      <FormControl>
-                        <Input 
-                          {...field} 
-                          type="number"
-                          step="0.001"
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                          data-testid="input-reorder-level"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={addItemForm.control}
-                  name="costPerUnit"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cost per Unit</FormLabel>
-                      <FormControl>
-                        <Input 
-                          {...field} 
-                          type="number"
-                          step="0.01"
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                          data-testid="input-cost-per-unit"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={addItemForm.control}
-                  name="storageLocation"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Storage Location</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="e.g., Shelf A3" data-testid="input-storage-location" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              {/* Where to keep it */}
+              <FormField
+                control={addItemForm.control}
+                name="storageLocation"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-base font-semibold">4. Where do you keep this item?</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="Example: Shelf 1, Cold Room, Top Rack" 
+                        className="text-base h-11"
+                        data-testid="input-storage-location" 
+                      />
+                    </FormControl>
+                    <FormDescription className="text-sm">Where in the store is this item kept?</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Optional: What it looks like / Notes */}
+              <FormField
+                control={addItemForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-base font-semibold">5. Any notes? (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        {...field} 
+                        placeholder="Example: White color, comes in blue bags, expires quickly" 
+                        className="text-base"
+                        rows={3}
+                        data-testid="input-item-description" 
+                      />
+                    </FormControl>
+                    <FormDescription className="text-sm">Add any helpful details about this item</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Advanced fields hidden by default - Only show if needed */}
+              <details className="border rounded-lg p-4 bg-muted/20">
+                <summary className="cursor-pointer font-semibold text-base mb-4">
+                  ⚙️ Advanced Settings (Optional - Click to show)
+                </summary>
+                <div className="space-y-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField
+                      control={addItemForm.control}
+                      name="packageUnit"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Package Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="e.g., sack, box, carton" data-testid="input-package-unit" />
+                          </FormControl>
+                          <FormDescription className="text-xs">If items come in packages</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={addItemForm.control}
+                      name="baseUnitsPerPackage"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>How many in 1 package?</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number"
+                              step="0.001"
+                              placeholder="e.g., 50"
+                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              data-testid="input-base-units-per-package"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <FormField
+                      control={addItemForm.control}
+                      name="reorderLevel"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Minimum Stock Alert</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number"
+                              step="0.001"
+                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              data-testid="input-reorder-level"
+                            />
+                          </FormControl>
+                          <FormDescription className="text-xs">Alert when stock goes below this</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={addItemForm.control}
+                      name="costPerUnit"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Price per Unit</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number"
+                              step="0.01"
+                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              data-testid="input-cost-per-unit"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={addItemForm.control}
+                      name="sku"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Item Code/SKU</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="e.g., ITM-001" data-testid="input-item-sku" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              </details>
 
               <Button 
                 type="submit" 
-                className="w-full"
+                className="w-full h-12 text-base font-semibold"
                 disabled={createItemMutation.isPending}
                 data-testid="button-submit-item"
               >
-                {createItemMutation.isPending ? 'Creating...' : 'Create Item'}
+                {createItemMutation.isPending ? 'Adding Item...' : '✓ Add Item to Store'}
               </Button>
             </form>
           </Form>
