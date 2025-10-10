@@ -232,7 +232,8 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Calculator', label: 'Tax Configuration', id: 'taxes' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
     { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' },
-    { icon: 'BarChart', label: 'Reports', id: 'reports' }
+    { icon: 'FileText', label: 'Report', id: 'report' },
+    { icon: 'BarChart', label: 'Financial Report', id: 'reports' }
   ],
   [ROLES.MANAGER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
