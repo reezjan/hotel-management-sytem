@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,10 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, User, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Calendar, Clock, User, CheckCircle, XCircle, AlertCircle, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 export default function LeaveRequests() {
+  const [, setLocation] = useLocation();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newRequest, setNewRequest] = useState({
     leaveType: "",
@@ -194,6 +196,21 @@ export default function LeaveRequests() {
   return (
     <DashboardLayout title="Leave Requests">
       <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setLocation("/security-head")}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold" data-testid="heading-leave-requests">Leave Requests</h1>
+            <p className="text-muted-foreground">View and manage your leave requests</p>
+          </div>
+        </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {leaveBalances.map((balance: any) => (
             <Card key={balance.id} data-testid={`balance-card-${balance.leaveType}`}>

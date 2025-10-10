@@ -219,8 +219,8 @@ export default function SecurityHeadDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <Dialog open={isCreateOfficerOpen} onOpenChange={setIsCreateOfficerOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="h-20 flex flex-col" data-testid="button-add-officer">
-                    <UserPlus className="h-6 w-6 mb-2" />
+                  <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-add-officer">
+                    <UserPlus className="h-6 w-6" />
                     <span className="text-sm">Add Officer</span>
                   </Button>
                 </DialogTrigger>
@@ -289,8 +289,8 @@ export default function SecurityHeadDashboard() {
 
               <Dialog open={isCreateTaskOpen} onOpenChange={setIsCreateTaskOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="h-20 flex flex-col" data-testid="button-assign-task">
-                    <ClipboardList className="h-6 w-6 mb-2" />
+                  <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-assign-task">
+                    <ClipboardList className="h-6 w-6" />
                     <span className="text-sm">Assign Task</span>
                   </Button>
                 </DialogTrigger>
@@ -375,8 +375,8 @@ export default function SecurityHeadDashboard() {
                 </DialogContent>
               </Dialog>
 
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-vehicle-logs">
-                <Car className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-vehicle-logs">
+                <Car className="h-6 w-6" />
                 <span className="text-sm">View Vehicles</span>
               </Button>
             </div>

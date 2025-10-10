@@ -84,20 +84,20 @@ export default function OwnerDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-audit" onClick={() => setLocation("/owner/audit-transparency")}>
-                <Shield className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-audit" onClick={() => setLocation("/owner/audit-transparency")}>
+                <Shield className="h-6 w-6" />
                 <span className="text-sm">Audit & Transparency</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-financial" onClick={() => setLocation("/owner/financial")}>
-                <Receipt className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-financial" onClick={() => setLocation("/owner/financial")}>
+                <Receipt className="h-6 w-6" />
                 <span className="text-sm">Financial</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-occupancy" onClick={() => setLocation("/owner/occupancy")}>
-                <Bed className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-occupancy" onClick={() => setLocation("/owner/occupancy")}>
+                <Bed className="h-6 w-6" />
                 <span className="text-sm">Occupancy</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-staff" onClick={() => setLocation("/owner/staff")}>
-                <Users className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-staff" onClick={() => setLocation("/owner/staff")}>
+                <Users className="h-6 w-6" />
                 <span className="text-sm">Staff</span>
               </Button>
             </div>

@@ -566,37 +566,37 @@ export default function FinanceDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 onClick={() => setIsBankDepositModalOpen(true)}
                 data-testid="button-bank-deposit"
               >
-                <Landmark className="h-6 w-6 mb-2" />
+                <Landmark className="h-6 w-6" />
                 <span className="text-sm">Deposit to Bank</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 onClick={() => setIsVendorPaymentModalOpen(true)}
                 data-testid="button-vendor-payment"
               >
-                <CreditCard className="h-6 w-6 mb-2" />
+                <CreditCard className="h-6 w-6" />
                 <span className="text-sm">Vendor Payment</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 onClick={() => setLocation("/hall-bookings")}
                 data-testid="button-hall-bookings"
               >
-                <Building2 className="h-6 w-6 mb-2" />
+                <Building2 className="h-6 w-6" />
                 <span className="text-sm">Hall Bookings</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-expense-report">
-                <Receipt className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-expense-report">
+                <Receipt className="h-6 w-6" />
                 <span className="text-sm">Expense Report</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-financial-report">
-                <TrendingUp className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-financial-report">
+                <TrendingUp className="h-6 w-6" />
                 <span className="text-sm">Financial Report</span>
               </Button>
             </div>

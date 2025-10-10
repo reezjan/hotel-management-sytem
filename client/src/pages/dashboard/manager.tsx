@@ -142,32 +142,32 @@ export default function ManagerDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-add-staff" onClick={() => setLocation("/manager/staff")}>
-                <Users className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-add-staff" onClick={() => setLocation("/manager/staff")}>
+                <Users className="h-6 w-6" />
                 <span className="text-sm">Add Staff</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-vendor-payment" onClick={() => setLocation("/manager/vendor-payments")}>
-                <CreditCard className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-vendor-payment" onClick={() => setLocation("/manager/vendor-payments")}>
+                <CreditCard className="h-6 w-6" />
                 <span className="text-sm">Vendor Payment</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-create-voucher" onClick={() => setLocation("/manager/discount-vouchers")}>
-                <Tag className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-create-voucher" onClick={() => setLocation("/manager/discount-vouchers")}>
+                <Tag className="h-6 w-6" />
                 <span className="text-sm">Create Voucher</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-room-setup" onClick={() => setLocation("/manager/room-setup")}>
-                <DoorOpen className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-room-setup" onClick={() => setLocation("/manager/room-setup")}>
+                <DoorOpen className="h-6 w-6" />
                 <span className="text-sm">Room Setup</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-amenities" onClick={() => setLocation("/manager/amenities")}>
-                <Receipt className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-amenities" onClick={() => setLocation("/manager/amenities")}>
+                <Receipt className="h-6 w-6" />
                 <span className="text-sm">Amenities</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-hall-bookings" onClick={() => setLocation("/hall-bookings")}>
-                <Building2 className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-hall-bookings" onClick={() => setLocation("/hall-bookings")}>
+                <Building2 className="h-6 w-6" />
                 <span className="text-sm">Hall Bookings</span>
               </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-transactions" onClick={() => setLocation("/manager/transactions")}>
-                <BarChart3 className="h-6 w-6 mb-2" />
+              <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" data-testid="button-transactions" onClick={() => setLocation("/manager/transactions")}>
+                <BarChart3 className="h-6 w-6" />
                 <span className="text-sm">Transactions</span>
               </Button>
             </div>

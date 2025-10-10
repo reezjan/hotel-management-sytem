@@ -129,38 +129,38 @@ export default function HousekeepingSupervisorDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 data-testid="button-add-staff"
                 onClick={() => setLocation("/housekeeping-supervisor/staff-management")}
               >
-                <UserPlus className="h-6 w-6 mb-2" />
+                <UserPlus className="h-6 w-6" />
                 <span className="text-sm">Add Staff</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 data-testid="button-assign-tasks"
                 onClick={() => setLocation("/housekeeping-supervisor/task-assignment")}
               >
-                <CheckSquare className="h-6 w-6 mb-2" />
+                <CheckSquare className="h-6 w-6" />
                 <span className="text-sm">Assign Tasks</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 data-testid="button-duty-roster"
                 onClick={() => setLocation("/housekeeping-supervisor/duty-tracking")}
               >
-                <Clock className="h-6 w-6 mb-2" />
+                <Clock className="h-6 w-6" />
                 <span className="text-sm">Duty Roster</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 data-testid="button-maintenance"
                 onClick={() => setLocation("/housekeeping-supervisor/maintenance-requests")}
               >
-                <Wrench className="h-6 w-6 mb-2" />
+                <Wrench className="h-6 w-6" />
                 <span className="text-sm">Maintenance</span>
               </Button>
             </div>

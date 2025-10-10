@@ -187,38 +187,38 @@ export default function RestaurantBarManagerDashboard() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 data-testid="button-add-staff"
                 onClick={() => setLocation("/restaurant-bar-manager/staff-management")}
               >
-                <Users className="h-6 w-6 mb-2" />
+                <Users className="h-6 w-6" />
                 <span className="text-sm">Add Staff</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 data-testid="button-menu-management"
                 onClick={() => setLocation("/restaurant-bar-manager/menu-management")}
               >
-                <Utensils className="h-6 w-6 mb-2" />
+                <Utensils className="h-6 w-6" />
                 <span className="text-sm">Menu Management</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 data-testid="button-table-setup"
                 onClick={() => setLocation("/restaurant-bar-manager/table-setup")}
               >
-                <Calendar className="h-6 w-6 mb-2" />
+                <Calendar className="h-6 w-6" />
                 <span className="text-sm">Table Setup</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="h-20 flex flex-col" 
+                className="h-20 flex flex-col items-center justify-center gap-0.5 p-0 [&_svg]:size-6" 
                 data-testid="button-inventory"
                 onClick={() => setLocation("/restaurant-bar-manager/inventory-tracking")}
               >
-                <Package className="h-6 w-6 mb-2" />
+                <Package className="h-6 w-6" />
                 <span className="text-sm">Inventory</span>
               </Button>
             </div>
