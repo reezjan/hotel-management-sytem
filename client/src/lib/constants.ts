@@ -261,6 +261,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Users', label: 'Guest Management', id: 'guests' },
     { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
+    { icon: 'Wrench', label: 'Maintenance', id: 'maintenance' },
     { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.HOUSEKEEPING_SUPERVISOR]: [

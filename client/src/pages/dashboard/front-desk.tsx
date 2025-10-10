@@ -1235,7 +1235,7 @@ export default function FrontDeskDashboard() {
                 <Button 
                   variant="outline" 
                   className="h-24 flex flex-col items-center justify-center gap-2 bg-red-50 hover:bg-red-100 border-red-200 dark:bg-red-950/20 dark:border-red-900 dark:hover:bg-red-950/30"
-                  onClick={() => setIsMaintenanceModalOpen(true)}
+                  onClick={() => setLocation('/front-desk/maintenance-requests')}
                   data-testid="button-maintenance-request"
                 >
                   <Wrench className="h-7 w-7 text-red-600" />

@@ -76,6 +76,7 @@ import FinanceCashFlow from "@/pages/dashboard/finance/cashflow";
 import FinanceReconciliation from "@/pages/dashboard/finance/reconciliation";
 import FinanceReports from "@/pages/dashboard/finance/reports";
 import FrontDeskDashboard from "@/pages/dashboard/front-desk";
+import FrontdeskMaintenanceRequests from "@/pages/dashboard/frontdesk/maintenance-requests";
 import GuestsPage from "@/pages/dashboard/guests";
 import StorekeeperDashboard from "@/pages/dashboard/storekeeper";
 import StorekeeperDutyStatus from "@/pages/dashboard/storekeeper/duty-status";
@@ -183,6 +184,7 @@ function Router() {
       
       <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
       <ProtectedRoute path="/front-desk/request-stock" component={RequestStock} allowedRoles={["front_desk"]} />
+      <ProtectedRoute path="/front-desk/maintenance-requests" component={FrontdeskMaintenanceRequests} allowedRoles={["front_desk"]} />
       <ProtectedRoute path="/guests" component={GuestsPage} allowedRoles={["front_desk", "manager", "owner"]} />
       <ProtectedRoute path="/dashboard/hall-calendar" component={HallCalendar} allowedRoles={["front_desk", "manager", "owner", "finance", "cashier"]} />
       <ProtectedRoute path="/dashboard/bookings/:id" component={BookingDetail} allowedRoles={["front_desk", "manager", "owner", "finance", "cashier"]} />
