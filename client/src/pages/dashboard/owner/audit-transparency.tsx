@@ -9,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { CalendarIcon, FileText, DollarSign, Package, Users, Settings, History, TrendingUp, ArrowLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 
 export default function AuditTransparencyPage() {
   const [, setLocation] = useLocation();
@@ -18,30 +18,95 @@ export default function AuditTransparencyPage() {
     to: undefined
   });
 
-  const { data: auditLogs } = useQuery({
-    queryKey: ['/api/audit-logs', dateRange.from, dateRange.to],
-    enabled: !!dateRange.from && !!dateRange.to
+  // Financial Activity - Use financial overview logic (real-time)
+  const { data: transactions = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/transactions"],
+    refetchInterval: 3000
   });
 
-  const { data: priceChangeLogs } = useQuery({
-    queryKey: ['/api/price-change-logs', dateRange.from, dateRange.to]
+  // Maintenance Approvals - Use maintenance requests logic (real-time)
+  const { data: maintenanceRequests = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/maintenance-requests"],
+    refetchInterval: 5000
   });
 
-  const { data: taxChangeLogs } = useQuery({
-    queryKey: ['/api/tax-change-logs']
+  // Filter transactions by date if range is selected
+  const filteredTransactions = dateRange.from && dateRange.to 
+    ? transactions.filter(t => {
+        const txnDate = new Date(t.createdAt);
+        return txnDate >= dateRange.from! && txnDate <= dateRange.to!;
+      })
+    : transactions;
+
+  // Filter maintenance by date if range is selected
+  const filteredMaintenance = dateRange.from && dateRange.to
+    ? maintenanceRequests.filter(m => {
+        const reqDate = new Date(m.createdAt);
+        return reqDate >= dateRange.from! && reqDate <= dateRange.to!;
+      })
+    : maintenanceRequests;
+
+  const buildQueryUrl = (baseUrl: string, from?: Date, to?: Date) => {
+    if (!from || !to) return baseUrl;
+    const params = new URLSearchParams({
+      startDate: from.toISOString(),
+      endDate: to.toISOString()
+    });
+    return `${baseUrl}?${params.toString()}`;
+  };
+
+  const { data: auditLogs = [] } = useQuery({
+    queryKey: ['/api/audit-logs', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
+    queryFn: async () => {
+      const url = buildQueryUrl('/api/audit-logs', dateRange.from, dateRange.to);
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 5000
   });
 
-  const { data: inventoryMovements } = useQuery({
-    queryKey: ['/api/inventory-movement-logs', dateRange.from, dateRange.to]
+  const { data: priceChangeLogs = [] } = useQuery({
+    queryKey: ['/api/price-change-logs', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
+    queryFn: async () => {
+      const url = buildQueryUrl('/api/price-change-logs', dateRange.from, dateRange.to);
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 10000
   });
 
-  const { data: staffActivity } = useQuery({
-    queryKey: ['/api/staff-activity-summary', dateRange.from, dateRange.to]
+  const { data: taxChangeLogs = [] } = useQuery({
+    queryKey: ['/api/tax-change-logs'],
+    queryFn: async () => {
+      const res = await fetch('/api/tax-change-logs', { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 30000
   });
 
-  const { data: financialTransactions } = useQuery({
-    queryKey: ['/api/hotels/current/transactions', dateRange.from, dateRange.to],
-    enabled: !!dateRange.from && !!dateRange.to
+  const { data: inventoryMovements = [] } = useQuery({
+    queryKey: ['/api/inventory-movement-logs', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
+    queryFn: async () => {
+      const url = buildQueryUrl('/api/inventory-movement-logs', dateRange.from, dateRange.to);
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 10000
+  });
+
+  const { data: staffActivity = [] } = useQuery({
+    queryKey: ['/api/staff-activity-summary', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
+    queryFn: async () => {
+      const url = buildQueryUrl('/api/staff-activity-summary', dateRange.from, dateRange.to);
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 10000
   });
 
   return (
@@ -68,7 +133,7 @@ export default function AuditTransparencyPage() {
               {dateRange.from && dateRange.to ? (
                 `${format(dateRange.from, "PPP")} - ${format(dateRange.to, "PPP")}`
               ) : (
-                "Select date range"
+                "Select date range (optional)"
               )}
             </Button>
           </PopoverTrigger>
@@ -93,6 +158,10 @@ export default function AuditTransparencyPage() {
             <DollarSign className="mr-2 h-4 w-4" />
             Financial Activity
           </TabsTrigger>
+          <TabsTrigger value="maintenance" data-testid="tab-maintenance">
+            <Settings className="mr-2 h-4 w-4" />
+            Maintenance Approvals
+          </TabsTrigger>
           <TabsTrigger value="price-changes" data-testid="tab-price-changes">
             <TrendingUp className="mr-2 h-4 w-4" />
             Price Changes
@@ -105,10 +174,6 @@ export default function AuditTransparencyPage() {
             <Users className="mr-2 h-4 w-4" />
             Staff Activity
           </TabsTrigger>
-          <TabsTrigger value="maintenance" data-testid="tab-maintenance">
-            <Settings className="mr-2 h-4 w-4" />
-            Maintenance Approvals
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -119,7 +184,7 @@ export default function AuditTransparencyPage() {
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-audit-count">{Array.isArray(auditLogs) ? auditLogs.length : 0}</div>
+                <div className="text-2xl font-bold" data-testid="text-audit-count">{auditLogs.length}</div>
                 <p className="text-xs text-muted-foreground">In selected period</p>
               </CardContent>
             </Card>
@@ -130,7 +195,7 @@ export default function AuditTransparencyPage() {
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-price-changes">{Array.isArray(priceChangeLogs) ? priceChangeLogs.length : 0}</div>
+                <div className="text-2xl font-bold" data-testid="text-price-changes">{priceChangeLogs.length}</div>
                 <p className="text-xs text-muted-foreground">Items updated</p>
               </CardContent>
             </Card>
@@ -141,7 +206,7 @@ export default function AuditTransparencyPage() {
                 <Package className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-inventory-count">{Array.isArray(inventoryMovements) ? inventoryMovements.length : 0}</div>
+                <div className="text-2xl font-bold" data-testid="text-inventory-count">{inventoryMovements.length}</div>
                 <p className="text-xs text-muted-foreground">Transactions recorded</p>
               </CardContent>
             </Card>
@@ -153,7 +218,7 @@ export default function AuditTransparencyPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold" data-testid="text-staff-count">
-                  {Array.isArray(staffActivity) ? new Set(staffActivity.map((s: any) => s.userId)).size : 0}
+                  {new Set(staffActivity.map((s: any) => s.userId)).size}
                 </div>
                 <p className="text-xs text-muted-foreground">Performed actions</p>
               </CardContent>
@@ -167,7 +232,7 @@ export default function AuditTransparencyPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Array.isArray(auditLogs) && auditLogs.slice(0, 10).map((log: any) => (
+                {auditLogs.slice(0, 10).map((log: any) => (
                   <div key={log.id} className="flex items-start justify-between border-b pb-4" data-testid={`log-${log.id}`}>
                     <div className="space-y-1">
                       <p className="text-sm font-medium" data-testid={`text-log-action-${log.id}`}>
@@ -182,9 +247,112 @@ export default function AuditTransparencyPage() {
                     </Badge>
                   </div>
                 ))}
-                {(!Array.isArray(auditLogs) || auditLogs.length === 0) && (
+                {auditLogs.length === 0 && (
                   <p className="text-center text-muted-foreground py-8" data-testid="text-no-logs">
-                    No audit logs found. Select a date range to view logs.
+                    No audit logs found in the selected period.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="financial" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Financial Transaction History</CardTitle>
+              <CardDescription>Complete audit trail of all financial transactions with creator information</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {filteredTransactions.map((txn: any) => (
+                  <div key={txn.id} className="flex items-start justify-between border-b pb-4" data-testid={`transaction-${txn.id}`}>
+                    <div className="space-y-1 flex-1">
+                      <p className="text-sm font-medium" data-testid={`text-txn-purpose-${txn.id}`}>
+                        {txn.purpose || 'Transaction'}
+                      </p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span data-testid={`text-txn-type-${txn.id}`}>Type: {txn.txnType?.replace(/_/g, ' ')}</span>
+                        <span data-testid={`text-txn-amount-${txn.id}`}>
+                          Amount: NPR {parseFloat(txn.amount || 0).toLocaleString()}
+                        </span>
+                        {txn.paymentMethod && (
+                          <span data-testid={`text-payment-method-${txn.id}`}>
+                            Method: {txn.paymentMethod}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground" data-testid={`text-created-by-${txn.id}`}>
+                        Created by: {txn.creator?.username || 'Unknown'} ({txn.creator?.role?.replace(/_/g, ' ') || 'N/A'}) on{" "}
+                        {new Date(txn.createdAt).toLocaleString()}
+                      </p>
+                      {txn.reference && (
+                        <p className="text-xs text-muted-foreground" data-testid={`text-reference-${txn.id}`}>
+                          Reference: {txn.reference}
+                        </p>
+                      )}
+                    </div>
+                    <Badge 
+                      variant={txn.txnType === 'revenue' || txn.txnType?.includes('_in') ? 'default' : txn.txnType === 'expense' || txn.txnType?.includes('_out') ? 'destructive' : 'secondary'}
+                      data-testid={`badge-txn-type-${txn.id}`}
+                    >
+                      {formatCurrency(parseFloat(txn.amount || 0))}
+                    </Badge>
+                  </div>
+                ))}
+                {filteredTransactions.length === 0 && (
+                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-transactions">
+                    No financial transactions found.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="maintenance" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Maintenance Request History</CardTitle>
+              <CardDescription>Track all maintenance requests with approval status and history</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {filteredMaintenance.map((request: any) => (
+                  <div key={request.id} className="flex items-start justify-between border-b pb-4" data-testid={`maintenance-${request.id}`}>
+                    <div className="space-y-1 flex-1">
+                      <p className="text-sm font-medium" data-testid={`text-request-title-${request.id}`}>
+                        {request.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Location: {request.location || 'N/A'}
+                      </p>
+                      <p className="text-xs text-muted-foreground" data-testid={`text-reported-by-${request.id}`}>
+                        Reported by: {request.reportedBy?.username || 'Unknown'} ({request.reportedBy?.role?.name?.replace(/_/g, ' ') || 'N/A'})
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Priority: <Badge variant={request.priority === 'high' ? 'destructive' : request.priority === 'medium' ? 'default' : 'secondary'}>{request.priority}</Badge>
+                      </p>
+                      <p className="text-xs text-muted-foreground" data-testid={`text-request-date-${request.id}`}>
+                        Submitted: {new Date(request.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <Badge 
+                      variant={
+                        request.status === 'approved' ? 'default' : 
+                        request.status === 'resolved' ? 'secondary' :
+                        request.status === 'declined' ? 'destructive' : 
+                        'outline'
+                      }
+                      data-testid={`badge-status-${request.id}`}
+                    >
+                      {request.status?.toUpperCase() || 'PENDING'}
+                    </Badge>
+                  </div>
+                ))}
+                {filteredMaintenance.length === 0 && (
+                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-maintenance">
+                    No maintenance requests found.
                   </p>
                 )}
               </div>
@@ -200,7 +368,7 @@ export default function AuditTransparencyPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Array.isArray(priceChangeLogs) && priceChangeLogs.map((log: any) => (
+                {priceChangeLogs.map((log: any) => (
                   <div key={log.id} className="flex items-start justify-between border-b pb-4" data-testid={`price-change-${log.id}`}>
                     <div className="space-y-1 flex-1">
                       <p className="text-sm font-medium" data-testid={`text-item-name-${log.id}`}>
@@ -228,16 +396,16 @@ export default function AuditTransparencyPage() {
                     </Badge>
                   </div>
                 ))}
-                {(!Array.isArray(priceChangeLogs) || priceChangeLogs.length === 0) && (
+                {priceChangeLogs.length === 0 && (
                   <p className="text-center text-muted-foreground py-8" data-testid="text-no-price-changes">
-                    No price changes recorded in the selected period.
+                    No price changes recorded.
                   </p>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          {Array.isArray(taxChangeLogs) && taxChangeLogs.length > 0 && (
+          {taxChangeLogs.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Tax Configuration Changes</CardTitle>
@@ -274,7 +442,7 @@ export default function AuditTransparencyPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Array.isArray(inventoryMovements) && inventoryMovements.map((movement: any) => (
+                {inventoryMovements.map((movement: any) => (
                   <div key={movement.id} className="flex items-start justify-between border-b pb-4" data-testid={`inventory-movement-${movement.id}`}>
                     <div className="space-y-1 flex-1">
                       <p className="text-sm font-medium" data-testid={`text-item-${movement.id}`}>
@@ -306,7 +474,7 @@ export default function AuditTransparencyPage() {
                     </Badge>
                   </div>
                 ))}
-                {(!Array.isArray(inventoryMovements) || inventoryMovements.length === 0) && (
+                {inventoryMovements.length === 0 && (
                   <p className="text-center text-muted-foreground py-8" data-testid="text-no-inventory">
                     No inventory movements recorded.
                   </p>
@@ -324,7 +492,7 @@ export default function AuditTransparencyPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Array.isArray(staffActivity) && staffActivity.map((activity: any, index: number) => (
+                {staffActivity.map((activity: any, index: number) => (
                   <div key={index} className="flex items-start justify-between border-b pb-4" data-testid={`staff-activity-${index}`}>
                     <div className="space-y-1 flex-1">
                       <p className="text-sm font-medium" data-testid={`text-staff-${index}`}>
@@ -340,65 +508,9 @@ export default function AuditTransparencyPage() {
                     <Badge data-testid={`badge-count-${index}`}>{activity.count} times</Badge>
                   </div>
                 ))}
-                {(!Array.isArray(staffActivity) || staffActivity.length === 0) && (
+                {staffActivity.length === 0 && (
                   <p className="text-center text-muted-foreground py-8" data-testid="text-no-staff-activity">
                     No staff activity recorded.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="financial" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Financial Transaction Details</CardTitle>
-              <CardDescription>Complete transaction history with creator information</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground text-center py-8">
-                View detailed financial transactions from the Finance dashboard. This section provides transparency on who created each transaction and full audit trails.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="maintenance" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Maintenance Request Approvals</CardTitle>
-              <CardDescription>Track who approved/declined each maintenance request</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {Array.isArray(auditLogs) && auditLogs
-                  .filter((log: any) => log.resourceType === 'maintenance_request' && ['approved', 'declined', 'resolved'].includes(log.action))
-                  .map((log: any) => (
-                  <div key={log.id} className="flex items-start justify-between border-b pb-4" data-testid={`maintenance-approval-${log.id}`}>
-                    <div className="space-y-1 flex-1">
-                      <p className="text-sm font-medium" data-testid={`text-request-title-${log.id}`}>
-                        {log.details?.requestTitle || 'Maintenance Request'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Location: {log.details?.requestLocation || 'N/A'}
-                      </p>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-approval-by-${log.id}`}>
-                        {log.action.charAt(0).toUpperCase() + log.action.slice(1)} by: {log.user?.username || 'Unknown'} ({log.user?.role?.name?.replace(/_/g, ' ')}) on{" "}
-                        {new Date(log.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <Badge 
-                      variant={log.action === 'approved' ? 'default' : log.action === 'declined' ? 'destructive' : 'secondary'}
-                      data-testid={`badge-approval-status-${log.id}`}
-                    >
-                      {log.action.toUpperCase()}
-                    </Badge>
-                  </div>
-                ))}
-                {(!Array.isArray(auditLogs) || auditLogs.filter((log: any) => log.resourceType === 'maintenance_request' && ['approved', 'declined', 'resolved'].includes(log.action)).length === 0) && (
-                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-approvals">
-                    No maintenance approvals recorded. Select a date range to view approval history.
                   </p>
                 )}
               </div>
