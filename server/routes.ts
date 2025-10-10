@@ -1110,8 +1110,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const request = await storage.createMaintenanceRequest(requestData);
       res.status(201).json(request);
-    } catch (error) {
-      res.status(400).json({ message: "Invalid maintenance request data" });
+    } catch (error: any) {
+      console.error('Maintenance request creation error:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: error.errors 
+        });
+      }
+      res.status(400).json({ 
+        message: error.message || "Invalid maintenance request data" 
+      });
     }
   });
 
