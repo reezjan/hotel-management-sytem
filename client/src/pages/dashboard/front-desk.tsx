@@ -1164,98 +1164,125 @@ export default function FrontDeskDashboard() {
           />
         </div>
 
-        {/* Quick Actions */}
+        {/* Quick Actions - Grouped Operations */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle>Front Desk Operations</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
-              <Button 
-                variant="outline" 
-                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
-                onClick={() => setIsCheckInModalOpen(true)}
-                data-testid="button-check-in"
-              >
-                <UserCheck className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
-                <span className="text-xs sm:text-sm">Check-in Guest</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
-                onClick={() => setIsReservationModalOpen(true)}
-                data-testid="button-new-reservation"
-              >
-                <CalendarPlus className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
-                <span className="text-xs sm:text-sm">New Reservation</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
-                onClick={() => setIsViewReservationsModalOpen(true)}
-                data-testid="button-view-reservations"
-              >
-                <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
-                <span className="text-xs sm:text-sm">View Reservations</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
-                onClick={() => setIsFoodOrderModalOpen(true)}
-                data-testid="button-food-order"
-              >
-                <Utensils className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
-                <span className="text-xs sm:text-sm">Food Order</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
-                onClick={() => setIsRoomServiceModalOpen(true)}
-                data-testid="button-room-service"
-              >
-                <HandPlatter className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
-                <span className="text-xs sm:text-sm">Room Service</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
-                onClick={() => setIsMaintenanceModalOpen(true)}
-                data-testid="button-maintenance-request"
-              >
-                <Wrench className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
-                <span className="text-xs sm:text-sm">Maintenance</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
-                onClick={() => setIsCashDepositModalOpen(true)}
-                data-testid="button-cash-deposit"
-              >
-                <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
-                <span className="text-xs sm:text-sm">Cash Deposit</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm"
-                onClick={() => setLocation('/hall-bookings')}
-                data-testid="button-hall-bookings"
-              >
-                <Building2 className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
-                <span className="text-xs sm:text-sm">Hall Bookings</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-16 sm:h-20 flex flex-col text-xs sm:text-sm" 
-                onClick={() => {
-                  const room = rooms.find(r => r.isOccupied);
-                  if (room) handlePrintReceipt(room, 'bill');
-                  else toast({ title: "No occupied rooms to print", variant: "destructive" });
-                }}
-                data-testid="button-print-reports"
-              >
-                <Printer className="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2" />
-                <span className="text-xs sm:text-sm">Print Bill</span>
-              </Button>
+          <CardContent className="space-y-6">
+            {/* Guest Services */}
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Guest Services
+              </h3>
+              <div className="grid grid-cols-3 gap-3">
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex flex-col items-center justify-center gap-2 bg-blue-50 hover:bg-blue-100 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900 dark:hover:bg-blue-950/30"
+                  onClick={() => setIsCheckInModalOpen(true)}
+                  data-testid="button-check-in"
+                >
+                  <UserCheck className="h-7 w-7 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Check-in Guest</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex flex-col items-center justify-center gap-2 bg-green-50 hover:bg-green-100 border-green-200 dark:bg-green-950/20 dark:border-green-900 dark:hover:bg-green-950/30"
+                  onClick={() => setIsReservationModalOpen(true)}
+                  data-testid="button-new-reservation"
+                >
+                  <CalendarPlus className="h-7 w-7 text-green-600" />
+                  <span className="text-sm font-medium text-green-900 dark:text-green-100">New Booking</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex flex-col items-center justify-center gap-2 bg-purple-50 hover:bg-purple-100 border-purple-200 dark:bg-purple-950/20 dark:border-purple-900 dark:hover:bg-purple-950/30"
+                  onClick={() => setIsViewReservationsModalOpen(true)}
+                  data-testid="button-view-reservations"
+                >
+                  <CalendarCheck className="h-7 w-7 text-purple-600" />
+                  <span className="text-sm font-medium text-purple-900 dark:text-purple-100">All Bookings</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Service Requests */}
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                <HandPlatter className="h-4 w-4" />
+                Service & Support
+              </h3>
+              <div className="grid grid-cols-3 gap-3">
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex flex-col items-center justify-center gap-2 bg-orange-50 hover:bg-orange-100 border-orange-200 dark:bg-orange-950/20 dark:border-orange-900 dark:hover:bg-orange-950/30"
+                  onClick={() => setIsFoodOrderModalOpen(true)}
+                  data-testid="button-food-order"
+                >
+                  <Utensils className="h-7 w-7 text-orange-600" />
+                  <span className="text-sm font-medium text-orange-900 dark:text-orange-100">Food Order</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex flex-col items-center justify-center gap-2 bg-teal-50 hover:bg-teal-100 border-teal-200 dark:bg-teal-950/20 dark:border-teal-900 dark:hover:bg-teal-950/30"
+                  onClick={() => setIsRoomServiceModalOpen(true)}
+                  data-testid="button-room-service"
+                >
+                  <HandPlatter className="h-7 w-7 text-teal-600" />
+                  <span className="text-sm font-medium text-teal-900 dark:text-teal-100">Room Service</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex flex-col items-center justify-center gap-2 bg-red-50 hover:bg-red-100 border-red-200 dark:bg-red-950/20 dark:border-red-900 dark:hover:bg-red-950/30"
+                  onClick={() => setIsMaintenanceModalOpen(true)}
+                  data-testid="button-maintenance-request"
+                >
+                  <Wrench className="h-7 w-7 text-red-600" />
+                  <span className="text-sm font-medium text-red-900 dark:text-red-100">Maintenance</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Finance & Administrative */}
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                Finance & Admin
+              </h3>
+              <div className="grid grid-cols-3 gap-3">
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex flex-col items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900 dark:hover:bg-emerald-950/30"
+                  onClick={() => setIsCashDepositModalOpen(true)}
+                  data-testid="button-cash-deposit"
+                >
+                  <DollarSign className="h-7 w-7 text-emerald-600" />
+                  <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">Cash Deposit</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex flex-col items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900 dark:hover:bg-indigo-950/30"
+                  onClick={() => setLocation('/hall-bookings')}
+                  data-testid="button-hall-bookings"
+                >
+                  <Building2 className="h-7 w-7 text-indigo-600" />
+                  <span className="text-sm font-medium text-indigo-900 dark:text-indigo-100">Hall Bookings</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="h-24 flex flex-col items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 border-slate-200 dark:bg-slate-950/20 dark:border-slate-700 dark:hover:bg-slate-950/30"
+                  onClick={() => {
+                    const room = rooms.find(r => r.isOccupied);
+                    if (room) handlePrintReceipt(room, 'bill');
+                    else toast({ title: "No occupied rooms to print", variant: "destructive" });
+                  }}
+                  data-testid="button-print-reports"
+                >
+                  <Printer className="h-7 w-7 text-slate-600" />
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Print Bill</span>
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
