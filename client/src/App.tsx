@@ -27,6 +27,7 @@ import AmenitiesSetup from "@/pages/dashboard/manager/amenities";
 import ManagerTransactions from "@/pages/dashboard/manager/transactions";
 import ManagerLeaveApprovals from "@/pages/dashboard/manager/leave-approvals";
 import ManagerMealPlans from "@/pages/dashboard/manager/meal-plans";
+import ManagerMaintenanceRequests from "@/pages/dashboard/manager/maintenance-requests";
 import HousekeepingSupervisorDashboard from "@/pages/dashboard/housekeeping-supervisor";
 import HousekeepingSupervisorStaffManagement from "@/pages/dashboard/housekeeping-supervisor/staff-management";
 import HousekeepingSupervisorDutyTracking from "@/pages/dashboard/housekeeping-supervisor/duty-tracking";
@@ -75,6 +76,7 @@ import FinanceExpenses from "@/pages/dashboard/finance/expenses";
 import FinanceCashFlow from "@/pages/dashboard/finance/cashflow";
 import FinanceReconciliation from "@/pages/dashboard/finance/reconciliation";
 import FinanceReports from "@/pages/dashboard/finance/reports";
+import FinanceMaintenanceRequests from "@/pages/dashboard/finance/maintenance-requests";
 import FrontDeskDashboard from "@/pages/dashboard/front-desk";
 import FrontdeskMaintenanceRequests from "@/pages/dashboard/frontdesk/maintenance-requests";
 import GuestsPage from "@/pages/dashboard/guests";
@@ -119,6 +121,7 @@ function Router() {
       <ProtectedRoute path="/manager/meal-plans" component={ManagerMealPlans} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/transactions" component={ManagerTransactions} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/manager/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["manager", "owner"]} />
+      <ProtectedRoute path="/manager/maintenance-requests" component={ManagerMaintenanceRequests} allowedRoles={["manager", "owner"]} />
       <ProtectedRoute path="/housekeeping-supervisor" component={HousekeepingSupervisorDashboard} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-supervisor/staff-management" component={HousekeepingSupervisorStaffManagement} allowedRoles={["housekeeping_supervisor"]} />
       <ProtectedRoute path="/housekeeping-supervisor/duty-tracking" component={HousekeepingSupervisorDutyTracking} allowedRoles={["housekeeping_supervisor"]} />
@@ -180,6 +183,7 @@ function Router() {
       <ProtectedRoute path="/finance/cashflow" component={FinanceCashFlow} allowedRoles={["finance"]} />
       <ProtectedRoute path="/finance/reconciliation" component={FinanceReconciliation} allowedRoles={["finance"]} />
       <ProtectedRoute path="/finance/reports" component={FinanceReports} allowedRoles={["finance"]} />
+      <ProtectedRoute path="/finance/maintenance-requests" component={FinanceMaintenanceRequests} allowedRoles={["finance"]} />
       <ProtectedRoute path="/finance" component={FinanceDashboard} allowedRoles={["finance"]} />
       
       <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />

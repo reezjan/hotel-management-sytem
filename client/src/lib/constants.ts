@@ -247,6 +247,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'DollarSign', label: 'Room Pricing', id: 'pricing' },
     { icon: 'Waves', label: 'Amenities', id: 'amenities' },
     { icon: 'UtensilsCrossed', label: 'Meal Plans', id: 'meal-plans' },
+    { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance-requests' },
     { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' },
     { icon: 'Receipt', label: 'Transactions', id: 'transactions' }
   ],
@@ -352,6 +353,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'DollarSign', label: 'Cash Flow', id: 'cashflow' },
     { icon: 'CreditCard', label: 'Payment Reconciliation', id: 'reconciliation' },
     { icon: 'FileText', label: 'Reports & Summary', id: 'reports' },
+    { icon: 'Wrench', label: 'Maintenance Requests', id: 'maintenance-requests' },
     { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
   [ROLES.STOREKEEPER]: [
