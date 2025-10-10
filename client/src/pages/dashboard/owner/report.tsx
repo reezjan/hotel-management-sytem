@@ -817,8 +817,6 @@ export default function Report() {
                 ) : (
                   <div className="space-y-4">
                     {maintenanceRequests.map((request: any) => {
-                      const reporter = getUserById(request.reportedBy);
-                      const assignee = request.assignedTo ? getUserById(request.assignedTo) : null;
                       return (
                         <Card key={request.id} className="border-2">
                           <CardContent className="pt-6">
@@ -848,11 +846,11 @@ export default function Report() {
                                   </div>
                                   <div>
                                     <span className="text-muted-foreground">Reported By:</span>
-                                    <span className="ml-2 font-medium">{reporter?.username || 'Unknown'}</span>
+                                    <span className="ml-2 font-medium">{request.reportedBy?.username || 'Unknown'}</span>
                                   </div>
                                   <div>
                                     <span className="text-muted-foreground">Assigned To:</span>
-                                    <span className="ml-2 font-medium">{assignee?.username || 'Unassigned'}</span>
+                                    <span className="ml-2 font-medium">{request.assignedTo?.username || 'Unassigned'}</span>
                                   </div>
                                   <div>
                                     <span className="text-muted-foreground">Created:</span>
