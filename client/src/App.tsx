@@ -58,10 +58,14 @@ import WaiterOrders from "@/pages/dashboard/waiter/orders";
 import WaiterBilling from "@/pages/dashboard/waiter/billing";
 import WaiterFoodSearch from "@/pages/dashboard/waiter/food-search";
 import KitchenStaffDashboard from "@/pages/dashboard/kitchen-staff";
+import KitchenStaffMaintenance from "@/pages/dashboard/kitchen-staff/maintenance";
 import BartenderDashboard from "@/pages/dashboard/bartender";
+import BartenderMaintenance from "@/pages/dashboard/bartender/maintenance";
 import BaristaDashboard from "@/pages/dashboard/barista";
+import BaristaMaintenance from "@/pages/dashboard/barista/maintenance";
 import CashierDashboard from "@/pages/dashboard/cashier";
 import CashierTableBilling from "@/pages/dashboard/cashier/table-billing";
+import CashierMaintenance from "@/pages/dashboard/cashier/maintenance";
 import SecurityHeadDashboard from "@/pages/dashboard/security-head";
 import SecurityHeadLeaveRequests from "@/pages/dashboard/security-head/leave-requests";
 import SecurityGuardDashboard from "@/pages/dashboard/security-guard";
@@ -159,12 +163,16 @@ function Router() {
       <ProtectedRoute path="/waiter/request-stock" component={RequestStock} allowedRoles={["waiter"]} />
       <ProtectedRoute path="/kitchen-staff" component={KitchenStaffDashboard} allowedRoles={["kitchen_staff"]} />
       <ProtectedRoute path="/kitchen-staff/request-stock" component={RequestStock} allowedRoles={["kitchen_staff"]} />
+      <ProtectedRoute path="/kitchen-staff/maintenance" component={KitchenStaffMaintenance} allowedRoles={["kitchen_staff"]} />
       <ProtectedRoute path="/bartender" component={BartenderDashboard} allowedRoles={["bartender"]} />
       <ProtectedRoute path="/bartender/request-stock" component={RequestStock} allowedRoles={["bartender"]} />
+      <ProtectedRoute path="/bartender/maintenance" component={BartenderMaintenance} allowedRoles={["bartender"]} />
       <ProtectedRoute path="/barista" component={BaristaDashboard} allowedRoles={["barista"]} />
       <ProtectedRoute path="/barista/request-stock" component={RequestStock} allowedRoles={["barista"]} />
+      <ProtectedRoute path="/barista/maintenance" component={BaristaMaintenance} allowedRoles={["barista"]} />
       <ProtectedRoute path="/cashier" component={CashierDashboard} allowedRoles={["cashier"]} />
       <ProtectedRoute path="/cashier/table-billing" component={CashierTableBilling} allowedRoles={["cashier"]} />
+      <ProtectedRoute path="/cashier/maintenance" component={CashierMaintenance} allowedRoles={["cashier"]} />
       <ProtectedRoute path="/security-head" component={SecurityHeadDashboard} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-head/request-stock" component={RequestStock} allowedRoles={["security_head"]} />
       <ProtectedRoute path="/security-head/leave-requests" component={SecurityHeadLeaveRequests} allowedRoles={["security_head"]} />
