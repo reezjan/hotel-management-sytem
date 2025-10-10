@@ -32,7 +32,6 @@ export default function CashierDashboard() {
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
   const [customerType, setCustomerType] = useState<"inhouse" | "walkin">("inhouse");
   const [isCashDepositModalOpen, setIsCashDepositModalOpen] = useState(false);
-  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [selectedAmenities, setSelectedAmenities] = useState<any[]>([]);
 
   const { data: hotel } = useQuery<any>({
@@ -61,16 +60,6 @@ export default function CashierDashboard() {
 
   const { data: tasks = [] } = useQuery<any[]>({
     queryKey: ["/api/users", user?.id, "tasks"]
-  });
-
-  const maintenanceForm = useForm({
-    defaultValues: {
-      title: "",
-      description: "",
-      priority: "medium",
-      location: "",
-      photo: ""
-    }
   });
 
   const cashDepositForm = useForm({
@@ -130,24 +119,6 @@ export default function CashierDashboard() {
         description: error?.message || "Failed to submit cash deposit request. Please check the amount and try again.", 
         variant: "destructive" 
       });
-    }
-  });
-
-  const createMaintenanceRequestMutation = useMutation({
-    mutationFn: async (data: any) => {
-      await apiRequest("POST", "/api/hotels/current/maintenance-requests", {
-        title: data.title,
-        location: data.location,
-        description: data.description,
-        priority: data.priority,
-        photo: data.photo,
-        status: 'pending'
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Maintenance request submitted to Restaurant & Bar Manager" });
-      setIsMaintenanceModalOpen(false);
-      maintenanceForm.reset();
     }
   });
 
@@ -640,7 +611,8 @@ export default function CashierDashboard() {
                 <Button 
                   variant="outline" 
                   className="w-full justify-start h-16"
-                  onClick={() => setIsMaintenanceModalOpen(true)}
+                  onClick={() => setLocation('/cashier/maintenance')}
+                  data-testid="button-maintenance"
                 >
                   <Wrench className="h-5 w-5 mr-3" />
                   Report Maintenance Issue
@@ -683,119 +655,6 @@ export default function CashierDashboard() {
                 />
                 <Button type="submit" className="w-full" disabled={cashDepositMutation.isPending}>
                   {cashDepositMutation.isPending ? "Submitting..." : "Submit Request"}
-                </Button>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={isMaintenanceModalOpen} onOpenChange={setIsMaintenanceModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Report Maintenance Issue</DialogTitle>
-            </DialogHeader>
-            <Form {...maintenanceForm}>
-              <form onSubmit={maintenanceForm.handleSubmit((data) => {
-                if (!data.title || !data.description || !data.location || !data.photo) {
-                  toast({ 
-                    title: "Missing information", 
-                    description: "Please fill in all required fields including photo",
-                    variant: "destructive" 
-                  });
-                  return;
-                }
-                createMaintenanceRequestMutation.mutate(data);
-              })} className="space-y-4">
-                <FormField
-                  control={maintenanceForm.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Title</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Brief title of the issue" required />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={maintenanceForm.control}
-                  name="location"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Location</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Where is the issue?" required />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={maintenanceForm.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} placeholder="Describe the maintenance issue in detail..." required />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={maintenanceForm.control}
-                  name="priority"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Priority</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select priority" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="low">Low</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={maintenanceForm.control}
-                  name="photo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Photo *</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="file"
-                          accept="image/*"
-                          required
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                field.onChange(reader.result as string);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </FormControl>
-                      {field.value && (
-                        <div className="mt-2">
-                          <img src={field.value} alt="Preview" className="max-w-full h-32 object-cover rounded border" />
-                        </div>
-                      )}
-                    </FormItem>
-                  )}
-                />
-                <Button type="submit" className="w-full" disabled={createMaintenanceRequestMutation.isPending}>
-                  {createMaintenanceRequestMutation.isPending ? "Submitting..." : "Submit to Restaurant & Bar Manager"}
                 </Button>
               </form>
             </Form>

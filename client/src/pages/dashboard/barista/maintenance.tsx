@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 
-export default function WaiterMaintenance() {
+export default function BaristaMaintenance() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -27,6 +27,7 @@ export default function WaiterMaintenance() {
 
   const { data: myRequests = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/maintenance-requests"],
+    enabled: !!user,
     select: (data: any) => {
       return data.filter((req: any) => req.reportedBy?.id === user?.id);
     }
@@ -122,10 +123,11 @@ export default function WaiterMaintenance() {
                 <Label htmlFor="title">Issue Title *</Label>
                 <Input
                   id="title"
-                  placeholder="e.g., Broken chair at Table 5"
+                  placeholder="e.g., Espresso machine malfunction"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
+                  data-testid="input-title"
                 />
               </div>
 
@@ -133,17 +135,18 @@ export default function WaiterMaintenance() {
                 <Label htmlFor="location">Location *</Label>
                 <Input
                   id="location"
-                  placeholder="e.g., Table 5, Bar Area, Kitchen Entrance"
+                  placeholder="e.g., Coffee Bar, Service Counter"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   required
+                  data-testid="input-location"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="priority">Priority *</Label>
                 <Select value={priority} onValueChange={setPriority}>
-                  <SelectTrigger id="priority" className="h-11">
+                  <SelectTrigger id="priority" className="h-11" data-testid="select-priority">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -163,6 +166,7 @@ export default function WaiterMaintenance() {
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
                   required
+                  data-testid="input-description"
                 />
               </div>
 
@@ -173,6 +177,7 @@ export default function WaiterMaintenance() {
                   type="file"
                   accept="image/*"
                   required
+                  data-testid="input-photo"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
@@ -186,7 +191,7 @@ export default function WaiterMaintenance() {
                 />
                 {photo && (
                   <div className="mt-2">
-                    <img src={photo} alt="Preview" className="max-w-full h-32 object-cover rounded border" />
+                    <img src={photo} alt="Preview" className="max-w-full h-32 object-cover rounded border" data-testid="img-photo-preview" />
                   </div>
                 )}
               </div>
@@ -195,6 +200,7 @@ export default function WaiterMaintenance() {
                 type="submit" 
                 className="w-full h-11 min-h-11"
                 disabled={createRequestMutation.isPending}
+                data-testid="button-submit-request"
               >
                 {createRequestMutation.isPending ? (
                   "Submitting..."
@@ -216,7 +222,7 @@ export default function WaiterMaintenance() {
           <CardContent>
             <div className="space-y-3">
               {myRequests.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
+                <p className="text-center text-muted-foreground py-8" data-testid="text-no-requests">
                   No maintenance requests submitted yet
                 </p>
               ) : (
@@ -224,39 +230,40 @@ export default function WaiterMaintenance() {
                   <div
                     key={request.id}
                     className="p-4 border rounded-lg space-y-2 hover:bg-accent/50 transition-colors"
+                    data-testid={`card-request-${request.id}`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-start space-x-3 flex-1">
                         {getStatusIcon(request.status)}
                         <div className="flex-1">
-                          <h4 className="font-medium text-foreground leading-tight">
+                          <h4 className="font-medium text-foreground leading-tight" data-testid={`text-title-${request.id}`}>
                             {request.title}
                           </h4>
-                          <p className="text-sm text-muted-foreground mt-1">
+                          <p className="text-sm text-muted-foreground mt-1" data-testid={`text-location-${request.id}`}>
                             {request.location}
                           </p>
                         </div>
                       </div>
                     </div>
                     
-                    <p className="text-sm text-muted-foreground pl-8">
+                    <p className="text-sm text-muted-foreground pl-8" data-testid={`text-description-${request.id}`}>
                       {request.description}
                     </p>
 
                     <div className="flex flex-wrap gap-2 pl-8">
-                      <Badge className={getPriorityColor(request.priority)} variant="outline">
+                      <Badge className={getPriorityColor(request.priority)} variant="outline" data-testid={`badge-priority-${request.id}`}>
                         {request.priority.toUpperCase()}
                       </Badge>
-                      <Badge variant="secondary">
+                      <Badge variant="secondary" data-testid={`badge-status-${request.id}`}>
                         {request.status.replace('_', ' ').toUpperCase()}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground" data-testid={`text-date-${request.id}`}>
                         {new Date(request.createdAt).toLocaleDateString()}
                       </span>
                     </div>
 
                     {request.resolvedAt && (
-                      <p className="text-xs text-green-600 pl-8">
+                      <p className="text-xs text-green-600 pl-8" data-testid={`text-resolved-${request.id}`}>
                         ✓ Resolved on {new Date(request.resolvedAt).toLocaleDateString()}
                       </p>
                     )}

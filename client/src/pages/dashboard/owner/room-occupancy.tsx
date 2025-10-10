@@ -1,11 +1,36 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Bed, Users, DoorOpen, Calendar } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function RoomOccupancy() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  const [checkInDialog, setCheckInDialog] = useState(false);
+  const [checkOutDialog, setCheckOutDialog] = useState(false);
+  const [maintenanceDialog, setMaintenanceDialog] = useState(false);
+  const [editDialog, setEditDialog] = useState(false);
+  const [addDialog, setAddDialog] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState<any>(null);
+  
+  // Room form states
+  const [roomNumber, setRoomNumber] = useState("");
+  const [selectedRoomTypeId, setSelectedRoomTypeId] = useState("");
+  
   const { data: rooms = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/rooms"]
   });
@@ -17,6 +42,72 @@ export default function RoomOccupancy() {
   const { data: reservations = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/reservations"]
   });
+
+  // Populate form when editing
+  useEffect(() => {
+    if (selectedRoom && editDialog) {
+      setRoomNumber(selectedRoom.roomNumber || "");
+      setSelectedRoomTypeId(selectedRoom.roomTypeId?.toString() || "");
+    } else if (addDialog && !selectedRoom) {
+      setRoomNumber("");
+      setSelectedRoomTypeId("");
+    } else if (!editDialog && !addDialog) {
+      setRoomNumber("");
+      setSelectedRoomTypeId("");
+      setSelectedRoom(null);
+    }
+  }, [selectedRoom, editDialog, addDialog]);
+
+  // Mutations
+  const createRoomMutation = useMutation({
+    mutationFn: async (data: any) => {
+      await apiRequest("POST", "/api/hotels/current/rooms", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/rooms"] });
+      toast({ title: "Success", description: "Room created successfully!" });
+      setAddDialog(false);
+      setRoomNumber("");
+      setSelectedRoomTypeId("");
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create room", variant: "destructive" });
+    }
+  });
+
+  const updateRoomMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      await apiRequest("PUT", `/api/hotels/current/rooms/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/rooms"] });
+      toast({ title: "Success", description: "Room updated successfully!" });
+      setEditDialog(false);
+      setRoomNumber("");
+      setSelectedRoomTypeId("");
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update room", variant: "destructive" });
+    }
+  });
+
+  const handleSaveRoom = () => {
+    if (!roomNumber.trim()) {
+      toast({ title: "Error", description: "Room number is required", variant: "destructive" });
+      return;
+    }
+
+    const data = {
+      roomNumber,
+      roomTypeId: selectedRoomTypeId ? parseInt(selectedRoomTypeId) : null
+    };
+
+    if (selectedRoom && editDialog) {
+      updateRoomMutation.mutate({ id: selectedRoom.id, data });
+    } else {
+      createRoomMutation.mutate(data);
+    }
+  };
 
   // Calculate room metrics
   const totalRooms = rooms.length;
@@ -64,10 +155,34 @@ export default function RoomOccupancy() {
   ];
 
   const roomActions = [
-    { label: "Check In", action: (row: any) => console.log("Check in:", row) },
-    { label: "Check Out", action: (row: any) => console.log("Check out:", row) },
-    { label: "Maintenance", action: (row: any) => console.log("Set maintenance:", row) },
-    { label: "Edit", action: (row: any) => console.log("Edit room:", row) }
+    { 
+      label: "Check In", 
+      action: (row: any) => {
+        setSelectedRoom(row);
+        setCheckInDialog(true);
+      }
+    },
+    { 
+      label: "Check Out", 
+      action: (row: any) => {
+        setSelectedRoom(row);
+        setCheckOutDialog(true);
+      }
+    },
+    { 
+      label: "Maintenance", 
+      action: (row: any) => {
+        setSelectedRoom(row);
+        setMaintenanceDialog(true);
+      }
+    },
+    { 
+      label: "Edit", 
+      action: (row: any) => {
+        setSelectedRoom(row);
+        setEditDialog(true);
+      }
+    }
   ];
 
   return (
@@ -167,10 +282,143 @@ export default function RoomOccupancy() {
           data={rooms}
           columns={roomColumns}
           actions={roomActions}
-          onAdd={() => console.log("Add room")}
+          onAdd={() => setAddDialog(true)}
           addButtonLabel="Add Room"
           searchPlaceholder="Search rooms..."
         />
+
+        {/* Dialogs */}
+        <Dialog open={checkInDialog} onOpenChange={setCheckInDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Check In - Room {selectedRoom?.roomNumber}</DialogTitle>
+              <DialogDescription>Guest check-in functionality</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Please use the Guest Management page to check in guests with reservations.
+                This will automatically update room occupancy status.
+              </p>
+              <Button onClick={() => setCheckInDialog(false)}>Close</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={checkOutDialog} onOpenChange={setCheckOutDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Check Out - Room {selectedRoom?.roomNumber}</DialogTitle>
+              <DialogDescription>Guest check-out functionality</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Please use the Guest Management page to check out guests.
+                This will automatically update room occupancy status and add the room to the cleaning queue.
+              </p>
+              <Button onClick={() => setCheckOutDialog(false)}>Close</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={maintenanceDialog} onOpenChange={setMaintenanceDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Set Maintenance - Room {selectedRoom?.roomNumber}</DialogTitle>
+              <DialogDescription>Mark room for maintenance</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Room maintenance management is available in the Manager dashboard under Room Setup.
+                Managers can update room status to 'maintenance' with reason tracking.
+              </p>
+              <Button onClick={() => setMaintenanceDialog(false)}>Close</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={editDialog} onOpenChange={setEditDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Room {selectedRoom?.roomNumber}</DialogTitle>
+              <DialogDescription>Update room details</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-room-number">Room Number</Label>
+                <Input
+                  id="edit-room-number"
+                  value={roomNumber}
+                  onChange={(e) => setRoomNumber(e.target.value)}
+                  placeholder="Enter room number"
+                  data-testid="input-room-number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-room-type">Room Type</Label>
+                <Select value={selectedRoomTypeId} onValueChange={setSelectedRoomTypeId}>
+                  <SelectTrigger id="edit-room-type" data-testid="select-room-type">
+                    <SelectValue placeholder="Select room type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roomTypes.map((type: any) => (
+                      <SelectItem key={type.id} value={type.id.toString()}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setEditDialog(false)} data-testid="button-cancel-edit">Cancel</Button>
+                <Button onClick={handleSaveRoom} disabled={updateRoomMutation.isPending} data-testid="button-save-room">
+                  {updateRoomMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={addDialog} onOpenChange={setAddDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Room</DialogTitle>
+              <DialogDescription>Create a new room</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="add-room-number">Room Number</Label>
+                <Input
+                  id="add-room-number"
+                  value={roomNumber}
+                  onChange={(e) => setRoomNumber(e.target.value)}
+                  placeholder="Enter room number"
+                  data-testid="input-room-number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-room-type">Room Type</Label>
+                <Select value={selectedRoomTypeId} onValueChange={setSelectedRoomTypeId}>
+                  <SelectTrigger id="add-room-type" data-testid="select-room-type">
+                    <SelectValue placeholder="Select room type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roomTypes.map((type: any) => (
+                      <SelectItem key={type.id} value={type.id.toString()}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setAddDialog(false)} data-testid="button-cancel-add">Cancel</Button>
+                <Button onClick={handleSaveRoom} disabled={createRoomMutation.isPending} data-testid="button-create-room">
+                  {createRoomMutation.isPending ? "Creating..." : "Create Room"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

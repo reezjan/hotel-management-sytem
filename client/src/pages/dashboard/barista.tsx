@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,22 +59,15 @@ export default function BaristaDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
   const [wastageDialogOpen, setWastageDialogOpen] = useState(false);
-  const [maintenanceDialogOpen, setMaintenanceDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<KotItem | null>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [wastageData, setWastageData] = useState({
     itemId: "",
     qty: "",
     reason: ""
-  });
-  const [maintenanceData, setMaintenanceData] = useState({
-    title: "",
-    location: "",
-    description: "",
-    priority: "medium",
-    photo: ""
   });
 
   const { data: kotOrders = [] } = useQuery({
@@ -120,27 +114,6 @@ export default function BaristaDashboard() {
       toast({ title: "Wastage recorded successfully" });
       setWastageDialogOpen(false);
       setWastageData({ itemId: "", qty: "", reason: "" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  });
-
-  const createMaintenanceMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiRequest("POST", "/api/hotels/current/maintenance-requests", data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/maintenance-requests"] });
-      toast({ title: "Maintenance request created successfully" });
-      setMaintenanceDialogOpen(false);
-      setMaintenanceData({
-        title: "",
-        location: "",
-        description: "",
-        priority: "medium",
-        photo: ""
-      });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -196,25 +169,6 @@ export default function BaristaDashboard() {
       qty: qty.toString(),
       reason: wastageData.reason.trim()
     });
-  };
-
-  const submitMaintenance = () => {
-    if (!maintenanceData.title.trim() || !maintenanceData.location.trim() || !maintenanceData.description.trim()) {
-      toast({ title: "Please fill all required fields", variant: "destructive" });
-      return;
-    }
-    createMaintenanceMutation.mutate(maintenanceData);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setMaintenanceData({ ...maintenanceData, photo: reader.result as string });
-      };
-      reader.readAsDataURL(file);
-    }
   };
 
   const pendingOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
@@ -389,75 +343,9 @@ export default function BaristaDashboard() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={maintenanceDialogOpen} onOpenChange={setMaintenanceDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Wrench className="w-4 h-4 mr-2" /> Maintenance Request
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Maintenance Request</DialogTitle>
-                <DialogDescription>Report a maintenance issue</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Title</Label>
-                  <Input
-                    value={maintenanceData.title}
-                    onChange={(e) => setMaintenanceData({ ...maintenanceData, title: e.target.value })}
-                    placeholder="Brief title"
-                  />
-                </div>
-                <div>
-                  <Label>Location</Label>
-                  <Input
-                    value={maintenanceData.location}
-                    onChange={(e) => setMaintenanceData({ ...maintenanceData, location: e.target.value })}
-                    placeholder="e.g., Coffee Bar"
-                  />
-                </div>
-                <div>
-                  <Label>Description</Label>
-                  <Textarea
-                    value={maintenanceData.description}
-                    onChange={(e) => setMaintenanceData({ ...maintenanceData, description: e.target.value })}
-                    placeholder="Describe the issue"
-                  />
-                </div>
-                <div>
-                  <Label>Priority</Label>
-                  <Select
-                    value={maintenanceData.priority}
-                    onValueChange={(value) => setMaintenanceData({ ...maintenanceData, priority: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Photo (Optional)</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                  />
-                  {maintenanceData.photo && (
-                    <img src={maintenanceData.photo} alt="Preview" className="mt-2 max-w-full h-32 object-cover rounded" />
-                  )}
-                </div>
-                <Button onClick={submitMaintenance} className="w-full" disabled={createMaintenanceMutation.isPending}>
-                  Submit Request
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button variant="outline" onClick={() => setLocation('/barista/maintenance')}>
+            <Wrench className="w-4 h-4 mr-2" /> Maintenance Request
+          </Button>
         </div>
 
         <Card>
