@@ -230,6 +230,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Package', label: 'Inventory Tracking', id: 'inventory' },
     { icon: 'Bed', label: 'Room Occupancy', id: 'occupancy' },
     { icon: 'Waves', label: 'Amenities', id: 'amenities' },
+    { icon: 'Tag', label: 'Discount Vouchers', id: 'vouchers' },
     { icon: 'Calculator', label: 'Tax Configuration', id: 'taxes' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
     { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' },

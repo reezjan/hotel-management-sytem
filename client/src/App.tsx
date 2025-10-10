@@ -117,6 +117,7 @@ function Router() {
       <ProtectedRoute path="/owner/reports" component={OwnerReports} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/audit-transparency" component={OwnerAuditTransparency} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/amenities" component={OwnerAmenities} allowedRoles={["owner"]} />
+      <ProtectedRoute path="/owner/vouchers" component={DiscountVouchers} allowedRoles={["owner"]} />
       
       <ProtectedRoute path="/manager" component={ManagerDashboard} allowedRoles={["manager"]} />
       <ProtectedRoute path="/manager/staff" component={StaffManagement} allowedRoles={["manager", "owner"]} />
