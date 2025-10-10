@@ -33,6 +33,7 @@ The system is built as a full-stack application using React and TypeScript for t
 -   **Restaurant Billing System**: Provides comprehensive cashier functionality with multi-table selection, cascading tax calculation, split bill options, multiple payment methods, bill amendments, and audit trails.
 -   **Immutable Financial System**: All financial transactions are permanent with void-only functionality requiring 15+ character justification and manager/owner approval for full audit compliance.
 -   **Enterprise-Grade Security**: Production-ready API authentication and authorization with hotel ownership verification on all sensitive endpoints (18 endpoints secured - Oct 2025).
+-   **Dual Reporting System**: Separate financial reporting and hotel transparency dashboards with dedicated pages for financial analytics and complete operational transparency (Oct 2025).
 
 ## Security Hardening & Vulnerability Fixes
 
@@ -130,6 +131,43 @@ The system is built as a full-stack application using React and TypeScript for t
   - `PUT /api/users/:id` - User updates (general endpoint)
   - `PUT /api/hotels/current/users/:id` - Hotel-scoped user updates
 - **Testing**: Verified managers and owners cannot inject passwordHash into user update requests
+
+## Recent Updates
+
+### Reporting System Restructure (October 2025)
+The reporting system has been restructured to separate financial reporting from complete hotel transparency views:
+
+**Changes Made:**
+1. **Navigation Update**: Renamed "Reports" to "Financial Report" and added new "Report" menu item in owner navigation
+2. **New Transparency Report Page** (`/owner/report`):
+   - Complete hotel transparency with 6 comprehensive tabs:
+     - **Financial Overview**: Profit & loss statement with revenue/expense breakdowns, payment methods analysis, and key metrics
+     - **All Transactions**: Complete transaction history with full details (date, type, purpose, payment method, vendor, creator, amount, status)
+     - **Rooms & Occupancy**: Real-time room availability, pricing, occupancy analysis, and revenue tracking
+     - **Staff & HR**: Complete staff directory with roles, activity status, and on-duty information
+     - **Maintenance Requests**: All maintenance history with photos and full details
+     - **Vendors & Suppliers**: Complete vendor directory with payment history and contact information
+   - Comprehensive CSV export functionality for complete transparency report
+   - Full visibility into all hotel operations and data
+
+3. **Financial Report Page** (`/owner/reports`):
+   - Focused on financial reporting and analytics
+   - Quick report generation (Financial, Occupancy, Staff reports)
+   - Financial summary cards with key metrics
+   - Recent activity summary with transactions and low stock alerts
+   - Individual report exports for specific analysis
+
+**Technical Implementation:**
+- Created new `report.tsx` component with tabbed interface using shadcn/ui Tabs
+- Simplified `reports.tsx` to focus on financial reporting only
+- Updated routing in `App.tsx` to support both pages
+- Maintained consistent data access patterns across both pages
+- All changes reviewed and approved by architect with no security issues
+
+**User Experience:**
+- Clear separation of concerns: financial analytics vs. operational transparency
+- Owners can now easily access comprehensive hotel data without mixing it with financial reports
+- Both pages maintain the same date range filtering and export capabilities
 
 ## External Dependencies
 -   **PostgreSQL**: Relational database for all application data.
