@@ -56,6 +56,10 @@ export default function SurveillanceOfficerMaintenanceReports() {
       toast({ title: "Title and location are required", variant: "destructive" });
       return;
     }
+    if (!maintenanceForm.photo) {
+      toast({ title: "Photo is required", variant: "destructive" });
+      return;
+    }
     createMaintenanceMutation.mutate(maintenanceForm);
   };
 
@@ -70,7 +74,7 @@ export default function SurveillanceOfficerMaintenanceReports() {
     }
   };
 
-  const myMaintenanceRequests = maintenanceRequests.filter(r => r.reportedBy === user?.id);
+  const myMaintenanceRequests = maintenanceRequests.filter(r => r.reported_by === user?.id || r.reportedBy === user?.id);
   const pendingRequests = myMaintenanceRequests.filter(r => r.status === 'pending');
   const resolvedRequests = myMaintenanceRequests.filter(r => r.status === 'resolved');
 
@@ -176,13 +180,14 @@ export default function SurveillanceOfficerMaintenanceReports() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="photo">Photo (optional)</Label>
+                  <Label htmlFor="photo">Photo *</Label>
                   <Input
                     id="photo"
                     type="file"
                     accept="image/*"
                     data-testid="input-maintenance-photo"
                     onChange={handlePhotoChange}
+                    required
                   />
                   {maintenanceForm.photo && (
                     <div className="mt-2">

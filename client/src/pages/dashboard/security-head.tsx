@@ -73,7 +73,8 @@ export default function SecurityHeadDashboard() {
 
   // Filter maintenance requests from surveillance officers
   const maintenanceRequests = allMaintenanceRequests.filter(req => {
-    const reporter = allUsers.find(u => u.id === req.reportedBy);
+    const reporterId = req.reported_by || req.reportedBy;
+    const reporter = allUsers.find(u => u.id === reporterId);
     return reporter?.role?.name === 'surveillance_officer';
   });
 
@@ -545,7 +546,8 @@ export default function SecurityHeadDashboard() {
                 ) : (
                   <div className="space-y-4">
                     {maintenanceRequests.map((request) => {
-                      const reporter = allUsers.find(u => u.id === request.reportedBy);
+                      const reporterId = request.reported_by || request.reportedBy;
+                      const reporter = allUsers.find(u => u.id === reporterId);
                       return (
                         <div key={request.id} className="p-4 border rounded-lg" data-testid={`maintenance-${request.id}`}>
                           <div className="flex items-start justify-between">
