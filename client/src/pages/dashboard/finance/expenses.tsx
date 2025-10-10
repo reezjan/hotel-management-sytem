@@ -159,6 +159,18 @@ export default function FinanceExpensesPage() {
   return (
     <DashboardLayout title="Expense Tracking">
       <div className="space-y-6">
+        {/* Add Expense Button */}
+        <div className="flex justify-end">
+          <Button 
+            onClick={() => setIsExpenseModalOpen(true)}
+            data-testid="button-add-expense"
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Expense
+          </Button>
+        </div>
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="bg-gradient-to-r from-red-500 to-pink-600 text-white">
@@ -200,43 +212,6 @@ export default function FinanceExpensesPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Expense Management</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button 
-                variant="outline" 
-                className="h-20 flex flex-col"
-                onClick={() => setIsVendorPaymentModalOpen(true)}
-                data-testid="button-vendor-payment"
-              >
-                <Truck className="h-6 w-6 mb-2" />
-                <span className="text-sm">Vendor Payment</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="h-20 flex flex-col"
-                onClick={() => setIsExpenseModalOpen(true)}
-                data-testid="button-add-expense"
-              >
-                <Plus className="h-6 w-6 mb-2" />
-                <span className="text-sm">Add Expense</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-payroll">
-                <Users className="h-6 w-6 mb-2" />
-                <span className="text-sm">Staff Payroll</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex flex-col" data-testid="button-maintenance">
-                <Wrench className="h-6 w-6 mb-2" />
-                <span className="text-sm">Maintenance</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Recent Expenses */}
         <Card>

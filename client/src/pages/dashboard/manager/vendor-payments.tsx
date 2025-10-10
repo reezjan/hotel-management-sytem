@@ -169,7 +169,7 @@ export default function VendorPayments() {
       return;
     }
     
-    if (!vendorName.trim() || !amount || !paymentMethod || !purpose) {
+    if (!vendorName.trim() || !amount || !paymentMethod || !purpose || !reference.trim()) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -214,7 +214,7 @@ export default function VendorPayments() {
         currency: "NPR",
         paymentMethod,
         purpose,
-        reference: reference || undefined
+        reference: reference.trim()
       });
     } catch (error: any) {
       toast.error(error.message || "Failed to process payment");
@@ -358,12 +358,14 @@ export default function VendorPayments() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="reference">Reference Number</Label>
+                  <Label htmlFor="reference">Reference Number <span className="text-red-500">*</span></Label>
                   <Input
                     id="reference"
-                    placeholder="Cheque number, transfer ID, etc."
+                    placeholder="Invoice/PO number, cheque number, etc."
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
+                    data-testid="input-reference"
+                    required
                   />
                 </div>
               </div>
