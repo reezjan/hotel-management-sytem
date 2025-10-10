@@ -229,6 +229,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'PieChart', label: 'Financial Overview', id: 'financial' },
     { icon: 'Package', label: 'Inventory Tracking', id: 'inventory' },
     { icon: 'Bed', label: 'Room Occupancy', id: 'occupancy' },
+    { icon: 'Waves', label: 'Amenities', id: 'amenities' },
     { icon: 'Calculator', label: 'Tax Configuration', id: 'taxes' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
     { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' },

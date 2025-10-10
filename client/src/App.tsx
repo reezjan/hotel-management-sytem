@@ -17,6 +17,7 @@ import OwnerStaffManagement from "@/pages/dashboard/owner/staff-management";
 import OwnerReports from "@/pages/dashboard/owner/reports";
 import OwnerReport from "@/pages/dashboard/owner/report";
 import OwnerAuditTransparency from "@/pages/dashboard/owner/audit-transparency";
+import OwnerAmenities from "@/pages/dashboard/owner/amenities";
 import ManagerDashboard from "@/pages/dashboard/manager";
 import StaffManagement from "@/pages/dashboard/manager/staff-management";
 import AttendanceReports from "@/pages/dashboard/manager/attendance-reports";
@@ -115,6 +116,7 @@ function Router() {
       <ProtectedRoute path="/owner/report" component={OwnerReport} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/reports" component={OwnerReports} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/audit-transparency" component={OwnerAuditTransparency} allowedRoles={["owner"]} />
+      <ProtectedRoute path="/owner/amenities" component={OwnerAmenities} allowedRoles={["owner"]} />
       
       <ProtectedRoute path="/manager" component={ManagerDashboard} allowedRoles={["manager"]} />
       <ProtectedRoute path="/manager/staff" component={StaffManagement} allowedRoles={["manager", "owner"]} />

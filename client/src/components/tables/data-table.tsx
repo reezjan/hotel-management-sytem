@@ -51,8 +51,32 @@ export function DataTable({
     const headers = columns.map(col => col.label).join(',');
     const rows = sortedData.map(row => 
       columns.map(col => {
-        const value = row[col.key];
-        const stringValue = String(value || '').replace(/"/g, '""');
+        let value = row[col.key];
+        
+        // Use render function if available to get proper formatted value
+        if (col.render) {
+          const rendered = col.render(value, row);
+          // Extract text content from React elements
+          if (typeof rendered === 'object' && rendered !== null) {
+            // If it's a React element with props.children, try to extract text
+            if ('props' in rendered && rendered.props && 'children' in rendered.props) {
+              value = String(rendered.props.children);
+            } else {
+              value = String(value || '');
+            }
+          } else {
+            value = String(rendered || '');
+          }
+        } else if (typeof value === 'object' && value !== null) {
+          // Handle objects - try to extract a display value
+          if (value.name) value = value.name;
+          else if (value.label) value = value.label;
+          else value = JSON.stringify(value);
+        } else {
+          value = String(value || '');
+        }
+        
+        const stringValue = String(value).replace(/"/g, '""');
         return `"${stringValue}"`;
       }).join(',')
     );
