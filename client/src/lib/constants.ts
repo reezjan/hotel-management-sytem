@@ -259,6 +259,7 @@ export const NAVIGATION_ITEMS = {
   [ROLES.FRONT_DESK]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'Users', label: 'Guest Management', id: 'guests' },
+    { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
     { icon: 'FileCheck', label: 'Leave Requests', id: 'leave' }
   ],
