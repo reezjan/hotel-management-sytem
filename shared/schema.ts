@@ -481,6 +481,20 @@ export const leaveRequests = pgTable("leave_requests", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
+// Leave Policies Table
+export const leavePolicies = pgTable("leave_policies", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  leaveType: text("leave_type").notNull(), // sick, vacation, personal, emergency, family
+  displayName: text("display_name").notNull(),
+  defaultDays: integer("default_days").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+}, (table) => ({
+  uniqueHotelLeaveType: unique().on(table.hotelId, table.leaveType)
+}));
+
 // Leave Balances Table
 export const leaveBalances = pgTable("leave_balances", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1088,6 +1102,12 @@ export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
   endDate: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val))
 });
 
+export const insertLeavePolicySchema = createInsertSchema(leavePolicies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
 export const insertLeaveBalanceSchema = createInsertSchema(leaveBalances).omit({
   id: true,
   createdAt: true,
@@ -1317,6 +1337,8 @@ export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
 export type Attendance = typeof attendance.$inferSelect;
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
+export type LeavePolicy = typeof leavePolicies.$inferSelect;
+export type InsertLeavePolicy = z.infer<typeof insertLeavePolicySchema>;
 export type LeaveBalance = typeof leaveBalances.$inferSelect;
 export type InsertLeaveBalance = z.infer<typeof insertLeaveBalanceSchema>;
 export type Notification = typeof notifications.$inferSelect;

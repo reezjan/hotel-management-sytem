@@ -23,6 +23,7 @@ import {
   insertPoolSchema,
   insertServiceSchema,
   insertLeaveRequestSchema,
+  insertLeavePolicySchema,
   insertWastageSchema,
   insertVehicleLogSchema,
   updateKotItemSchema,
@@ -4902,6 +4903,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(balances);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch leave balances" });
+    }
+  });
+
+  // Leave policy routes (Owner only)
+  app.get("/api/hotels/current/leave-policies", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      const policies = await storage.getLeavePoliciesByHotel(user.hotelId);
+      res.json(policies);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch leave policies" });
+    }
+  });
+
+  app.post("/api/hotels/current/leave-policies", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const userRole = user.role?.name || '';
+      if (userRole !== 'owner') {
+        return res.status(403).json({ message: "Only hotel owners can create leave policies" });
+      }
+
+      const policyData = insertLeavePolicySchema.parse({
+        ...req.body,
+        hotelId: user.hotelId
+      });
+
+      const policy = await storage.createLeavePolicy(policyData);
+      res.json(policy);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Invalid policy data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create leave policy" });
+    }
+  });
+
+  app.patch("/api/leave-policies/:id", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const userRole = user.role?.name || '';
+      if (userRole !== 'owner') {
+        return res.status(403).json({ message: "Only hotel owners can update leave policies" });
+      }
+
+      const { id } = req.params;
+      const policy = await storage.updateLeavePolicy(id, req.body);
+      res.json(policy);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update leave policy" });
+    }
+  });
+
+  app.delete("/api/leave-policies/:id", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const userRole = user.role?.name || '';
+      if (userRole !== 'owner') {
+        return res.status(403).json({ message: "Only hotel owners can delete leave policies" });
+      }
+
+      const { id } = req.params;
+      await storage.deleteLeavePolicy(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete leave policy" });
     }
   });
 

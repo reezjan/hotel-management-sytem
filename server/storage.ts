@@ -28,6 +28,7 @@ import {
   pools,
   services,
   leaveRequests,
+  leavePolicies,
   leaveBalances,
   notifications,
   wastages,
@@ -85,6 +86,8 @@ import {
   type InsertService,
   type LeaveRequest,
   type InsertLeaveRequest,
+  type LeavePolicy,
+  type InsertLeavePolicy,
   type Wastage,
   type InsertWastage,
   type MealPlan,
@@ -308,6 +311,13 @@ export interface IStorage {
   createLeaveBalance(balance: any): Promise<any>;
   updateLeaveBalance(id: string, balance: any): Promise<any>;
   initializeLeaveBalances(userId: string, hotelId: string, year: number): Promise<void>;
+  
+  // Leave policy operations
+  getLeavePoliciesByHotel(hotelId: string): Promise<LeavePolicy[]>;
+  getLeavePolicy(id: string): Promise<LeavePolicy | undefined>;
+  createLeavePolicy(policy: InsertLeavePolicy): Promise<LeavePolicy>;
+  updateLeavePolicy(id: string, policy: Partial<InsertLeavePolicy>): Promise<LeavePolicy>;
+  deleteLeavePolicy(id: string): Promise<void>;
   
   // Notification operations
   getNotificationsByUser(userId: string): Promise<any[]>;
@@ -2669,28 +2679,63 @@ export class DatabaseStorage implements IStorage {
   }
 
   async initializeLeaveBalances(userId: string, hotelId: string, year: number): Promise<void> {
-    const leaveTypes = [
-      { type: 'sick', days: 10 },
-      { type: 'vacation', days: 15 },
-      { type: 'personal', days: 5 },
-      { type: 'emergency', days: 5 },
-      { type: 'family', days: 5 }
-    ];
+    const policies = await this.getLeavePoliciesByHotel(hotelId);
+    const activePolicies = policies.filter(p => p.isActive);
 
-    for (const { type, days } of leaveTypes) {
-      const existing = await this.getLeaveBalance(userId, type, year);
+    for (const policy of activePolicies) {
+      const existing = await this.getLeaveBalance(userId, policy.leaveType, year);
       if (!existing) {
         await this.createLeaveBalance({
           hotelId,
           userId,
-          leaveType: type,
-          totalDays: days.toString(),
+          leaveType: policy.leaveType,
+          totalDays: policy.defaultDays.toString(),
           usedDays: '0',
-          remainingDays: days.toString(),
+          remainingDays: policy.defaultDays.toString(),
           year
         });
       }
     }
+  }
+
+  // Leave policy operations
+  async getLeavePoliciesByHotel(hotelId: string): Promise<LeavePolicy[]> {
+    return await db
+      .select()
+      .from(leavePolicies)
+      .where(eq(leavePolicies.hotelId, hotelId))
+      .orderBy(asc(leavePolicies.leaveType));
+  }
+
+  async getLeavePolicy(id: string): Promise<LeavePolicy | undefined> {
+    const [policy] = await db
+      .select()
+      .from(leavePolicies)
+      .where(eq(leavePolicies.id, id));
+    return policy || undefined;
+  }
+
+  async createLeavePolicy(policy: InsertLeavePolicy): Promise<LeavePolicy> {
+    const [newPolicy] = await db
+      .insert(leavePolicies)
+      .values(policy)
+      .returning();
+    return newPolicy;
+  }
+
+  async updateLeavePolicy(id: string, policy: Partial<InsertLeavePolicy>): Promise<LeavePolicy> {
+    const [updatedPolicy] = await db
+      .update(leavePolicies)
+      .set({ ...policy, updatedAt: new Date() })
+      .where(eq(leavePolicies.id, id))
+      .returning();
+    return updatedPolicy;
+  }
+
+  async deleteLeavePolicy(id: string): Promise<void> {
+    await db
+      .delete(leavePolicies)
+      .where(eq(leavePolicies.id, id));
   }
 
   // Notification operations

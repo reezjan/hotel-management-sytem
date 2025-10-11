@@ -1,7 +1,7 @@
 import { db } from './db';
-import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls, guests, transactions, vendors, maintenanceRequests } from '@shared/schema';
+import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls, guests, transactions, vendors, maintenanceRequests, leavePolicies } from '@shared/schema';
 import { hashPassword } from './auth';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 const ROLES = [
   { name: 'super_admin', description: 'Full access across hotels' },
@@ -271,6 +271,35 @@ async function seed() {
         console.log(`  ✓ Created user: ${user.username} (password: ${user.password})`);
       } else {
         console.log(`  → User already exists: ${user.username}`);
+      }
+    }
+
+    // Create leave policies
+    console.log('\n📋 Creating leave policies...');
+    const leavePolicyData = [
+      { leaveType: 'sick', displayName: 'Sick Leave', defaultDays: 10 },
+      { leaveType: 'vacation', displayName: 'Vacation Leave', defaultDays: 15 },
+      { leaveType: 'personal', displayName: 'Personal Leave', defaultDays: 5 },
+      { leaveType: 'emergency', displayName: 'Emergency Leave', defaultDays: 5 },
+      { leaveType: 'family', displayName: 'Family Leave', defaultDays: 5 }
+    ];
+
+    for (const policy of leavePolicyData) {
+      const existing = await db
+        .select()
+        .from(leavePolicies)
+        .where(and(
+          eq(leavePolicies.hotelId, testHotel.id),
+          eq(leavePolicies.leaveType, policy.leaveType)
+        ));
+
+      if (existing.length === 0) {
+        await db.insert(leavePolicies).values({
+          hotelId: testHotel.id,
+          ...policy,
+          isActive: true
+        });
+        console.log(`  ✓ Created leave policy: ${policy.displayName} (${policy.defaultDays} days)`);
       }
     }
 
