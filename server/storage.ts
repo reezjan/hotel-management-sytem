@@ -107,6 +107,9 @@ import {
   type RoomReservation,
   type InsertRoomReservation,
   roomReservations,
+  type RoomServiceCharge,
+  type InsertRoomServiceCharge,
+  roomServiceCharges,
   type Attendance,
   type InsertAttendance,
   checkoutOverrideLogs,
@@ -167,6 +170,12 @@ export interface IStorage {
   getRoomReservation(id: string): Promise<RoomReservation | undefined>;
   updateRoomReservation(id: string, data: Partial<InsertRoomReservation>): Promise<RoomReservation>;
   createCheckoutOverrideLog(log: InsertCheckoutOverrideLog): Promise<CheckoutOverrideLog>;
+
+  // Room service charge operations
+  createRoomServiceCharge(charge: InsertRoomServiceCharge): Promise<RoomServiceCharge>;
+  getRoomServiceCharges(reservationId: string): Promise<RoomServiceCharge[]>;
+  getAllRoomServiceChargesByHotel(hotelId: string): Promise<RoomServiceCharge[]>;
+  deleteRoomServiceCharge(id: string): Promise<void>;
 
   // Room type operations
   getRoomTypesByHotel(hotelId: string): Promise<RoomType[]>;
@@ -802,6 +811,39 @@ export class DatabaseStorage implements IStorage {
       .values(log)
       .returning();
     return createdLog;
+  }
+
+  // Room service charge operations
+  async createRoomServiceCharge(chargeData: InsertRoomServiceCharge): Promise<RoomServiceCharge> {
+    const [charge] = await db
+      .insert(roomServiceCharges)
+      .values(chargeData)
+      .returning();
+    return charge;
+  }
+
+  async getRoomServiceCharges(reservationId: string): Promise<RoomServiceCharge[]> {
+    const charges = await db
+      .select()
+      .from(roomServiceCharges)
+      .where(eq(roomServiceCharges.reservationId, reservationId))
+      .orderBy(desc(roomServiceCharges.createdAt));
+    return charges;
+  }
+
+  async getAllRoomServiceChargesByHotel(hotelId: string): Promise<RoomServiceCharge[]> {
+    const charges = await db
+      .select()
+      .from(roomServiceCharges)
+      .where(eq(roomServiceCharges.hotelId, hotelId))
+      .orderBy(desc(roomServiceCharges.createdAt));
+    return charges;
+  }
+
+  async deleteRoomServiceCharge(id: string): Promise<void> {
+    await db
+      .delete(roomServiceCharges)
+      .where(eq(roomServiceCharges.id, id));
   }
 
   async checkRoomAvailability(

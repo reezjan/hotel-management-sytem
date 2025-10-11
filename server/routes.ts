@@ -34,12 +34,14 @@ import {
   insertServicePackageSchema,
   insertBookingPaymentSchema,
   insertRoomReservationSchema,
+  insertRoomServiceChargeSchema,
   vouchers,
   guests,
   hallBookings,
   halls,
   servicePackages,
-  bookingPayments
+  bookingPayments,
+  roomServiceCharges
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -2934,6 +2936,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get reservations error:", error);
       res.status(500).json({ message: "Failed to get reservations" });
+    }
+  });
+
+  // Room Service Charges routes
+  app.post("/api/hotels/current/room-service-charges", requireActiveUser, async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      if (!currentUser?.hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const chargeData = insertRoomServiceChargeSchema.parse({
+        ...req.body,
+        hotelId: currentUser.hotelId,
+        addedBy: currentUser.id
+      });
+
+      const charge = await storage.createRoomServiceCharge(chargeData);
+      res.json(charge);
+    } catch (error) {
+      console.error("Create room service charge error:", error);
+      res.status(500).json({ message: "Failed to add service charge" });
+    }
+  });
+
+  app.get("/api/hotels/current/room-service-charges", requireActiveUser, async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      if (!currentUser?.hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { reservationId } = req.query;
+      
+      if (reservationId) {
+        // Get charges for specific reservation
+        const charges = await storage.getRoomServiceCharges(reservationId as string);
+        res.json(charges);
+      } else {
+        // Get all charges for the hotel
+        const charges = await storage.getAllRoomServiceChargesByHotel(currentUser.hotelId);
+        res.json(charges);
+      }
+    } catch (error) {
+      console.error("Get room service charges error:", error);
+      res.status(500).json({ message: "Failed to get service charges" });
+    }
+  });
+
+  app.delete("/api/hotels/current/room-service-charges/:id", requireActiveUser, async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      if (!currentUser?.hotelId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { id } = req.params;
+      await storage.deleteRoomServiceCharge(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete room service charge error:", error);
+      res.status(500).json({ message: "Failed to delete service charge" });
     }
   });
 

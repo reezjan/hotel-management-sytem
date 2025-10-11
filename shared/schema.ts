@@ -641,6 +641,23 @@ export const roomReservations = pgTable("room_reservations", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
+// Room Service Charges Table
+export const roomServiceCharges = pgTable("room_service_charges", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  reservationId: uuid("reservation_id").references(() => roomReservations.id, { onDelete: "cascade" }),
+  serviceId: uuid("service_id").references(() => services.id),
+  serviceName: text("service_name").notNull(),
+  serviceKind: text("service_kind").notNull(),
+  quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+  unit: text("unit").notNull(),
+  unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull(),
+  totalCharge: numeric("total_charge", { precision: 12, scale: 2 }).notNull(),
+  notes: text("notes"),
+  addedBy: uuid("added_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+});
+
 // Stock Requests Table
 export const stockRequests = pgTable("stock_requests", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1171,6 +1188,15 @@ export const insertRoomReservationSchema = createInsertSchema(roomReservations).
   checkOutDate: z.string().or(z.date()).transform((val) => val instanceof Date ? val : new Date(val))
 });
 
+export const insertRoomServiceChargeSchema = createInsertSchema(roomServiceCharges).omit({
+  id: true,
+  createdAt: true
+}).extend({
+  quantity: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  unitPrice: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  totalCharge: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
 export const insertVendorSchema = createInsertSchema(vendors).omit({
   id: true,
   createdAt: true
@@ -1351,6 +1377,8 @@ export type MealVoucher = typeof mealVouchers.$inferSelect;
 export type InsertMealVoucher = z.infer<typeof insertMealVoucherSchema>;
 export type RoomReservation = typeof roomReservations.$inferSelect;
 export type InsertRoomReservation = z.infer<typeof insertRoomReservationSchema>;
+export type RoomServiceCharge = typeof roomServiceCharges.$inferSelect;
+export type InsertRoomServiceCharge = z.infer<typeof insertRoomServiceChargeSchema>;
 export type Guest = typeof guests.$inferSelect;
 export type InsertGuest = z.infer<typeof insertGuestSchema>;
 export type StockRequest = typeof stockRequests.$inferSelect;
