@@ -659,6 +659,8 @@ export class DatabaseStorage implements IStorage {
         roomTypeId: rooms.roomTypeId,
         isOccupied: rooms.isOccupied,
         occupantDetails: rooms.occupantDetails,
+        currentReservationId: rooms.currentReservationId,
+        status: rooms.status,
         createdAt: rooms.createdAt,
         updatedAt: rooms.updatedAt,
         deletedAt: rooms.deletedAt,

@@ -2971,7 +2971,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { reservationId } = req.query;
       
       if (reservationId) {
-        // Get charges for specific reservation
+        // SECURITY: Verify reservation belongs to user's hotel before returning charges
+        const reservation = await storage.getRoomReservation(reservationId as string);
+        if (!reservation || reservation.hotelId !== currentUser.hotelId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
         const charges = await storage.getRoomServiceCharges(reservationId as string);
         res.json(charges);
       } else {
