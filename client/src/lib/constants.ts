@@ -233,6 +233,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'Tag', label: 'Discount Vouchers', id: 'vouchers' },
     { icon: 'Calculator', label: 'Tax Configuration', id: 'taxes' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
+    { icon: 'Settings', label: 'Leave Policies', id: 'leave-policies' },
     { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' },
     { icon: 'FileText', label: 'Report', id: 'report' },
     { icon: 'BarChart', label: 'Financial Report', id: 'reports' }

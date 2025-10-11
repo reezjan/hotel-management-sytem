@@ -14,6 +14,7 @@ import OwnerInventoryTracking from "@/pages/dashboard/owner/inventory-tracking";
 import OwnerRoomOccupancy from "@/pages/dashboard/owner/room-occupancy";
 import OwnerTaxConfiguration from "@/pages/dashboard/owner/tax-configuration";
 import OwnerStaffManagement from "@/pages/dashboard/owner/staff-management";
+import OwnerLeavePolicies from "@/pages/dashboard/owner/leave-policies";
 import OwnerReports from "@/pages/dashboard/owner/reports";
 import OwnerReport from "@/pages/dashboard/owner/report";
 import OwnerAuditTransparency from "@/pages/dashboard/owner/audit-transparency";
@@ -112,6 +113,7 @@ function Router() {
       <ProtectedRoute path="/owner/occupancy" component={OwnerRoomOccupancy} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/taxes" component={OwnerTaxConfiguration} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/staff" component={OwnerStaffManagement} allowedRoles={["owner"]} />
+      <ProtectedRoute path="/owner/leave-policies" component={OwnerLeavePolicies} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/leave-approvals" component={ManagerLeaveApprovals} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/report" component={OwnerReport} allowedRoles={["owner"]} />
       <ProtectedRoute path="/owner/reports" component={OwnerReports} allowedRoles={["owner"]} />
