@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useForm } from "react-hook-form";
@@ -42,6 +43,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatCurrency, getStatusColor, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { Room, Task, RoomServiceOrder, MealPlan, Voucher, MenuItem, MenuCategory, RoomType } from "@shared/schema";
+import { RoomServiceChargeModal } from "@/components/modals/room-service-charge-modal";
 
 export default function FrontDeskDashboard() {
   const { user } = useAuth();
@@ -75,6 +77,8 @@ export default function FrontDeskDashboard() {
   const [isViewReservationsModalOpen, setIsViewReservationsModalOpen] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
+  const [isServiceChargeModalOpen, setIsServiceChargeModalOpen] = useState(false);
+  const [selectedReservationForService, setSelectedReservationForService] = useState<string>("");
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
@@ -136,6 +140,16 @@ export default function FrontDeskDashboard() {
     enabled: !!user?.hotelId
   });
 
+  const { data: services = [] } = useQuery<any[]>({
+    queryKey: ["/api/services"],
+    enabled: !!user?.hotelId
+  });
+
+  const { data: roomServiceCharges = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/room-service-charges"],
+    enabled: !!user?.hotelId
+  });
+
   const checkInForm = useForm({
     defaultValues: {
       guestName: "",
@@ -180,14 +194,6 @@ export default function FrontDeskDashboard() {
       numberOfPersons: "",
       mealPlanId: "",
       specialRequests: ""
-    }
-  });
-
-  const roomServiceForm = useForm({
-    defaultValues: {
-      roomId: "",
-      serviceType: "",
-      specialInstructions: ""
     }
   });
 
@@ -588,24 +594,6 @@ export default function FrontDeskDashboard() {
         description: error.message || "Please try again",
         variant: "destructive" 
       });
-    }
-  });
-
-  const createRoomServiceOrderMutation = useMutation({
-    mutationFn: async (data: any) => {
-      await apiRequest("POST", "/api/room-service-orders", {
-        hotelId: user?.hotelId,
-        roomId: data.roomId,
-        requestedBy: user?.id,
-        status: 'pending',
-        specialInstructions: `${data.serviceType}: ${data.specialInstructions}`
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "room-service-orders"] });
-      toast({ title: "Room service order created successfully" });
-      roomServiceForm.reset();
-      setIsRoomServiceModalOpen(false);
     }
   });
 
@@ -1226,7 +1214,14 @@ export default function FrontDeskDashboard() {
                 <Button 
                   variant="outline" 
                   className="h-24 flex flex-col items-center justify-center gap-2 bg-teal-50 hover:bg-teal-100 border-teal-200 dark:bg-teal-950/20 dark:border-teal-900 dark:hover:bg-teal-950/30"
-                  onClick={() => setIsRoomServiceModalOpen(true)}
+                  onClick={() => {
+                    // Show room selector modal
+                    if (occupiedRooms.length === 0) {
+                      toast({ title: "No occupied rooms", description: "There are no occupied rooms to add service charges to", variant: "destructive" });
+                    } else {
+                      setIsRoomServiceModalOpen(true);
+                    }
+                  }}
                   data-testid="button-room-service"
                 >
                   <HandPlatter className="h-7 w-7 text-teal-600" />
@@ -2470,97 +2465,84 @@ export default function FrontDeskDashboard() {
           </DialogContent>
         </Dialog>
 
-        {/* Room Service Modal */}
+        {/* Room Service Modal - Select Room First */}
         <Dialog open={isRoomServiceModalOpen} onOpenChange={setIsRoomServiceModalOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Create Room Service Order</DialogTitle>
+              <DialogTitle>Add Room Service Charge</DialogTitle>
             </DialogHeader>
             
-            <Form {...roomServiceForm}>
-              <form onSubmit={roomServiceForm.handleSubmit(onSubmitRoomService)} className="space-y-4">
-                <FormField
-                  control={roomServiceForm.control}
-                  name="roomId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Room *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-room-service-room">
-                            <SelectValue placeholder="Select room" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {occupiedRooms.map((room) => (
-                            <SelectItem key={room.id} value={room.id}>
-                              {room.roomNumber} - {(room.occupantDetails as any)?.name || 'Guest'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={roomServiceForm.control}
-                  name="serviceType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Service Type *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-service-type">
-                            <SelectValue placeholder="Select service type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="housekeeping">Housekeeping</SelectItem>
-                          <SelectItem value="food_delivery">Food Delivery</SelectItem>
-                          <SelectItem value="laundry">Laundry</SelectItem>
-                          <SelectItem value="maintenance">Maintenance</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={roomServiceForm.control}
-                  name="specialInstructions"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Instructions</FormLabel>
-                      <FormControl>
-                        <Textarea {...field} placeholder="Special instructions..." rows={3} data-testid="textarea-service-instructions" />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="flex space-x-3">
-                  <Button
-                    type="submit"
-                    className="flex-1"
-                    disabled={createRoomServiceOrderMutation.isPending}
-                    data-testid="button-create-room-service"
-                  >
-                    {createRoomServiceOrderMutation.isPending ? "Creating..." : "Create Order"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="flex-1"
-                    onClick={() => setIsRoomServiceModalOpen(false)}
-                    data-testid="button-cancel-room-service"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </Form>
+            <div className="space-y-4">
+              <div>
+                <Label>Select Room *</Label>
+                <Select onValueChange={(roomId) => {
+                  const room = occupiedRooms.find(r => r.id === roomId);
+                  if (room && room.occupantDetails) {
+                    // Try to find reservation first
+                    const reservation = reservations.find(r => 
+                      r.roomId === room.id && r.status === 'checked_in'
+                    );
+                    
+                    if (reservation) {
+                      setSelectedReservationForService(reservation.id);
+                      setIsRoomServiceModalOpen(false);
+                      setIsServiceChargeModalOpen(true);
+                    } else {
+                      // If no reservation found in new system, create a temporary one
+                      // This handles rooms checked in using the old system
+                      const occupantData = room.occupantDetails as any;
+                      
+                      // Create a reservation for this room
+                      apiRequest("POST", "/api/hotels/current/reservations", {
+                        guestName: occupantData.name || "Guest",
+                        guestEmail: occupantData.email || "",
+                        guestPhone: occupantData.phone || "",
+                        roomId: room.id,
+                        checkInDate: occupantData.checkInDate || new Date().toISOString(),
+                        checkOutDate: occupantData.checkOutDate || new Date(Date.now() + 86400000).toISOString(),
+                        numberOfPersons: occupantData.numberOfPersons || 1,
+                        roomPrice: occupantData.roomPrice || "0",
+                        mealPlanPrice: "0",
+                        totalPrice: occupantData.roomPrice || "0",
+                        paidAmount: occupantData.advancePayment || "0",
+                        status: 'checked_in'
+                      }).then((newReservation: any) => {
+                        setSelectedReservationForService(newReservation.id);
+                        queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/reservations"] });
+                        setIsRoomServiceModalOpen(false);
+                        setIsServiceChargeModalOpen(true);
+                      }).catch((error: any) => {
+                        toast({ 
+                          title: "Error creating reservation", 
+                          description: error.message,
+                          variant: "destructive" 
+                        });
+                      });
+                    }
+                  }
+                }}>
+                  <SelectTrigger data-testid="select-room-for-service">
+                    <SelectValue placeholder="Select room" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {occupiedRooms.map((room) => (
+                      <SelectItem key={room.id} value={room.id}>
+                        Room {room.roomNumber} - {(room.occupantDetails as any)?.name || 'Guest'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => setIsRoomServiceModalOpen(false)}
+                data-testid="button-cancel-room-service"
+              >
+                Cancel
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
 
@@ -3219,6 +3201,13 @@ export default function FrontDeskDashboard() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Service Charge Modal */}
+        <RoomServiceChargeModal
+          open={isServiceChargeModalOpen}
+          onOpenChange={setIsServiceChargeModalOpen}
+          reservationId={selectedReservationForService}
+        />
       </div>
     </DashboardLayout>
   );
