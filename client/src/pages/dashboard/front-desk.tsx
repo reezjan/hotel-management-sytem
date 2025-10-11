@@ -643,7 +643,15 @@ export default function FrontDeskDashboard() {
     const foodCharges = room.occupantDetails?.foodCharges || [];
     const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
     
-    const subtotal = totalRoomCharges + totalMealPlanCharges + totalFoodCharges;
+    // Get room service charges for this reservation
+    const reservationId = room.currentReservationId || (room.occupantDetails as any)?.reservationId;
+    const serviceCharges = reservationId 
+      ? roomServiceCharges.filter((charge: any) => charge.reservationId === reservationId)
+      : [];
+    const totalServiceCharges = serviceCharges.reduce((sum: number, charge: any) => 
+      sum + parseFloat(charge.totalCharge || 0), 0);
+    
+    const subtotal = totalRoomCharges + totalMealPlanCharges + totalFoodCharges + totalServiceCharges;
 
     // Apply voucher discount on subtotal first
     let discountAmount = 0;
@@ -736,7 +744,9 @@ export default function FrontDeskDashboard() {
       totalRoomCharges,
       mealPlanCostPerDay: parseFloat(mealPlanCostPerDay.toString()),
       totalMealPlanCharges: parseFloat(totalMealPlanCharges.toString()),
-      totalFoodCharges
+      totalFoodCharges,
+      totalServiceCharges,
+      serviceCharges
     };
   };
 
@@ -819,7 +829,8 @@ export default function FrontDeskDashboard() {
   };
 
   const onSubmitRoomService = (data: any) => {
-    createRoomServiceOrderMutation.mutate(data);
+    // Room service functionality has been replaced with service charges modal
+    toast({ title: "Please use the Service button on the room card" });
   };
 
   const onSubmitMaintenance = (data: any) => {
@@ -980,6 +991,7 @@ export default function FrontDeskDashboard() {
           <div class="bold">GUEST DETAILS</div>
           <div>Name: ${guest?.name || 'N/A'}</div>
           <div>Room: ${room.roomNumber}${roomType ? ` (${roomType.name})` : ''}</div>
+          <div>Number of People: ${guest?.mealPlan?.numberOfPersons || 1}</div>
           ${guest?.phone ? `<div>Phone: ${guest.phone}</div>` : ''}
           ${guest?.email ? `<div>Email: ${guest.email}</div>` : ''}
           ${guest?.nationality ? `<div>Nationality: ${guest.nationality}</div>` : ''}
@@ -1030,6 +1042,19 @@ export default function FrontDeskDashboard() {
               <div class="item-row" style="padding-left: 10px;">
                 <span class="bold">F&B Subtotal:</span>
                 <span class="bold">${formatCurrency(billCalc.totalFoodCharges)}</span>
+              </div>
+            ` : ''}
+            ${billCalc.totalServiceCharges > 0 && billCalc.serviceCharges?.length > 0 ? `
+              <div class="bold" style="margin-top: 5px;">Room Service Charges:</div>
+              ${billCalc.serviceCharges.map((charge: any) => `
+                <div class="item-row" style="font-size: 11px; padding-left: 10px;">
+                  <span>${charge.serviceName} (${charge.quantity} ${charge.unit})</span>
+                  <span>${formatCurrency(parseFloat(charge.totalCharge))}</span>
+                </div>
+              `).join('')}
+              <div class="item-row" style="padding-left: 10px;">
+                <span class="bold">Service Subtotal:</span>
+                <span class="bold">${formatCurrency(billCalc.totalServiceCharges)}</span>
               </div>
             ` : ''}
             <div class="line"></div>
@@ -1407,6 +1432,56 @@ export default function FrontDeskDashboard() {
                     <div className="mt-2 space-y-1">
                       <p className="text-xs text-foreground font-medium">{(room.occupantDetails as any)?.name || 'Guest'}</p>
                       <div className="flex flex-wrap gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            let reservation = reservations.find((r: any) => 
+                              r.roomId === room.id && r.status === 'checked_in'
+                            );
+                            
+                            if (reservation) {
+                              setSelectedReservationForService(reservation.id);
+                              setIsServiceChargeModalOpen(true);
+                            } else {
+                              // Create a reservation for this checked-in room
+                              try {
+                                const occupantDetails = room.occupantDetails as any;
+                                const newReservation = await apiRequest("POST", "/api/reservations", {
+                                  hotelId: user?.hotelId,
+                                  guestName: occupantDetails?.name || 'Guest',
+                                  guestEmail: occupantDetails?.email || '',
+                                  guestPhone: occupantDetails?.phone || '',
+                                  roomId: room.id,
+                                  checkInDate: occupantDetails?.checkInDate || new Date().toISOString(),
+                                  checkOutDate: occupantDetails?.checkOutDate || new Date(Date.now() + 86400000).toISOString(),
+                                  numberOfPersons: occupantDetails?.mealPlan?.numberOfPersons || 1,
+                                  mealPlanId: occupantDetails?.mealPlan?.planId || null,
+                                  roomPrice: String(occupantDetails?.roomPrice || 0),
+                                  mealPlanPrice: String(occupantDetails?.mealPlan?.totalCost || 0),
+                                  totalPrice: String(parseFloat(occupantDetails?.roomPrice || 0) + parseFloat(occupantDetails?.mealPlan?.totalCost || 0)),
+                                  status: 'checked_in',
+                                  createdBy: user?.id
+                                });
+                                
+                                setSelectedReservationForService(newReservation.id);
+                                queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/reservations"] });
+                                setIsServiceChargeModalOpen(true);
+                              } catch (error: any) {
+                                toast({ 
+                                  title: "Error creating reservation", 
+                                  description: error.message || "Failed to create reservation for service",
+                                  variant: "destructive" 
+                                });
+                              }
+                            }
+                          }}
+                          className="h-6 text-xs px-2"
+                          data-testid={`button-service-${index}`}
+                        >
+                          <HandPlatter className="h-3 w-3 mr-1" />
+                          Service
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -1926,6 +2001,10 @@ export default function FrontDeskDashboard() {
                         <p className="font-semibold">{selectedRoom.occupantDetails?.name || 'N/A'}</p>
                       </div>
                       <div>
+                        <p className="text-sm text-muted-foreground">Number of People</p>
+                        <p className="font-semibold">{selectedRoom.occupantDetails?.mealPlan?.numberOfPersons || 1}</p>
+                      </div>
+                      <div>
                         <p className="text-sm text-muted-foreground">Check-in Date</p>
                         <p className="font-semibold">{selectedRoom.occupantDetails?.checkInDate ? formatDate(selectedRoom.occupantDetails.checkInDate) : 'N/A'}</p>
                       </div>
@@ -2013,6 +2092,21 @@ export default function FrontDeskDashboard() {
                               <div className="flex justify-between font-medium text-sm pl-4 pt-1 border-t">
                                 <span>F&B Subtotal:</span>
                                 <span data-testid="checkout-food-price">NPR {billCalc.totalFoodCharges.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          )}
+                          {billCalc.totalServiceCharges > 0 && (
+                            <div className="space-y-1">
+                              <div className="font-medium text-sm">Room Service Charges:</div>
+                              {billCalc.serviceCharges.map((charge: any, chargeIdx: number) => (
+                                <div key={chargeIdx} className="pl-4 flex justify-between text-sm text-muted-foreground">
+                                  <span>{charge.serviceName} ({charge.quantity} {charge.unit})</span>
+                                  <span>NPR {parseFloat(charge.totalCharge).toFixed(2)}</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-between font-medium text-sm pl-4 pt-1 border-t">
+                                <span>Service Subtotal:</span>
+                                <span data-testid="checkout-service-price">NPR {billCalc.totalServiceCharges.toFixed(2)}</span>
                               </div>
                             </div>
                           )}

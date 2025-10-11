@@ -58,9 +58,15 @@ export default function TaxConfiguration() {
       const response = await fetch("/api/hotels/current/taxes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(taxData),
+        body: JSON.stringify({
+          ...taxData,
+          percentType: 'number'
+        }),
       });
-      if (!response.ok) throw new Error("Failed to update tax settings");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to update tax settings");
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -70,20 +76,23 @@ export default function TaxConfiguration() {
         description: "Tax settings updated successfully",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Failed to update tax settings",
+        description: error.message || "Failed to update tax settings",
         variant: "destructive",
       });
     },
   });
 
   const handleTaxToggle = (taxType: string, enabled: boolean) => {
+    const updatedTax = { ...taxSettings[taxType], isActive: enabled };
     setTaxSettings(prev => ({
       ...prev,
-      [taxType]: { ...prev[taxType], isActive: enabled }
+      [taxType]: updatedTax
     }));
+    // Automatically save when toggled
+    updateTaxMutation.mutate(updatedTax);
   };
 
   const handlePercentChange = (taxType: string, percent: number) => {
@@ -91,6 +100,7 @@ export default function TaxConfiguration() {
       ...prev,
       [taxType]: { ...prev[taxType], percent }
     }));
+    // Note: Don't auto-save on percent change to allow user to finish typing
   };
 
   const handleSaveTax = (taxType: string) => {
