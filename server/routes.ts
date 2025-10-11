@@ -1177,6 +1177,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Automatically set timestamps based on status changes
+      if (updateData.status === 'resolved' && !updateData.resolvedAt) {
+        updateData.resolvedAt = new Date();
+      }
+      if (updateData.status === 'approved' && !updateData.approvedAt) {
+        updateData.approvedAt = new Date();
+        updateData.approvedBy = currentUser.id;
+      }
+      if (updateData.status === 'declined' && !updateData.declinedAt) {
+        updateData.declinedAt = new Date();
+        updateData.declinedBy = currentUser.id;
+      }
+      
       const requestData = insertMaintenanceRequestSchema.partial().parse(updateData);
       const request = await storage.updateMaintenanceRequest(id, requestData);
       res.json(request);
