@@ -26,8 +26,8 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [weight, setWeight] = useState("");
-  const [duration, setDuration] = useState("");
-  const [numberOfTrips, setNumberOfTrips] = useState("1");
+  const [hours, setHours] = useState("");
+  const [days, setDays] = useState("");
   const [notes, setNotes] = useState("");
   const [calculatedTotal, setCalculatedTotal] = useState(0);
 
@@ -50,21 +50,44 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
   const selectedReservation = reservations.find(r => r.id === reservationId);
   const isInHouseGuest = selectedReservation?.status === 'checked_in';
 
-  // Determine service type and calculation method
+  // Determine service type and calculation method based on user requirements
   const getServiceType = (serviceKind: string) => {
     const lowerKind = serviceKind?.toLowerCase() || '';
-    if (lowerKind.includes('laundry')) return 'weight';
-    if (lowerKind.includes('transfer') || lowerKind.includes('airport') || lowerKind.includes('taxi')) return 'trip';
-    if (lowerKind.includes('spa') || lowerKind.includes('massage') || lowerKind.includes('therapy')) return 'duration';
+    
+    // Fixed price services
+    if (lowerKind.includes('airport') || lowerKind.includes('transfer')) return 'fixed';
+    if (lowerKind.includes('tour guide')) return 'fixed';
+    if (lowerKind.includes('business center')) return 'fixed';
+    
+    // Per hour services
+    if (lowerKind.includes('spa')) return 'hours';
+    if (lowerKind.includes('jacuzzi')) return 'hours';
+    if (lowerKind.includes('massage')) return 'hours';
+    if (lowerKind.includes('sauna')) return 'hours';
+    if (lowerKind.includes('beauty salon')) return 'hours';
+    
+    // Per kg services
+    if (lowerKind.includes('laundry')) return 'kg';
+    
+    // Per day services
+    if (lowerKind.includes('gym') || lowerKind.includes('fitness')) return 'days';
+    if (lowerKind.includes('car rental')) return 'days';
+    if (lowerKind.includes('conference room')) return 'days';
+    
+    // Default to other (can be fixed or custom)
+    if (lowerKind.includes('other')) return 'custom';
+    
     return 'quantity';
   };
 
   // Get display unit based on service kind
   const getServiceUnit = (serviceKind: string) => {
     const type = getServiceType(serviceKind);
-    if (type === 'weight') return 'kg';
-    if (type === 'trip') return 'trip';
-    if (type === 'duration') return 'hour';
+    if (type === 'kg') return 'kg';
+    if (type === 'hours') return 'hour';
+    if (type === 'days') return 'day';
+    if (type === 'fixed') return 'service';
+    if (type === 'custom') return 'unit';
     return 'unit';
   };
 
@@ -79,14 +102,25 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
       let total = 0;
 
       switch (serviceType) {
-        case 'weight':
+        case 'kg':
+          // Laundry: price per kg
           total = unitPrice * (Number(weight) || 0);
           break;
-        case 'trip':
-          total = unitPrice * (Number(numberOfTrips) || 0);
+        case 'hours':
+          // Spa, Jacuzzi, Massage, Sauna, Beauty Salon: price per hour
+          total = unitPrice * (Number(hours) || 0);
           break;
-        case 'duration':
-          total = unitPrice * (Number(duration) || 0);
+        case 'days':
+          // Gym, Car Rental, Conference Room: price per day
+          total = unitPrice * (Number(days) || 0);
+          break;
+        case 'fixed':
+          // Airport Transfer, Tour Guide, Business Center: fixed price
+          total = unitPrice;
+          break;
+        case 'custom':
+          // Other services: can use quantity or be fixed
+          total = unitPrice * (Number(quantity) || 1);
           break;
         case 'quantity':
         default:
@@ -98,7 +132,7 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
     } else {
       setCalculatedTotal(0);
     }
-  }, [selectedService, quantity, weight, duration, numberOfTrips, isInHouseGuest]);
+  }, [selectedService, quantity, weight, hours, days, isInHouseGuest]);
 
   const addServiceChargeMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -124,8 +158,8 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
     setSelectedServiceId("");
     setQuantity("");
     setWeight("");
-    setDuration("");
-    setNumberOfTrips("1");
+    setHours("");
+    setDays("");
     setNotes("");
     setCalculatedTotal(0);
   };
@@ -145,7 +179,7 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
     
     // Validate based on service type
     switch (serviceType) {
-      case 'weight':
+      case 'kg':
         if (!weight) {
           toast({ 
             title: "Missing weight",
@@ -156,27 +190,34 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
         }
         quantityValue = weight;
         break;
-      case 'trip':
-        if (!numberOfTrips) {
+      case 'hours':
+        if (!hours) {
           toast({ 
-            title: "Missing trips",
-            description: "Please enter number of trips",
+            title: "Missing hours",
+            description: "Please enter number of hours",
             variant: "destructive" 
           });
           return;
         }
-        quantityValue = numberOfTrips;
+        quantityValue = hours;
         break;
-      case 'duration':
-        if (!duration) {
+      case 'days':
+        if (!days) {
           toast({ 
-            title: "Missing duration",
-            description: "Please enter duration in hours",
+            title: "Missing days",
+            description: "Please enter number of days",
             variant: "destructive" 
           });
           return;
         }
-        quantityValue = duration;
+        quantityValue = days;
+        break;
+      case 'fixed':
+        // Fixed price services don't need quantity input
+        quantityValue = "1";
+        break;
+      case 'custom':
+        quantityValue = quantity || "1";
         break;
       default:
         if (!quantity) {
@@ -251,13 +292,14 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
               </div>
 
               {/* Different forms based on service type */}
-              {getServiceType(selectedService.kind) === 'weight' && (
+              {getServiceType(selectedService.kind) === 'kg' && (
                 <div>
                   <Label htmlFor="weight">Weight (kg) *</Label>
                   <Input
                     id="weight"
                     type="number"
                     step="0.01"
+                    min="0"
                     value={weight}
                     onChange={(e) => setWeight(e.target.value)}
                     placeholder="Enter weight in kg"
@@ -269,38 +311,65 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
                 </div>
               )}
 
-              {getServiceType(selectedService.kind) === 'trip' && (
+              {getServiceType(selectedService.kind) === 'hours' && (
                 <div>
-                  <Label htmlFor="trips">Number of Trips *</Label>
+                  <Label htmlFor="hours">Hours *</Label>
                   <Input
-                    id="trips"
+                    id="hours"
                     type="number"
-                    min="1"
-                    value={numberOfTrips}
-                    onChange={(e) => setNumberOfTrips(e.target.value)}
-                    placeholder="Enter number of trips"
-                    data-testid="input-trips"
+                    step="0.5"
+                    min="0.5"
+                    value={hours}
+                    onChange={(e) => setHours(e.target.value)}
+                    placeholder="Enter number of hours"
+                    data-testid="input-hours"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Charged at {formatCurrency(isInHouseGuest ? selectedService.priceInhouse : selectedService.priceWalkin)} per trip
+                    Charged at {formatCurrency(isInHouseGuest ? selectedService.priceInhouse : selectedService.priceWalkin)} per hour
                   </p>
                 </div>
               )}
 
-              {getServiceType(selectedService.kind) === 'duration' && (
+              {getServiceType(selectedService.kind) === 'days' && (
                 <div>
-                  <Label htmlFor="duration">Duration (hours) *</Label>
+                  <Label htmlFor="days">Days *</Label>
                   <Input
-                    id="duration"
+                    id="days"
                     type="number"
-                    step="0.5"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    placeholder="Enter duration in hours"
-                    data-testid="input-duration"
+                    min="1"
+                    value={days}
+                    onChange={(e) => setDays(e.target.value)}
+                    placeholder="Enter number of days"
+                    data-testid="input-days"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Charged at {formatCurrency(isInHouseGuest ? selectedService.priceInhouse : selectedService.priceWalkin)} per hour
+                    Charged at {formatCurrency(isInHouseGuest ? selectedService.priceInhouse : selectedService.priceWalkin)} per day
+                  </p>
+                </div>
+              )}
+
+              {getServiceType(selectedService.kind) === 'fixed' && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    This is a fixed-price service. The full amount will be charged.
+                  </p>
+                </div>
+              )}
+
+              {getServiceType(selectedService.kind) === 'custom' && (
+                <div>
+                  <Label htmlFor="quantity">Quantity (Optional)</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    placeholder="Enter quantity (default: 1)"
+                    data-testid="input-quantity"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Charged at {formatCurrency(isInHouseGuest ? selectedService.priceInhouse : selectedService.priceWalkin)} per unit
                   </p>
                 </div>
               )}
@@ -349,7 +418,7 @@ export function RoomServiceChargeModal({ open, onOpenChange, reservationId, room
           <div className="flex space-x-3 pt-4">
             <Button
               onClick={handleSubmit}
-              disabled={!selectedService || !quantity || addServiceChargeMutation.isPending}
+              disabled={!selectedService || addServiceChargeMutation.isPending}
               className="flex-1"
               data-testid="button-add-charge"
             >
