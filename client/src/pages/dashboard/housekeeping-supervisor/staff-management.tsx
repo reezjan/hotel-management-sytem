@@ -16,6 +16,8 @@ const staffSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   phone: z.string().min(10, "Phone number must be at least 10 characters"),
+  fullName: z.string().min(2, "Full name is required"),
+  address: z.string().min(5, "Address is required"),
   password: z.string().min(6, "Password must be at least 6 characters")
 });
 
@@ -31,6 +33,8 @@ export default function HousekeepingSupervisorStaffManagement() {
       username: "",
       email: "",
       phone: "",
+      fullName: "",
+      address: "",
       password: ""
     }
   });
@@ -191,9 +195,33 @@ export default function HousekeepingSupervisorStaffManagement() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone</FormLabel>
+                    <FormLabel>Phone *</FormLabel>
                     <FormControl>
                       <Input {...field} data-testid="input-phone" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Full Name *</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-fullname" />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address *</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-address" />
                     </FormControl>
                   </FormItem>
                 )}

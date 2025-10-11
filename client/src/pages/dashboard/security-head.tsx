@@ -23,14 +23,15 @@ export default function SecurityHeadDashboard() {
   
   const [isCreateOfficerOpen, setIsCreateOfficerOpen] = useState(false);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
-  const [selectedRequestForForward, setSelectedRequestForForward] = useState<any>(null);
   
   // New officer form
   const [newOfficer, setNewOfficer] = useState({
     username: "",
     password: "",
     email: "",
-    phone: ""
+    phone: "",
+    fullName: "",
+    address: ""
   });
   
   // New task form
@@ -62,25 +63,14 @@ export default function SecurityHeadDashboard() {
     queryKey: ["/api/hotels/current/maintenance-requests"]
   });
 
-  // Fetch all hotel users for finance forwarding
-  const { data: allUsers = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/users"]
-  });
-
   const { data: dailyAttendance = [] } = useQuery<any[]>({
     queryKey: ["/api/attendance/daily"]
   });
 
   // Filter maintenance requests from surveillance officers
   const maintenanceRequests = allMaintenanceRequests.filter(req => {
-    const reporterId = req.reported_by || req.reportedBy;
-    const reporter = allUsers.find(u => u.id === reporterId);
-    return reporter?.role?.name === 'surveillance_officer';
+    return req.reportedBy?.role?.name === 'surveillance_officer';
   });
-
-  const financeUsers = allUsers.filter(u => 
-    ['finance', 'manager', 'owner'].includes(u.role?.name || '')
-  );
 
   // Create officer mutation
   const createOfficerMutation = useMutation({
@@ -91,7 +81,7 @@ export default function SecurityHeadDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/security/officers"] });
       toast({ title: "Surveillance Officer created successfully" });
       setIsCreateOfficerOpen(false);
-      setNewOfficer({ username: "", password: "", email: "", phone: "" });
+      setNewOfficer({ username: "", password: "", email: "", phone: "", fullName: "", address: "" });
     },
     onError: (error: any) => {
       toast({ 
@@ -122,19 +112,60 @@ export default function SecurityHeadDashboard() {
     }
   });
 
-  // Forward maintenance request mutation
-  const forwardMaintenanceMutation = useMutation({
-    mutationFn: async ({ requestId, financeUserId }: { requestId: string; financeUserId: string }) => {
-      return await apiRequest("POST", `/api/maintenance-requests/${requestId}/forward`, { financeUserId });
+  // Approve maintenance request mutation
+  const approveMaintenanceMutation = useMutation({
+    mutationFn: async (requestId: string) => {
+      return await apiRequest("PUT", `/api/maintenance-requests/${requestId}`, { 
+        status: 'approved'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/maintenance-requests"] });
-      toast({ title: "Maintenance request forwarded to finance successfully" });
-      setSelectedRequestForForward(null);
+      toast({ title: "Maintenance request approved successfully" });
     },
     onError: (error: any) => {
       toast({ 
-        title: "Failed to forward request", 
+        title: "Failed to approve request", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
+      });
+    }
+  });
+
+  // Mark as resolved mutation
+  const resolveMaintenanceMutation = useMutation({
+    mutationFn: async (requestId: string) => {
+      return await apiRequest("PUT", `/api/maintenance-requests/${requestId}`, { 
+        status: 'resolved'
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/maintenance-requests"] });
+      toast({ title: "Maintenance request marked as resolved" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to resolve request", 
+        description: error.message || "An error occurred",
+        variant: "destructive" 
+      });
+    }
+  });
+
+  // Decline maintenance request mutation
+  const declineMaintenanceMutation = useMutation({
+    mutationFn: async (requestId: string) => {
+      return await apiRequest("PUT", `/api/maintenance-requests/${requestId}`, { 
+        status: 'declined'
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/maintenance-requests"] });
+      toast({ title: "Maintenance request declined successfully" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to decline request", 
         description: error.message || "An error occurred",
         variant: "destructive" 
       });
@@ -143,8 +174,8 @@ export default function SecurityHeadDashboard() {
 
   const handleCreateOfficer = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newOfficer.username || !newOfficer.password || !newOfficer.email || !newOfficer.phone) {
-      toast({ title: "Username, password, email, and phone are required", variant: "destructive" });
+    if (!newOfficer.username || !newOfficer.password || !newOfficer.email || !newOfficer.phone || !newOfficer.fullName || !newOfficer.address) {
+      toast({ title: "All fields are required (username, password, email, phone, full name, and address)", variant: "destructive" });
       return;
     }
     createOfficerMutation.mutate(newOfficer);
@@ -157,15 +188,6 @@ export default function SecurityHeadDashboard() {
       return;
     }
     createTaskMutation.mutate(newTask);
-  };
-
-  const handleForwardMaintenance = (financeUserId: string) => {
-    if (selectedRequestForForward && financeUserId) {
-      forwardMaintenanceMutation.mutate({ 
-        requestId: selectedRequestForForward.id, 
-        financeUserId 
-      });
-    }
   };
 
   const onlineOfficers = officers.filter(o => {
@@ -272,6 +294,26 @@ export default function SecurityHeadDashboard() {
                         data-testid="input-officer-phone"
                         value={newOfficer.phone}
                         onChange={(e) => setNewOfficer({ ...newOfficer, phone: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="fullName">Full Name *</Label>
+                      <Input
+                        id="fullName"
+                        data-testid="input-officer-fullname"
+                        value={newOfficer.fullName}
+                        onChange={(e) => setNewOfficer({ ...newOfficer, fullName: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="address">Address *</Label>
+                      <Input
+                        id="address"
+                        data-testid="input-officer-address"
+                        value={newOfficer.address}
+                        onChange={(e) => setNewOfficer({ ...newOfficer, address: e.target.value })}
                         required
                       />
                     </div>
@@ -545,10 +587,7 @@ export default function SecurityHeadDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {maintenanceRequests.map((request) => {
-                      const reporterId = request.reported_by || request.reportedBy;
-                      const reporter = allUsers.find(u => u.id === reporterId);
-                      return (
+                    {maintenanceRequests.map((request) => (
                         <div key={request.id} className="p-4 border rounded-lg" data-testid={`maintenance-${request.id}`}>
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
@@ -565,53 +604,47 @@ export default function SecurityHeadDashboard() {
                               </div>
                               <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
                               <div className="flex items-center space-x-4 mt-2 text-sm text-muted-foreground">
-                                <span>Reported by: {reporter?.username || 'Unknown'}</span>
+                                <span>Reported by: {request.reportedBy?.username || 'Unknown'}</span>
                                 <span>Location: {request.location}</span>
                                 <span data-testid={`maintenance-status-${request.id}`}>Status: {request.status}</span>
                               </div>
                             </div>
-                            {request.status !== 'forwarded' && (
-                              <Dialog open={selectedRequestForForward?.id === request.id} onOpenChange={(open) => setSelectedRequestForForward(open ? request : null)}>
-                                <DialogTrigger asChild>
-                                  <Button size="sm" variant="outline" data-testid={`button-forward-${request.id}`}>
-                                    Forward to Finance
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent data-testid="dialog-forward-maintenance">
-                                  <DialogHeader>
-                                    <DialogTitle>Forward Maintenance Request</DialogTitle>
-                                    <DialogDescription>
-                                      Select a finance department user to forward this maintenance request to
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  <div className="space-y-4">
-                                    <Label>Select Finance User</Label>
-                                    {financeUsers.length === 0 ? (
-                                      <p className="text-sm text-muted-foreground">No finance users available</p>
-                                    ) : (
-                                      <div className="space-y-2">
-                                        {financeUsers.map((financeUser) => (
-                                          <Button
-                                            key={financeUser.id}
-                                            variant="outline"
-                                            className="w-full justify-start"
-                                            onClick={() => handleForwardMaintenance(financeUser.id)}
-                                            disabled={forwardMaintenanceMutation.isPending}
-                                            data-testid={`button-forward-to-${financeUser.id}`}
-                                          >
-                                            {financeUser.username} ({financeUser.role?.name})
-                                          </Button>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
+                            {request.status === 'pending' && (
+                              <div className="flex gap-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="default"
+                                  onClick={() => approveMaintenanceMutation.mutate(request.id)}
+                                  disabled={approveMaintenanceMutation.isPending}
+                                  data-testid={`button-approve-${request.id}`}
+                                >
+                                  Approve
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="destructive"
+                                  onClick={() => declineMaintenanceMutation.mutate(request.id)}
+                                  disabled={declineMaintenanceMutation.isPending}
+                                  data-testid={`button-decline-${request.id}`}
+                                >
+                                  Decline
+                                </Button>
+                              </div>
+                            )}
+                            {request.status === 'approved' && (
+                              <Button 
+                                size="sm" 
+                                variant="default"
+                                onClick={() => resolveMaintenanceMutation.mutate(request.id)}
+                                disabled={resolveMaintenanceMutation.isPending}
+                                data-testid={`button-resolve-${request.id}`}
+                              >
+                                Mark as Resolved
+                              </Button>
                             )}
                           </div>
                         </div>
-                      );
-                    })}
+                    ))}
                   </div>
                 )}
               </CardContent>

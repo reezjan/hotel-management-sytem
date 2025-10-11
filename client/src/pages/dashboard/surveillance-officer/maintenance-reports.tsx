@@ -74,7 +74,7 @@ export default function SurveillanceOfficerMaintenanceReports() {
     }
   };
 
-  const myMaintenanceRequests = maintenanceRequests.filter(r => r.reported_by === user?.id || r.reportedBy === user?.id);
+  const myMaintenanceRequests = maintenanceRequests.filter(r => r.reportedBy?.id === user?.id);
   const pendingRequests = myMaintenanceRequests.filter(r => r.status === 'pending');
   const resolvedRequests = myMaintenanceRequests.filter(r => r.status === 'resolved');
 
@@ -257,11 +257,6 @@ export default function SurveillanceOfficerMaintenanceReports() {
                           <span>Location: {request.location}</span>
                           <span>{format(new Date(request.createdAt), 'MMM dd, yyyy')}</span>
                         </div>
-                        {request.photo && (
-                          <div className="mt-2">
-                            <img src={request.photo} alt="Issue" className="max-w-xs rounded border" />
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>

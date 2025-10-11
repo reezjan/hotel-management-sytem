@@ -20,6 +20,8 @@ export default function StaffManagement() {
     username: "",
     email: "",
     phone: "",
+    fullName: "",
+    address: "",
     password: "",
     role: ""
   });
@@ -79,7 +81,7 @@ export default function StaffManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/users"] });
       setIsAddDialogOpen(false);
-      setNewStaff({ username: "", email: "", phone: "", password: "", role: "" });
+      setNewStaff({ username: "", email: "", phone: "", fullName: "", address: "", password: "", role: "" });
       toast.success("Staff member created successfully");
     },
     onError: (error: any) => {
@@ -134,8 +136,8 @@ export default function StaffManagement() {
   });
 
   const handleCreateStaff = () => {
-    if (!newStaff.username || !newStaff.password || !newStaff.role) {
-      toast.error("Please fill in all required fields");
+    if (!newStaff.username || !newStaff.password || !newStaff.role || !newStaff.phone || !newStaff.fullName || !newStaff.address) {
+      toast.error("Please fill in all required fields (username, password, role, phone, full name, and address)");
       return;
     }
 
@@ -291,24 +293,45 @@ export default function StaffManagement() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="phone">Phone</Label>
+                  <Label htmlFor="phone">Phone *</Label>
                   <Input
                     id="phone"
                     value={newStaff.phone}
                     onChange={(e) => setNewStaff(prev => ({ ...prev, phone: e.target.value }))}
                     placeholder="Enter phone number"
+                    required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="password">Password *</Label>
+                  <Label htmlFor="fullName">Full Name *</Label>
                   <Input
-                    id="password"
-                    type="password"
-                    value={newStaff.password}
-                    onChange={(e) => setNewStaff(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="Enter password"
+                    id="fullName"
+                    value={newStaff.fullName}
+                    onChange={(e) => setNewStaff(prev => ({ ...prev, fullName: e.target.value }))}
+                    placeholder="Enter full name"
+                    required
                   />
                 </div>
+              </div>
+              <div>
+                <Label htmlFor="address">Address *</Label>
+                <Input
+                  id="address"
+                  value={newStaff.address}
+                  onChange={(e) => setNewStaff(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="Enter address"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="password">Password *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={newStaff.password}
+                  onChange={(e) => setNewStaff(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="Enter password"
+                />
               </div>
               <div>
                 <Label htmlFor="role">Role *</Label>

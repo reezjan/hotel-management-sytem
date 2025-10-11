@@ -18,6 +18,8 @@ export default function RestaurantStaffManagement() {
     username: "",
     email: "",
     phone: "",
+    fullName: "",
+    address: "",
     password: "",
     role: ""
   });
@@ -67,7 +69,7 @@ export default function RestaurantStaffManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/users"] });
       setIsAddDialogOpen(false);
-      setNewStaff({ username: "", email: "", phone: "", password: "", role: "" });
+      setNewStaff({ username: "", email: "", phone: "", fullName: "", address: "", password: "", role: "" });
       toast.success("Restaurant staff member created successfully");
     },
     onError: (error: any) => {
@@ -76,8 +78,8 @@ export default function RestaurantStaffManagement() {
   });
 
   const handleAddStaff = () => {
-    if (!newStaff.username || !newStaff.email || !newStaff.password || !newStaff.role) {
-      toast.error("Please fill in all required fields");
+    if (!newStaff.username || !newStaff.email || !newStaff.password || !newStaff.role || !newStaff.phone || !newStaff.fullName || !newStaff.address) {
+      toast.error("Please fill in all required fields (username, email, password, role, phone, full name, and address)");
       return;
     }
 
@@ -254,12 +256,35 @@ export default function RestaurantStaffManagement() {
               </div>
               
               <div>
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone">Phone *</Label>
                 <Input
                   id="phone"
                   value={newStaff.phone}
                   onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })}
                   placeholder="Enter phone number"
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="fullName">Full Name *</Label>
+                <Input
+                  id="fullName"
+                  value={newStaff.fullName}
+                  onChange={(e) => setNewStaff({ ...newStaff, fullName: e.target.value })}
+                  placeholder="Enter full name"
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="address">Address *</Label>
+                <Input
+                  id="address"
+                  value={newStaff.address}
+                  onChange={(e) => setNewStaff({ ...newStaff, address: e.target.value })}
+                  placeholder="Enter address"
+                  required
                 />
               </div>
               
