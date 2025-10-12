@@ -810,10 +810,6 @@ export default function CashierDashboard() {
                           <span>Subtotal:</span>
                           <span className="font-semibold">{formatCurrency(total)}</span>
                         </div>
-                        <div className="flex justify-between text-xs sm:text-sm text-blue-600">
-                          <span>Taxes:</span>
-                          <span className="font-semibold">No tax applied</span>
-                        </div>
                         <div className="flex justify-between font-bold text-base sm:text-lg pt-2 border-t">
                           <span>TOTAL:</span>
                           <span>{formatCurrency(total)}</span>
@@ -935,10 +931,6 @@ export default function CashierDashboard() {
                         <div style="display: flex; justify-content: space-between; padding: 3px 0;">
                           <span>Subtotal:</span>
                           <span>${formatCurrency(total)}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; padding: 3px 0; color: blue;">
-                          <span>Tax:</span>
-                          <span>No tax applied</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; padding: 10px 0 5px 0; margin-top: 5px; border-top: 2px dashed #000; font-weight: bold; font-size: 14px;">
                           <span>TOTAL:</span>
