@@ -34,6 +34,7 @@ export default function CashierDashboard() {
   const [isCashDepositModalOpen, setIsCashDepositModalOpen] = useState(false);
   const [selectedAmenities, setSelectedAmenities] = useState<any[]>([]);
   const [isAmenityBillingModalOpen, setIsAmenityBillingModalOpen] = useState(false);
+  const [amenitySearchQuery, setAmenitySearchQuery] = useState("");
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
@@ -259,7 +260,17 @@ export default function CashierDashboard() {
     const price = amenity.priceWalkin;
     const existingItem = selectedAmenities.find(item => item.id === amenity.id);
     
-    if (!existingItem) {
+    if (existingItem) {
+      // Increment quantity if already exists
+      setSelectedAmenities(prev =>
+        prev.map(item =>
+          item.id === amenity.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        )
+      );
+    } else {
+      // Add new item
       setSelectedAmenities(prev => [...prev, {
         ...amenity,
         type,
@@ -285,6 +296,18 @@ export default function CashierDashboard() {
     setCurrentOrder(prev =>
       prev.map(item =>
         item.id === menuItemId ? { ...item, quantity } : item
+      )
+    );
+  };
+
+  const updateAmenityQuantity = (amenityId: string, quantity: number) => {
+    if (quantity <= 0) {
+      removeAmenity(amenityId);
+      return;
+    }
+    setSelectedAmenities(prev =>
+      prev.map(item =>
+        item.id === amenityId ? { ...item, quantity } : item
       )
     );
   };
@@ -693,12 +716,25 @@ export default function CashierDashboard() {
                 <strong>Note:</strong> All amenities are billed at walk-in customer rates. No stock limits apply. Halls cannot be billed here.
               </div>
 
+              {/* Search Bar */}
+              <div className="space-y-2">
+                <Input
+                  placeholder="Search amenities..."
+                  value={amenitySearchQuery}
+                  onChange={(e) => setAmenitySearchQuery(e.target.value)}
+                  className="w-full"
+                  data-testid="input-amenity-search"
+                />
+              </div>
+
               {/* Amenities Selection */}
               <div className="space-y-3 max-h-[250px] overflow-y-auto">
                 {(pools.length > 0 || services.length > 0) ? (
                   <div className="space-y-2">
                     <h4 className="font-medium text-sm">Available Amenities</h4>
-                    {pools.map((pool) => (
+                    {pools.filter(pool => 
+                      pool.name.toLowerCase().includes(amenitySearchQuery.toLowerCase())
+                    ).map((pool) => (
                       <div key={pool.id} className="flex items-center justify-between p-3 border rounded-lg touch-manipulation">
                         <div className="flex-1 min-w-0 pr-2">
                           <p className="font-medium text-sm truncate">{pool.name} (Pool)</p>
@@ -706,12 +742,15 @@ export default function CashierDashboard() {
                             Walk-in Rate: {formatCurrency(pool.priceWalkin)}
                           </p>
                         </div>
-                        <Button size="lg" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0" onClick={() => addAmenity(pool, 'Pool')}>
+                        <Button size="lg" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0" onClick={() => addAmenity(pool, 'Pool')} data-testid={`button-add-amenity-${pool.id}`}>
                           <Plus className="h-5 w-5" />
                         </Button>
                       </div>
                     ))}
-                    {services.map((service) => (
+                    {services.filter(service => 
+                      service.name.toLowerCase().includes(amenitySearchQuery.toLowerCase()) ||
+                      service.kind.toLowerCase().includes(amenitySearchQuery.toLowerCase())
+                    ).map((service) => (
                       <div key={service.id} className="flex items-center justify-between p-3 border rounded-lg touch-manipulation">
                         <div className="flex-1 min-w-0 pr-2">
                           <p className="font-medium text-sm truncate">{service.name} ({service.kind})</p>
@@ -719,7 +758,7 @@ export default function CashierDashboard() {
                             Walk-in Rate: {formatCurrency(service.priceWalkin)}
                           </p>
                         </div>
-                        <Button size="lg" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0" onClick={() => addAmenity(service, service.kind)}>
+                        <Button size="lg" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0" onClick={() => addAmenity(service, service.kind)} data-testid={`button-add-amenity-${service.id}`}>
                           <Plus className="h-5 w-5" />
                         </Button>
                       </div>
@@ -740,10 +779,16 @@ export default function CashierDashboard() {
                     {selectedAmenities.map((item) => (
                       <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 bg-muted rounded">
                         <span className="flex-1 font-medium text-sm min-w-0 truncate">{item.name} ({item.type})</span>
-                        <div className="flex items-center gap-2 justify-between sm:justify-end">
-                          <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                          <span className="w-20 text-right text-sm font-semibold">{formatCurrency(item.price * item.quantity)}</span>
-                          <Button size="sm" className="h-8 w-8 sm:h-9 sm:w-9" variant="destructive" onClick={() => removeAmenity(item.id)}>×</Button>
+                        <div className="flex items-center gap-1 sm:gap-2 justify-between sm:justify-end">
+                          <Button size="sm" className="h-8 w-8 sm:h-9 sm:w-9" variant="outline" onClick={() => updateAmenityQuantity(item.id, item.quantity - 1)} data-testid={`button-decrease-amenity-${item.id}`}>
+                            <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
+                          </Button>
+                          <span className="w-6 sm:w-8 text-center text-sm font-semibold">{item.quantity}</span>
+                          <Button size="sm" className="h-8 w-8 sm:h-9 sm:w-9" variant="outline" onClick={() => updateAmenityQuantity(item.id, item.quantity + 1)} data-testid={`button-increase-amenity-${item.id}`}>
+                            <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+                          </Button>
+                          <span className="w-16 sm:w-20 text-right text-sm font-semibold">{formatCurrency(item.price * item.quantity)}</span>
+                          <Button size="sm" className="h-8 w-8 sm:h-9 sm:w-9" variant="destructive" onClick={() => removeAmenity(item.id)} data-testid={`button-remove-amenity-${item.id}`}>×</Button>
                         </div>
                       </div>
                     ))}
@@ -764,10 +809,6 @@ export default function CashierDashboard() {
                         <div className="flex justify-between text-xs sm:text-sm text-muted-foreground">
                           <span>Subtotal:</span>
                           <span className="font-semibold">{formatCurrency(total)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs sm:text-sm text-blue-600">
-                          <span>Taxes:</span>
-                          <span className="font-semibold">No tax applied</span>
                         </div>
                         <div className="flex justify-between font-bold text-base sm:text-lg pt-2 border-t">
                           <span>TOTAL:</span>
@@ -891,10 +932,6 @@ export default function CashierDashboard() {
                           <span>Subtotal:</span>
                           <span>${formatCurrency(total)}</span>
                         </div>
-                        <div style="display: flex; justify-content: space-between; padding: 3px 0; color: blue;">
-                          <span>Tax:</span>
-                          <span>No tax applied</span>
-                        </div>
                         <div style="display: flex; justify-content: space-between; padding: 10px 0 5px 0; margin-top: 5px; border-top: 2px dashed #000; font-weight: bold; font-size: 14px;">
                           <span>TOTAL:</span>
                           <span>${formatCurrency(total)}</span>
@@ -1001,10 +1038,19 @@ export default function CashierDashboard() {
                   <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
                     <strong>Note:</strong> Amenities are billed at walk-in customer rates. No stock limits apply.
                   </div>
+                  <Input
+                    placeholder="Search amenities..."
+                    value={amenitySearchQuery}
+                    onChange={(e) => setAmenitySearchQuery(e.target.value)}
+                    className="w-full mb-2"
+                    data-testid="input-checkout-amenity-search"
+                  />
                   {(pools.length > 0 || services.length > 0) ? (
                     <div className="space-y-2">
                       <h4 className="font-medium text-sm">Available Amenities (Walk-In Rate)</h4>
-                      {pools.map((pool) => (
+                      {pools.filter(pool => 
+                        pool.name.toLowerCase().includes(amenitySearchQuery.toLowerCase())
+                      ).map((pool) => (
                         <div key={pool.id} className="flex items-center justify-between p-3 border rounded-lg touch-manipulation">
                           <div className="flex-1 min-w-0 pr-2">
                             <p className="font-medium text-sm truncate">{pool.name} (Pool)</p>
@@ -1012,12 +1058,15 @@ export default function CashierDashboard() {
                               Walk-in Rate: {formatCurrency(pool.priceWalkin)}
                             </p>
                           </div>
-                          <Button size="lg" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0" onClick={() => addAmenity(pool, 'Pool')}>
+                          <Button size="lg" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0" onClick={() => addAmenity(pool, 'Pool')} data-testid={`button-checkout-add-amenity-${pool.id}`}>
                             <Plus className="h-5 w-5" />
                           </Button>
                         </div>
                       ))}
-                      {services.map((service) => (
+                      {services.filter(service => 
+                        service.name.toLowerCase().includes(amenitySearchQuery.toLowerCase()) ||
+                        service.kind.toLowerCase().includes(amenitySearchQuery.toLowerCase())
+                      ).map((service) => (
                         <div key={service.id} className="flex items-center justify-between p-3 border rounded-lg touch-manipulation">
                           <div className="flex-1 min-w-0 pr-2">
                             <p className="font-medium text-sm truncate">{service.name} ({service.kind})</p>
@@ -1025,7 +1074,7 @@ export default function CashierDashboard() {
                               Walk-in Rate: {formatCurrency(service.priceWalkin)}
                             </p>
                           </div>
-                          <Button size="lg" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0" onClick={() => addAmenity(service, service.kind)}>
+                          <Button size="lg" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0" onClick={() => addAmenity(service, service.kind)} data-testid={`button-checkout-add-amenity-${service.id}`}>
                             <Plus className="h-5 w-5" />
                           </Button>
                         </div>
@@ -1063,10 +1112,16 @@ export default function CashierDashboard() {
                     {selectedAmenities.map((item) => (
                       <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 bg-muted rounded">
                         <span className="flex-1 font-medium text-sm min-w-0 truncate">{item.name} ({item.type})</span>
-                        <div className="flex items-center gap-2 justify-between sm:justify-end">
-                          <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                          <span className="w-20 text-right text-sm font-semibold">{formatCurrency(item.price * item.quantity)}</span>
-                          <Button size="sm" className="h-8 w-8 sm:h-9 sm:w-9" variant="destructive" onClick={() => removeAmenity(item.id)}>×</Button>
+                        <div className="flex items-center gap-1 sm:gap-2 justify-between sm:justify-end">
+                          <Button size="sm" className="h-8 w-8 sm:h-9 sm:w-9" variant="outline" onClick={() => updateAmenityQuantity(item.id, item.quantity - 1)} data-testid={`button-checkout-decrease-amenity-${item.id}`}>
+                            <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
+                          </Button>
+                          <span className="w-6 sm:w-8 text-center text-sm font-semibold">{item.quantity}</span>
+                          <Button size="sm" className="h-8 w-8 sm:h-9 sm:w-9" variant="outline" onClick={() => updateAmenityQuantity(item.id, item.quantity + 1)} data-testid={`button-checkout-increase-amenity-${item.id}`}>
+                            <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+                          </Button>
+                          <span className="w-16 sm:w-20 text-right text-sm font-semibold">{formatCurrency(item.price * item.quantity)}</span>
+                          <Button size="sm" className="h-8 w-8 sm:h-9 sm:w-9" variant="destructive" onClick={() => removeAmenity(item.id)} data-testid={`button-checkout-remove-amenity-${item.id}`}>×</Button>
                         </div>
                       </div>
                     ))}
