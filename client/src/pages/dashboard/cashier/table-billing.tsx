@@ -22,6 +22,8 @@ export default function CashierTableBilling() {
   const [voucherCode, setVoucherCode] = useState<string>("");
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
   const [cashReceived, setCashReceived] = useState<string>("");
+  const [fonepayAmount, setFonepayAmount] = useState<string>("");
+  const [orderItemQuantities, setOrderItemQuantities] = useState<Record<string, number>>({});
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"]
@@ -126,7 +128,8 @@ export default function CashierTableBilling() {
         if (item.status === 'approved' || item.status === 'ready') {
           const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
           if (menuItem) {
-            subtotal += menuItem.price * item.qty;
+            const quantity = orderItemQuantities[item.id] ?? item.qty;
+            subtotal += menuItem.price * quantity;
           }
         }
       });
@@ -181,7 +184,9 @@ export default function CashierTableBilling() {
   const billCalc = calculateBill();
 
   const cashReceivedAmount = parseFloat(cashReceived) || 0;
-  const changeAmount = Math.max(0, cashReceivedAmount - billCalc.grandTotal);
+  const fonepayReceivedAmount = parseFloat(fonepayAmount) || 0;
+  const totalReceived = cashReceivedAmount + fonepayReceivedAmount;
+  const changeAmount = Math.max(0, totalReceived - billCalc.grandTotal);
 
   const handleProcessPayment = async () => {
     if (!selectedPaymentMethod) {
@@ -194,9 +199,27 @@ export default function CashierTableBilling() {
       return;
     }
 
-    if ((selectedPaymentMethod === 'cash' || selectedPaymentMethod === 'cash_fonepay') && cashReceivedAmount < billCalc.grandTotal) {
+    if (selectedPaymentMethod === 'cash' && cashReceivedAmount < billCalc.grandTotal) {
       toast({ title: "Error", description: "Cash received must be at least the bill amount", variant: "destructive" });
       return;
+    }
+
+    if (selectedPaymentMethod === 'cash_fonepay') {
+      const tolerance = 0.01;
+      const difference = Math.abs(totalReceived - billCalc.grandTotal);
+      
+      if (difference > tolerance) {
+        if (totalReceived < billCalc.grandTotal) {
+          toast({ title: "Error", description: `Total payment is ${formatCurrency(billCalc.grandTotal - totalReceived)} short. Cash + Fonepay must equal the bill amount.`, variant: "destructive" });
+        } else {
+          toast({ title: "Error", description: `Total payment is ${formatCurrency(totalReceived - billCalc.grandTotal)} over. Cash + Fonepay must equal the bill amount.`, variant: "destructive" });
+        }
+        return;
+      }
+      if (cashReceivedAmount <= 0 || fonepayReceivedAmount <= 0) {
+        toast({ title: "Error", description: "Both cash and fonepay amounts must be greater than zero", variant: "destructive" });
+        return;
+      }
     }
 
     try {
@@ -236,6 +259,8 @@ export default function CashierTableBilling() {
       setVoucherCode("");
       setAppliedVoucher(null);
       setCashReceived("");
+      setFonepayAmount("");
+      setOrderItemQuantities({});
     } catch (error) {
       toast({ title: "Error", description: "Failed to process payment", variant: "destructive" });
     }
@@ -294,12 +319,15 @@ export default function CashierTableBilling() {
         if (item.status === 'approved' || item.status === 'ready') {
           const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
           if (menuItem) {
-            billContent += `
+            const quantity = orderItemQuantities[item.id] ?? item.qty;
+            if (quantity > 0) {
+              billContent += `
         <tr>
           <td style="padding: 3px 0;">${menuItem.name}</td>
-          <td style="text-align: center;">${item.qty}</td>
-          <td style="text-align: right;">${formatCurrency(menuItem.price * item.qty)}</td>
+          <td style="text-align: center;">${quantity}</td>
+          <td style="text-align: right;">${formatCurrency(menuItem.price * quantity)}</td>
         </tr>`;
+            }
           }
         }
       });
@@ -349,7 +377,7 @@ export default function CashierTableBilling() {
       <span>${paymentMethodText}</span>
     </div>`;
 
-    if ((selectedPaymentMethod === 'cash' || selectedPaymentMethod === 'cash_fonepay') && cashReceivedAmount > 0) {
+    if (selectedPaymentMethod === 'cash' && cashReceivedAmount > 0) {
       billContent += `
     <div style="display: flex; justify-content: space-between; padding: 3px 0;">
       <span>Cash Received:</span>
@@ -359,6 +387,29 @@ export default function CashierTableBilling() {
       <span>Change:</span>
       <span>${formatCurrency(changeAmount)}</span>
     </div>`;
+    }
+
+    if (selectedPaymentMethod === 'cash_fonepay') {
+      billContent += `
+    <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+      <span>Cash:</span>
+      <span>${formatCurrency(cashReceivedAmount)}</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+      <span>Fonepay:</span>
+      <span>${formatCurrency(fonepayReceivedAmount)}</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; padding: 3px 0; font-weight: bold;">
+      <span>Total Received:</span>
+      <span>${formatCurrency(totalReceived)}</span>
+    </div>`;
+      if (changeAmount > 0) {
+        billContent += `
+    <div style="display: flex; justify-content: space-between; padding: 3px 0; font-weight: bold;">
+      <span>Change:</span>
+      <span>${formatCurrency(changeAmount)}</span>
+    </div>`;
+      }
     }
 
     billContent += `
@@ -514,6 +565,53 @@ export default function CashierTableBilling() {
                         <CardTitle>Bill Summary</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        <div className="border rounded-lg p-4 space-y-3">
+                          <div className="font-medium text-sm mb-2">Order Items</div>
+                          {selectedTableOrders.map((order: any) => (
+                            <div key={order.id} className="space-y-2">
+                              {order.items?.map((item: any, idx: number) => {
+                                if (item.status === 'approved' || item.status === 'ready') {
+                                  const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
+                                  if (!menuItem) return null;
+                                  const quantity = orderItemQuantities[item.id] ?? item.qty;
+                                  return (
+                                    <div key={idx} className="flex items-center justify-between gap-2 py-1 border-b last:border-b-0" data-testid={`bill-item-${idx}`}>
+                                      <div className="flex-1">
+                                        <div className="text-sm font-medium">{menuItem.name}</div>
+                                        <div className="text-xs text-muted-foreground">{formatCurrency(menuItem.price)} each</div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max={item.qty}
+                                          value={quantity}
+                                          onChange={(e) => {
+                                            const newQty = parseInt(e.target.value) || 0;
+                                            if (newQty >= 0 && newQty <= item.qty) {
+                                              setOrderItemQuantities(prev => ({
+                                                ...prev,
+                                                [item.id]: newQty
+                                              }));
+                                            }
+                                          }}
+                                          className="w-16 h-8 text-center"
+                                          data-testid={`input-item-quantity-${idx}`}
+                                        />
+                                        <span className="text-sm text-muted-foreground">/ {item.qty}</span>
+                                        <span className="text-sm font-medium min-w-[80px] text-right">
+                                          {formatCurrency(menuItem.price * quantity)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })}
+                            </div>
+                          ))}
+                        </div>
+
                         <div className="border rounded-lg p-4 space-y-2">
                           <div className="flex justify-between text-sm">
                             <span>Subtotal:</span>
@@ -623,7 +721,7 @@ export default function CashierTableBilling() {
                           </Select>
                         </div>
 
-                        {(selectedPaymentMethod === 'cash' || selectedPaymentMethod === 'cash_fonepay') && (
+                        {selectedPaymentMethod === 'cash' && (
                           <div className="border rounded-lg p-4 space-y-3 bg-blue-50 dark:bg-blue-950/20">
                             <Label className="text-sm font-medium">Cash Received</Label>
                             <Input
@@ -643,6 +741,100 @@ export default function CashierTableBilling() {
                                 </span>
                               </div>
                             )}
+                          </div>
+                        )}
+
+                        {selectedPaymentMethod === 'cash_fonepay' && (
+                          <div className="border rounded-lg p-4 space-y-3 bg-blue-50 dark:bg-blue-950/20">
+                            <div className="space-y-3">
+                              <div>
+                                <Label className="text-sm font-medium">Cash Amount</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="Enter cash amount"
+                                  value={cashReceived}
+                                  onChange={(e) => setCashReceived(e.target.value)}
+                                  step="0.01"
+                                  min="0"
+                                  data-testid="input-cash-amount-split"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium">Fonepay Amount</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="Enter fonepay amount"
+                                  value={fonepayAmount}
+                                  onChange={(e) => setFonepayAmount(e.target.value)}
+                                  step="0.01"
+                                  min="0"
+                                  data-testid="input-fonepay-amount"
+                                />
+                              </div>
+                              {(() => {
+                                const tolerance = 0.01;
+                                const difference = Math.abs(totalReceived - billCalc.grandTotal);
+                                const isExactMatch = difference <= tolerance;
+                                
+                                if (totalReceived === 0) {
+                                  return (
+                                    <div className="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg">
+                                      <span className="font-medium">Total Received:</span>
+                                      <span className="text-lg font-bold" data-testid="text-total-received">
+                                        {formatCurrency(totalReceived)}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+                                
+                                if (isExactMatch) {
+                                  return (
+                                    <div className="flex justify-between items-center p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-800 rounded-lg">
+                                      <span className="font-medium text-green-900 dark:text-green-100">✓ Total Received (Exact Match):</span>
+                                      <span className="text-lg font-bold text-green-700 dark:text-green-300" data-testid="text-total-received">
+                                        {formatCurrency(totalReceived)}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+                                
+                                if (totalReceived < billCalc.grandTotal) {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg">
+                                        <span className="font-medium">Total Received:</span>
+                                        <span className="text-lg font-bold" data-testid="text-total-received">
+                                          {formatCurrency(totalReceived)}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center p-3 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-800 rounded-lg">
+                                        <span className="font-medium text-yellow-900 dark:text-yellow-100">Remaining:</span>
+                                        <span className="text-lg font-bold text-yellow-700 dark:text-yellow-300" data-testid="text-remaining-amount">
+                                          {formatCurrency(billCalc.grandTotal - totalReceived)}
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                }
+                                
+                                return (
+                                  <>
+                                    <div className="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg">
+                                      <span className="font-medium">Total Received:</span>
+                                      <span className="text-lg font-bold" data-testid="text-total-received">
+                                        {formatCurrency(totalReceived)}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-800 rounded-lg">
+                                      <span className="font-medium text-red-900 dark:text-red-100">Over by:</span>
+                                      <span className="text-lg font-bold text-red-700 dark:text-red-300" data-testid="text-over-amount">
+                                        {formatCurrency(totalReceived - billCalc.grandTotal)}
+                                      </span>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
                           </div>
                         )}
 
