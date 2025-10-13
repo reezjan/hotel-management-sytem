@@ -227,18 +227,39 @@ export default function CashierTableBilling() {
         await redeemVoucherMutation.mutateAsync(appliedVoucher.id);
       }
 
-      const txnType = selectedPaymentMethod === 'cash' ? 'cash_in' : 
-                      selectedPaymentMethod === 'pos' ? 'pos_in' : 
-                      selectedPaymentMethod === 'fonepay' ? 'fonepay_in' :
-                      selectedPaymentMethod === 'cash_fonepay' ? 'cash_in' : 'cash_in';
+      const tableRef = `Table: ${tables.find((t: any) => t.id === selectedTable)?.name || selectedTable}${appliedVoucher ? ` | Voucher: ${appliedVoucher.code}` : ''}`;
 
-      await createTransactionMutation.mutateAsync({
-        txnType: txnType,
-        amount: billCalc.grandTotal.toFixed(2),
-        paymentMethod: selectedPaymentMethod,
-        purpose: 'restaurant_sale',
-        reference: `Table: ${tables.find((t: any) => t.id === selectedTable)?.name || selectedTable}${appliedVoucher ? ` | Voucher: ${appliedVoucher.code}` : ''}`
-      });
+      if (selectedPaymentMethod === 'cash_fonepay') {
+        // Create separate transactions for cash and fonepay
+        await createTransactionMutation.mutateAsync({
+          txnType: 'cash_in',
+          amount: cashReceivedAmount.toFixed(2),
+          paymentMethod: 'cash',
+          purpose: 'restaurant_sale',
+          reference: tableRef
+        });
+
+        await createTransactionMutation.mutateAsync({
+          txnType: 'fonepay_in',
+          amount: fonepayReceivedAmount.toFixed(2),
+          paymentMethod: 'fonepay',
+          purpose: 'restaurant_sale',
+          reference: tableRef
+        });
+      } else {
+        // Single payment method
+        const txnType = selectedPaymentMethod === 'cash' ? 'cash_in' : 
+                        selectedPaymentMethod === 'pos' ? 'pos_in' : 
+                        selectedPaymentMethod === 'fonepay' ? 'fonepay_in' : 'cash_in';
+
+        await createTransactionMutation.mutateAsync({
+          txnType: txnType,
+          amount: billCalc.grandTotal.toFixed(2),
+          paymentMethod: selectedPaymentMethod,
+          purpose: 'restaurant_sale',
+          reference: tableRef
+        });
+      }
 
       for (const order of selectedTableOrders) {
         await updateOrderStatusMutation.mutateAsync({
