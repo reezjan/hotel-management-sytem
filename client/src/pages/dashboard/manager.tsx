@@ -241,17 +241,17 @@ export default function ManagerDashboard() {
           <CardContent>
             <div className="space-y-3">
               {transactions.filter(t => t.txnType === 'vendor_payment').slice(0, 5).map((payment, index) => (
-                <div key={payment.id || index} className="flex items-center justify-between p-3 bg-secondary rounded" data-testid={`payment-item-${index}`}>
+                <div key={payment.id || index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded" data-testid={`payment-item-${index}`}>
                   <div className="flex items-center">
                     <CreditCard className="text-blue-500 mr-3 h-5 w-5" />
                     <div>
-                      <span className="font-medium">{payment.purpose || 'Vendor Payment'}</span>
-                      <p className="text-sm text-muted-foreground">Payment method: {payment.paymentMethod}</p>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{payment.purpose || 'Vendor Payment'}</span>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Payment method: {payment.paymentMethod}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-bold">रु{Number(payment.amount).toLocaleString()}</span>
-                    <p className="text-xs text-muted-foreground">{new Date(payment.createdAt).toLocaleDateString()}</p>
+                    <span className="font-bold text-gray-900 dark:text-gray-100">रु{Number(payment.amount).toLocaleString()}</span>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">{new Date(payment.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
               ))}
