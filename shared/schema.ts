@@ -77,9 +77,50 @@ export const userSessions = pgTable("user_sessions", {
   jwtToken: text("jwt_token"),
   deviceInfo: text("device_info"),
   ip: text("ip"),
+  deviceFingerprint: text("device_fingerprint"),
+  browser: text("browser"),
+  os: text("os"),
+  location: text("location"),
+  isNewDevice: boolean("is_new_device").default(false),
+  isNewLocation: boolean("is_new_location").default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow(),
   revokedAt: timestamp("revoked_at", { withTimezone: true })
+});
+
+// Login History Table
+export const loginHistory = pgTable("login_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  deviceFingerprint: text("device_fingerprint"),
+  browser: text("browser"),
+  os: text("os"),
+  ip: text("ip"),
+  location: text("location"),
+  isNewDevice: boolean("is_new_device").default(false),
+  isNewLocation: boolean("is_new_location").default(false),
+  loginAt: timestamp("login_at", { withTimezone: true }).defaultNow(),
+  logoutAt: timestamp("logout_at", { withTimezone: true })
+});
+
+// Security Settings Table
+export const securitySettings = pgTable("security_settings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }).unique(),
+  ownerEmail: text("owner_email"),
+  ownerPhone: text("owner_phone"),
+  alertOnNewDevice: boolean("alert_on_new_device").default(true),
+  alertOnNewLocation: boolean("alert_on_new_location").default(true),
+  alertOnLargeTransaction: boolean("alert_on_large_transaction").default(true),
+  largeTransactionThreshold: numeric("large_transaction_threshold", { precision: 12, scale: 2 }).default('10000'),
+  smtpHost: text("smtp_host"),
+  smtpPort: integer("smtp_port"),
+  smtpUser: text("smtp_user"),
+  smtpPassword: text("smtp_password"),
+  smsProvider: text("sms_provider"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
 // Audit Logs Table
@@ -1483,3 +1524,24 @@ export const insertTaxChangeLogSchema = createInsertSchema(taxChangeLogs).omit({
 
 export type InsertTaxChangeLog = z.infer<typeof insertTaxChangeLogSchema>;
 export type TaxChangeLog = typeof taxChangeLogs.$inferSelect;
+
+// Login History
+export const insertLoginHistorySchema = createInsertSchema(loginHistory).omit({
+  id: true,
+  loginAt: true
+});
+
+export type InsertLoginHistory = z.infer<typeof insertLoginHistorySchema>;
+export type LoginHistory = typeof loginHistory.$inferSelect;
+
+// Security Settings
+export const insertSecuritySettingsSchema = createInsertSchema(securitySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+}).extend({
+  largeTransactionThreshold: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
+export type InsertSecuritySettings = z.infer<typeof insertSecuritySettingsSchema>;
+export type SecuritySettings = typeof securitySettings.$inferSelect;
