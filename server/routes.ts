@@ -175,6 +175,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
+      // SECURITY: Only managers, owners, and finance staff can view financial transactions
+      const currentRole = user.role?.name || '';
+      const canViewFinancials = ['owner', 'manager', 'finance'].includes(currentRole);
+      
+      if (!canViewFinancials) {
+        return res.status(403).json({ 
+          message: "Only managers, owners, and finance staff can view financial reports" 
+        });
+      }
+      
       const { startDate, endDate } = req.query;
       let transactions = await storage.getTransactionsByHotel(user.hotelId);
       
@@ -717,17 +727,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Menu item not found" });
       }
       
-      // CRITICAL: Price changes require manager approval
+      // SECURITY: Only managers, owners, and restaurant/bar managers can change menu item prices
       if ('price' in itemData && itemData.price !== undefined && String(itemData.price) !== String(existingItem.price)) {
-        const canChangePrice = ['manager', 'owner', 'restaurant_bar_manager', 'super_admin'].includes(user.role?.name || '');
+        const canChangePrice = ['manager', 'owner', 'restaurant_bar_manager'].includes(user.role?.name || '');
         
         if (!canChangePrice) {
           return res.status(403).json({ 
-            message: "Only managers can change menu item prices" 
+            message: "Only managers, owners, and restaurant/bar managers can change menu item prices" 
           });
         }
         
-        // Log price change for audit trail
+        // AUDIT: Log price change for accountability
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'price_update',
+          resourceType: 'menu_item',
+          resourceId: id,
+          details: {
+            itemName: existingItem.name || 'Unknown Item',
+            previousPrice: existingItem.price,
+            newPrice: itemData.price,
+            timestamp: new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
+        
+        // Also log in legacy price change log
         await storage.createPriceChangeLog({
           hotelId: user.hotelId,
           itemId: id,
@@ -1453,6 +1481,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
+      // SECURITY: Only managers, owners, and storekeepers can create inventory items
+      const currentRole = user.role?.name || '';
+      const canManageInventory = ['owner', 'manager', 'storekeeper'].includes(currentRole);
+      
+      if (!canManageInventory) {
+        return res.status(403).json({ 
+          message: "Only managers, owners, and storekeepers can manage inventory" 
+        });
+      }
+      
       // CRITICAL VALIDATION: Validate inventory item data
       const { name, sku, unit, baseStockQty, costPerUnit } = req.body;
       
@@ -1505,6 +1543,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      // SECURITY: Only managers, owners, and storekeepers can update inventory items
+      const currentRole = user.role?.name || '';
+      const canManageInventory = ['owner', 'manager', 'storekeeper'].includes(currentRole);
+      
+      if (!canManageInventory) {
+        return res.status(403).json({ 
+          message: "Only managers, owners, and storekeepers can manage inventory" 
+        });
+      }
+      
       const { id } = req.params;
       const itemData = req.body;
       // Verify the inventory item belongs to current hotel
@@ -1513,6 +1562,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Inventory item not found" });
       }
       const item = await storage.updateInventoryItem(id, itemData);
+      
+      // AUDIT: Log inventory modifications
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'inventory_update',
+        resourceType: 'inventory_item',
+        resourceId: id,
+        details: {
+          itemName: item.name,
+          changes: itemData,
+          timestamp: new Date()
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: true
+      });
+      
       res.json(item);
     } catch (error) {
       res.status(400).json({ message: "Failed to update inventory item" });
@@ -1528,12 +1595,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      // SECURITY: Only managers, owners, and storekeepers can delete inventory items
+      const currentRole = user.role?.name || '';
+      const canManageInventory = ['owner', 'manager', 'storekeeper'].includes(currentRole);
+      
+      if (!canManageInventory) {
+        return res.status(403).json({ 
+          message: "Only managers, owners, and storekeepers can manage inventory" 
+        });
+      }
+      
       const { id } = req.params;
       // Verify the inventory item belongs to current hotel
       const existingItem = await storage.getInventoryItem(id);
       if (!existingItem || existingItem.hotelId !== user.hotelId) {
         return res.status(404).json({ message: "Inventory item not found" });
       }
+      
+      // AUDIT: Log inventory deletion
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'inventory_delete',
+        resourceType: 'inventory_item',
+        resourceId: id,
+        details: {
+          itemName: existingItem.name,
+          itemSku: existingItem.sku,
+          timestamp: new Date()
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: true
+      });
+      
       await storage.deleteInventoryItem(id);
       res.status(204).send();
     } catch (error) {
@@ -1747,16 +1843,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
+      // SECURITY: Only managers and owners can update room type prices
+      const currentRole = user.role?.name || '';
+      const canUpdatePrices = ['owner', 'manager'].includes(currentRole);
+      
+      if (!canUpdatePrices) {
+        return res.status(403).json({ 
+          message: "Only managers and owners can update room type prices" 
+        });
+      }
+
       const { id } = req.params;
       const roomTypeData = insertRoomTypeSchema.partial().parse(req.body);
       
       // Strip hotelId to prevent cross-tenant tampering
       delete (roomTypeData as any).hotelId;
       
+      // Fetch existing room type BEFORE updating to capture old prices
+      const existingRoomType = await storage.getRoomType(parseInt(id));
+      if (!existingRoomType || existingRoomType.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Room type not found" });
+      }
+      
       const roomType = await storage.updateRoomType(parseInt(id), user.hotelId, roomTypeData);
       
       if (!roomType) {
         return res.status(404).json({ message: "Room type not found" });
+      }
+      
+      // AUDIT: Log price changes with BOTH old and new prices
+      if (roomTypeData.priceInhouse || roomTypeData.priceWalkin) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'price_update',
+          resourceType: 'room_type',
+          resourceId: id,
+          details: {
+            roomTypeName: roomType.name,
+            previousPriceInhouse: existingRoomType.priceInhouse,
+            newPriceInhouse: roomTypeData.priceInhouse,
+            previousPriceWalkin: existingRoomType.priceWalkin,
+            newPriceWalkin: roomTypeData.priceWalkin,
+            timestamp: new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
       }
       
       res.json(roomType);
@@ -1877,16 +2011,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
+      // SECURITY: Only managers and owners can update hall prices
+      const currentRole = user.role?.name || '';
+      const canUpdatePrices = ['owner', 'manager'].includes(currentRole);
+      
+      if (!canUpdatePrices) {
+        return res.status(403).json({ 
+          message: "Only managers and owners can update hall prices" 
+        });
+      }
+
       const { id } = req.params;
       const hallData = insertHallSchema.partial().parse(req.body);
       
       // Strip hotelId to prevent cross-tenant tampering
       delete (hallData as any).hotelId;
       
+      // Fetch existing hall BEFORE updating to capture old prices
+      const existingHall = await storage.getHall(id);
+      if (!existingHall || existingHall.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Hall not found" });
+      }
+      
       const hall = await storage.updateHall(id, user.hotelId, hallData);
       
       if (!hall) {
         return res.status(404).json({ message: "Hall not found" });
+      }
+      
+      // AUDIT: Log price changes with BOTH old and new prices
+      if (hallData.priceInhouse || hallData.priceWalkin || hallData.hourlyRate) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'price_update',
+          resourceType: 'hall',
+          resourceId: id,
+          details: {
+            hallName: hall.name,
+            previousPriceInhouse: existingHall.priceInhouse,
+            newPriceInhouse: hallData.priceInhouse,
+            previousPriceWalkin: existingHall.priceWalkin,
+            newPriceWalkin: hallData.priceWalkin,
+            previousHourlyRate: existingHall.hourlyRate,
+            newHourlyRate: hallData.hourlyRate,
+            timestamp: new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
       }
       
       res.json(hall);
@@ -2065,16 +2239,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
+      // SECURITY: Only managers and owners can update service prices
+      const currentRole = user.role?.name || '';
+      const canUpdatePrices = ['owner', 'manager'].includes(currentRole);
+      
+      if (!canUpdatePrices) {
+        return res.status(403).json({ 
+          message: "Only managers and owners can update service prices" 
+        });
+      }
+
       const { id } = req.params;
       const serviceData = insertServiceSchema.partial().parse(req.body);
       
       // Strip hotelId to prevent cross-tenant tampering
       delete (serviceData as any).hotelId;
       
+      // Fetch existing service BEFORE updating to capture old prices
+      const existingService = await storage.getService(id);
+      if (!existingService || existingService.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+      
       const service = await storage.updateService(id, user.hotelId, serviceData);
       
       if (!service) {
         return res.status(404).json({ message: "Service not found" });
+      }
+      
+      // AUDIT: Log price changes with BOTH old and new prices
+      if (serviceData.priceInhouse || serviceData.priceWalkin) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'price_update',
+          resourceType: 'service',
+          resourceId: id,
+          details: {
+            serviceName: service.name,
+            serviceKind: service.kind,
+            previousPriceInhouse: existingService.priceInhouse,
+            newPriceInhouse: serviceData.priceInhouse,
+            previousPriceWalkin: existingService.priceWalkin,
+            newPriceWalkin: serviceData.priceWalkin,
+            timestamp: new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
       }
       
       res.json(service);
