@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Receipt, Printer, CreditCard, Banknote, Smartphone, CheckCircle2, Utensils, History } from "lucide-react";
+import { Receipt, Printer, CreditCard, Banknote, Smartphone, CheckCircle2, Utensils } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -11,7 +11,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function CashierTableBilling() {
   const { user } = useAuth();
@@ -47,11 +46,6 @@ export default function CashierTableBilling() {
 
   const { data: hotelTaxes = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/taxes"]
-  });
-
-  const { data: billHistory = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/bills"],
-    refetchInterval: 5000,
   });
 
   const createTransactionMutation = useMutation({
@@ -268,8 +262,13 @@ export default function CashierTableBilling() {
         });
       }
 
+      // Mark table as available for new guests
+      await apiRequest("PUT", `/api/hotels/current/restaurant-tables/${selectedTable}`, {
+        status: 'available'
+      });
+
       await queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
-      await queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/bills"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/restaurant-tables"] });
 
       handlePrintBill();
       
@@ -478,19 +477,7 @@ export default function CashierTableBilling() {
           <h1 className="text-3xl font-bold">Table Billing</h1>
         </div>
 
-        <Tabs defaultValue="billing" className="w-full">
-          <TabsList>
-            <TabsTrigger value="billing" data-testid="tab-billing">
-              <Receipt className="w-4 h-4 mr-2" />
-              Create Bill
-            </TabsTrigger>
-            <TabsTrigger value="history" data-testid="tab-history">
-              <History className="w-4 h-4 mr-2" />
-              Bill History
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="billing" className="space-y-6 mt-6">
+        <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Left Column - Visual Table Selection */}
               <div className="space-y-6">
@@ -888,51 +875,7 @@ export default function CashierTableBilling() {
                 )}
               </div>
             </div>
-          </TabsContent>
-
-          <TabsContent value="history" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Bill History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {billHistory.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No bills found</p>
-                ) : (
-                  <div className="space-y-3">
-                    {billHistory.slice(0, 50).map((bill: any) => (
-                      <div key={bill.id} className="border rounded-lg p-4" data-testid={`bill-history-${bill.id}`}>
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <div className="font-medium">{bill.billNumber}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {new Date(bill.createdAt).toLocaleString()}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Tables: {bill.tableIds?.map((id: string) => 
-                                tables.find((t: any) => t.id === id)?.name
-                              ).join(", ")}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold text-lg">{formatCurrency(parseFloat(bill.grandTotal))}</div>
-                            <div className={`text-xs px-2 py-1 rounded ${
-                              bill.status === 'final' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                              bill.status === 'amended' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 
-                              'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                            }`}>
-                              {bill.status}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        </div>
       </div>
     </DashboardLayout>
   );
