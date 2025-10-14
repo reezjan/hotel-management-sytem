@@ -179,6 +179,7 @@ export interface IStorage {
 
   // Room type operations
   getRoomTypesByHotel(hotelId: string): Promise<RoomType[]>;
+  getRoomType(id: number): Promise<RoomType | undefined>;
   createRoomType(roomType: InsertRoomType): Promise<RoomType>;
   updateRoomType(id: number, hotelId: string, roomType: Partial<InsertRoomType>): Promise<RoomType | null>;
   deleteRoomType(id: number, hotelId: string): Promise<boolean>;
@@ -198,6 +199,7 @@ export interface IStorage {
   
   // Amenity operations - Services
   getServicesByHotel(hotelId: string): Promise<Service[]>;
+  getService(id: string): Promise<Service | undefined>;
   createService(service: InsertService): Promise<Service>;
   updateService(id: string, hotelId: string, service: Partial<InsertService>): Promise<Service | null>;
   deleteService(id: string, hotelId: string): Promise<boolean>;
@@ -2055,6 +2057,15 @@ export class DatabaseStorage implements IStorage {
       .orderBy(asc(roomTypes.name));
   }
 
+  async getRoomType(id: number): Promise<RoomType | undefined> {
+    const [roomType] = await db
+      .select()
+      .from(roomTypes)
+      .where(eq(roomTypes.id, id))
+      .limit(1);
+    return roomType;
+  }
+
   async createRoomType(roomType: InsertRoomType): Promise<RoomType> {
     const [created] = await db.insert(roomTypes).values(roomType).returning();
     return created;
@@ -2155,6 +2166,15 @@ export class DatabaseStorage implements IStorage {
       .from(services)
       .where(eq(services.hotelId, hotelId))
       .orderBy(asc(services.name));
+  }
+
+  async getService(id: string): Promise<Service | undefined> {
+    const [service] = await db
+      .select()
+      .from(services)
+      .where(eq(services.id, id))
+      .limit(1);
+    return service;
   }
 
   async createService(service: InsertService): Promise<Service> {
