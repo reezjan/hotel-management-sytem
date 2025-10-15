@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { UserWithRole as SelectUser } from "@shared/schema";
 import { logAudit } from "./audit";
+import { getLocationFromIP } from "@shared/device-utils";
 
 // Sanitize user object for API responses - remove sensitive fields
 function sanitizeUser(user: SelectUser): Omit<SelectUser, 'passwordHash'> {
@@ -184,6 +185,35 @@ export function setupAuth(app: Express) {
           return next(err);
         }
         
+        // Extract device info from request body
+        const deviceFingerprint = req.body.deviceFingerprint || 'unknown';
+        const browser = req.body.browser || 'unknown';
+        const os = req.body.os || 'unknown';
+        const ipAddress = req.ip || 'unknown';
+        
+        // Get location from IP address
+        const locationData = await getLocationFromIP(ipAddress);
+        const location = `${locationData.city}, ${locationData.country}`;
+        
+        // Check if device has been used before by this user
+        const isNewDevice = !(await storage.checkDeviceExists(user.id, deviceFingerprint));
+        
+        // Check if location has been used before by this user
+        const isNewLocation = !(await storage.checkLocationExists(user.id, location));
+        
+        // Create login history record
+        await storage.createLoginHistory({
+          userId: user.id,
+          hotelId: user.hotelId || null,
+          deviceFingerprint,
+          browser,
+          os,
+          ip: ipAddress,
+          location,
+          isNewDevice,
+          isNewLocation
+        });
+        
         // Log successful login
         await logAudit({
           userId: user.id,
@@ -191,13 +221,28 @@ export function setupAuth(app: Express) {
           action: 'login',
           resourceType: 'user',
           resourceId: user.id,
-          details: { username: user.username },
+          details: { 
+            username: user.username,
+            deviceFingerprint,
+            browser,
+            os,
+            location,
+            isNewDevice,
+            isNewLocation
+          },
           ipAddress: req.ip,
           userAgent: req.headers['user-agent'],
           success: true
         });
         
-        return res.status(200).json(sanitizeUser(user));
+        // TODO: If isNewDevice or isNewLocation is true, trigger security alert
+        // This will be implemented later
+        
+        return res.status(200).json({
+          ...sanitizeUser(user),
+          isNewDevice,
+          isNewLocation
+        });
       });
     })(req, res, next);
   });
