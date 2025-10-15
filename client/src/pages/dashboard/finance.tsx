@@ -32,6 +32,8 @@ export default function FinanceDashboard() {
   const [isAddVendorModalOpen, setIsAddVendorModalOpen] = useState(false);
   const [isAddExpenseModalOpen, setIsAddExpenseModalOpen] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [billFile, setBillFile] = useState<File | null>(null);
+  const [billFilePreview, setBillFilePreview] = useState<string | null>(null);
 
   const bankDepositForm = useForm({
     defaultValues: {
@@ -68,7 +70,8 @@ export default function FinanceDashboard() {
       paymentMethod: "cash",
       chequeNumber: "",
       bankName: "",
-      description: ""
+      description: "",
+      billInvoiceNumber: ""
     }
   });
 
@@ -300,11 +303,60 @@ export default function FinanceDashboard() {
     }
   });
 
+  const handleBillFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "Invalid file type",
+          description: "Only JPEG, JPG, PNG images and PDF files are allowed",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Validate file size (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "File size must be less than 10MB",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setBillFile(file);
+
+      // Create preview for images only
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setBillFilePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setBillFilePreview(null);
+      }
+    }
+  };
+
   const addExpenseMutation = useMutation({
     mutationFn: async (data: any) => {
       const amount = parseFloat(data.amount);
       if (isNaN(amount) || amount <= 0) {
         throw new Error("Please enter a valid amount");
+      }
+
+      // Validate bill invoice number
+      if (!data.billInvoiceNumber || data.billInvoiceNumber.trim() === "") {
+        throw new Error("Bill invoice number is required");
+      }
+
+      // Validate bill file upload
+      if (!billFile) {
+        throw new Error("Bill photo or PDF is required");
       }
 
       // Validate cheque details if payment method is cheque
@@ -317,13 +369,31 @@ export default function FinanceDashboard() {
         }
       }
 
+      // First, upload the bill document
+      const formData = new FormData();
+      formData.append('billDocument', billFile);
+
+      const uploadResponse = await fetch('/api/upload/bill-document', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.message || "Failed to upload bill document");
+      }
+
+      const uploadData = await uploadResponse.json();
+      
       const details: any = {};
       if (data.paymentMethod === "cheque") {
         details.chequeNumber = data.chequeNumber.trim();
         details.bankName = data.bankName.trim();
       }
 
-      await apiRequest("POST", "/api/transactions", {
+      // Create transaction with bill document URL
+      const transactionData: any = {
         hotelId: user?.hotelId,
         txnType: "cash_out",
         amount: amount.toFixed(2),
@@ -331,13 +401,25 @@ export default function FinanceDashboard() {
         purpose: `${data.category} - ${data.description}`,
         reference: data.category,
         details,
+        billInvoiceNumber: data.billInvoiceNumber.trim(),
         createdBy: user?.id
-      });
+      };
+
+      // Set the appropriate URL field based on file type
+      if (uploadData.isPdf) {
+        transactionData.billPdfUrl = uploadData.fileUrl;
+      } else {
+        transactionData.billPhotoUrl = uploadData.fileUrl;
+      }
+
+      await apiRequest("POST", "/api/transactions", transactionData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
       toast({ title: "Success", description: "Expense recorded successfully" });
       addExpenseForm.reset();
+      setBillFile(null);
+      setBillFilePreview(null);
       setIsAddExpenseModalOpen(false);
     },
     onError: (error: any) => {
@@ -1260,6 +1342,44 @@ export default function FinanceDashboard() {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={addExpenseForm.control}
+                  name="billInvoiceNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Bill/Invoice Number *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="Enter bill or invoice number" data-testid="input-bill-invoice-number" />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <div className="space-y-2">
+                  <FormLabel>Bill Photo/PDF *</FormLabel>
+                  <Input
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,application/pdf"
+                    onChange={handleBillFileChange}
+                    data-testid="input-bill-document"
+                  />
+                  {billFile && (
+                    <div className="text-sm text-muted-foreground">
+                      Selected: {billFile.name} ({(billFile.size / 1024).toFixed(2)} KB)
+                    </div>
+                  )}
+                  {billFilePreview && (
+                    <div className="mt-2">
+                      <img src={billFilePreview} alt="Bill preview" className="max-w-full h-auto max-h-48 rounded border" />
+                    </div>
+                  )}
+                  {billFile && billFile.type === 'application/pdf' && (
+                    <div className="text-sm text-blue-600">
+                      PDF file selected - preview not available
+                    </div>
+                  )}
+                </div>
                 
                 <div className="flex space-x-3">
                   <Button
