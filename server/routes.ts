@@ -5,6 +5,7 @@ import { setupAuth, requireActiveUser } from "./auth";
 import { logAudit } from "./audit";
 import { db } from "./db";
 import { wsEvents } from "./websocket";
+import { uploadWastagePhoto } from "./upload";
 import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings } from "@shared/schema";
 import { eq, and, isNull, asc, desc, sql, ne } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
@@ -4309,8 +4310,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Upload routes
+  app.post("/api/upload/wastage-photo", requireActiveUser, (req, res, next) => {
+    uploadWastagePhoto.single('photo')(req, res, (err) => {
+      if (err) {
+        if (err.message.includes('Invalid file type')) {
+          return res.status(400).json({ message: "Invalid file type. Only JPEG, JPG and PNG images are allowed." });
+        }
+        if (err.message.includes('File too large')) {
+          return res.status(400).json({ message: "File size exceeds 5MB limit." });
+        }
+        console.error("Photo upload error:", err);
+        return res.status(400).json({ message: err.message || "Failed to upload photo" });
+      }
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "No photo file provided" });
+      }
+
+      const photoUrl = `/uploads/wastage-photos/${req.file.filename}`;
+      
+      res.status(200).json({
+        success: true,
+        photoUrl,
+        message: "Photo uploaded successfully"
+      });
+    });
+  });
+
   // Wastage routes
-  app.post("/api/hotels/current/wastages", async (req, res) => {
+  app.post("/api/hotels/current/wastages", (req, res, next) => {
+    // Only use multer for multipart/form-data requests
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data')) {
+      uploadWastagePhoto.single('photo')(req, res, next);
+    } else {
+      next();
+    }
+  }, async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
@@ -4321,12 +4358,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
-      const wastageData = req.body;
+      // Handle photo upload from FormData
+      let photoUrl = req.body.photoUrl;
+      if (req.file) {
+        photoUrl = `/uploads/wastage-photos/${req.file.filename}`;
+      }
+      
+      const wastageData = {
+        ...req.body,
+        photoUrl
+      };
       
       // Validate required fields (check specifically for undefined/null, not falsy values like 0)
       if (!wastageData.itemId || wastageData.qty === undefined || wastageData.qty === null || !wastageData.reason) {
         return res.status(400).json({ 
           message: "Item, quantity, and reason are required" 
+        });
+      }
+      
+      // Validate photoUrl is provided
+      if (!wastageData.photoUrl || typeof wastageData.photoUrl !== 'string' || wastageData.photoUrl.trim() === '') {
+        return res.status(400).json({ 
+          message: "Photo is required for wastage reporting" 
         });
       }
       
