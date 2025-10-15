@@ -8,6 +8,7 @@ import { storage } from "./storage";
 import { UserWithRole as SelectUser } from "@shared/schema";
 import { logAudit } from "./audit";
 import { getLocationFromIP } from "@shared/device-utils";
+import { alertService } from "./alert-service";
 
 // Sanitize user object for API responses - remove sensitive fields
 function sanitizeUser(user: SelectUser): Omit<SelectUser, 'passwordHash'> {
@@ -235,8 +236,46 @@ export function setupAuth(app: Express) {
           success: true
         });
         
-        // TODO: If isNewDevice or isNewLocation is true, trigger security alert
-        // This will be implemented later
+        // Trigger security alerts for new device or new location
+        if (user.hotelId) {
+          const securitySettings = await storage.getSecuritySettings(user.hotelId);
+          
+          // Send new device alert if enabled
+          if (isNewDevice && securitySettings?.alertOnNewDevice) {
+            alertService.sendSecurityAlert({
+              hotelId: user.hotelId,
+              userId: user.id,
+              alertType: 'new_device',
+              alertData: {
+                browser,
+                os,
+                deviceFingerprint,
+                location,
+                ip: ipAddress,
+                loginTime: new Date().toLocaleString()
+              }
+            }).catch(err => console.error('Failed to send new device alert:', err));
+          }
+          
+          // Send new location alert if enabled
+          if (isNewLocation && securitySettings?.alertOnNewLocation) {
+            const locationParts = location.split(', ');
+            alertService.sendSecurityAlert({
+              hotelId: user.hotelId,
+              userId: user.id,
+              alertType: 'new_location',
+              alertData: {
+                location,
+                city: locationParts[0] || 'Unknown',
+                country: locationParts[1] || 'Unknown',
+                ip: ipAddress,
+                browser,
+                os,
+                loginTime: new Date().toLocaleString()
+              }
+            }).catch(err => console.error('Failed to send new location alert:', err));
+          }
+        }
         
         return res.status(200).json({
           ...sanitizeUser(user),
