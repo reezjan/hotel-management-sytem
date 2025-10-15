@@ -283,6 +283,9 @@ export const wastages = pgTable("wastages", {
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   estimatedValue: numeric("estimated_value", { precision: 12, scale: 2 }),
   rejectionReason: text("rejection_reason"),
+  photoUrl: text("photo_url").notNull(),
+  photoTimestamp: timestamp("photo_timestamp", { withTimezone: true }),
+  photoCapturedByDevice: text("photo_captured_by_device"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
@@ -328,7 +331,14 @@ export const transactions = pgTable("transactions", {
   isVoided: boolean("is_voided").default(false),
   voidedBy: uuid("voided_by").references(() => users.id),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
-  voidReason: text("void_reason")
+  voidReason: text("void_reason"),
+  billPhotoUrl: text("bill_photo_url"),
+  billPdfUrl: text("bill_pdf_url"),
+  billInvoiceNumber: text("bill_invoice_number"),
+  requiresApproval: boolean("requires_approval").default(false),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason")
 });
 
 // Maintenance Requests Table
@@ -1094,7 +1104,9 @@ export type SelectRoomCleaningQueue = typeof roomCleaningQueue.$inferSelect;
 export const insertTransactionSchema = createInsertSchema(transactions).omit({
   id: true,
   createdAt: true,
-  deletedAt: true
+  deletedAt: true,
+  approvedBy: true,
+  approvedAt: true
 }).refine(
   (data) => {
     // For revenue transactions (those with _in in txnType), require a valid paymentMethod
