@@ -23,16 +23,16 @@ export default function StaffWastage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [isApproving, setIsApproving] = useState(true);
 
-  const { data: wastages = [] } = useQuery({
+  const { data: wastages = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/wastages"],
     refetchInterval: 5000
   });
 
-  const { data: inventoryItems = [] } = useQuery({
+  const { data: inventoryItems = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/inventory-items"]
   });
 
-  const { data: hotelUsers = [] } = useQuery({
+  const { data: hotelUsers = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"]
   });
 
@@ -190,7 +190,7 @@ export default function StaffWastage() {
             <CardContent>
               <div className="text-3xl font-bold text-yellow-600">{pendingWastages.length}</div>
               <div className="text-sm text-muted-foreground mt-1">
-                Total Value: {formatCurrency(pendingWastages.reduce((sum, w) => sum + (w.estimatedValue || 0), 0))}
+                Total Value: {formatCurrency(pendingWastages.reduce((sum: number, w: any) => sum + (w.estimatedValue || 0), 0))}
               </div>
             </CardContent>
           </Card>
@@ -205,7 +205,7 @@ export default function StaffWastage() {
             <CardContent>
               <div className="text-3xl font-bold text-green-600">{approvedWastages.length}</div>
               <div className="text-sm text-muted-foreground mt-1">
-                Total Value: {formatCurrency(approvedWastages.reduce((sum, w) => sum + (w.estimatedValue || 0), 0))}
+                Total Value: {formatCurrency(approvedWastages.reduce((sum: number, w: any) => sum + (w.estimatedValue || 0), 0))}
               </div>
             </CardContent>
           </Card>
@@ -220,7 +220,7 @@ export default function StaffWastage() {
             <CardContent>
               <div className="text-3xl font-bold text-red-600">{rejectedWastages.length}</div>
               <div className="text-sm text-muted-foreground mt-1">
-                Total Value: {formatCurrency(rejectedWastages.reduce((sum, w) => sum + (w.estimatedValue || 0), 0))}
+                Total Value: {formatCurrency(rejectedWastages.reduce((sum: number, w: any) => sum + (w.estimatedValue || 0), 0))}
               </div>
             </CardContent>
           </Card>
