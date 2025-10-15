@@ -1199,6 +1199,8 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 export const insertWastageSchema = createInsertSchema(wastages).omit({
   id: true,
   createdAt: true
+}).extend({
+  photoUrl: z.string().min(1, "Photo is required for wastage reporting")
 });
 
 export const insertVehicleLogSchema = createInsertSchema(vehicleLogs).omit({
