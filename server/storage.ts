@@ -123,7 +123,10 @@ import {
   type InsertSecurityAlert,
   loginHistory,
   type LoginHistory,
-  type InsertLoginHistory
+  type InsertLoginHistory,
+  securitySettings,
+  type SecuritySettings,
+  type InsertSecuritySettings
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, not, isNull, desc, asc, sql, gte, lte, gt, lt, ne, inArray } from "drizzle-orm";
@@ -414,6 +417,10 @@ export interface IStorage {
   getLoginHistoryByUser(userId: string): Promise<LoginHistory[]>;
   checkDeviceExists(userId: string, deviceFingerprint: string): Promise<boolean>;
   checkLocationExists(userId: string, location: string): Promise<boolean>;
+  
+  // Security settings operations
+  getSecuritySettings(hotelId: string): Promise<SecuritySettings | undefined>;
+  upsertSecuritySettings(hotelId: string, settings: Partial<InsertSecuritySettings>): Promise<SecuritySettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3704,6 +3711,48 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     
     return result.length > 0;
+  }
+  
+  // Security settings operations
+  async getSecuritySettings(hotelId: string): Promise<SecuritySettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(securitySettings)
+      .where(eq(securitySettings.hotelId, hotelId))
+      .limit(1);
+    
+    return settings;
+  }
+  
+  async upsertSecuritySettings(hotelId: string, settings: Partial<InsertSecuritySettings>): Promise<SecuritySettings> {
+    // Check if settings exist
+    const existing = await this.getSecuritySettings(hotelId);
+    
+    if (existing) {
+      // Update existing settings
+      const [updated] = await db
+        .update(securitySettings)
+        .set({
+          ...settings,
+          hotelId,
+          updatedAt: new Date()
+        })
+        .where(eq(securitySettings.hotelId, hotelId))
+        .returning();
+      
+      return updated;
+    } else {
+      // Create new settings
+      const [created] = await db
+        .insert(securitySettings)
+        .values({
+          ...settings,
+          hotelId
+        })
+        .returning();
+      
+      return created;
+    }
   }
 }
 
