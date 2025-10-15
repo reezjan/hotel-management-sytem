@@ -46,6 +46,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'));
+
 (async () => {
   const server = await registerRoutes(app);
 
