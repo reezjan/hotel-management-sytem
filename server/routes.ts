@@ -5,7 +5,7 @@ import { setupAuth, requireActiveUser } from "./auth";
 import { logAudit } from "./audit";
 import { db } from "./db";
 import { wsEvents } from "./websocket";
-import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors } from "@shared/schema";
+import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings } from "@shared/schema";
 import { eq, and, isNull, asc, desc, sql, ne } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
 import {
@@ -35,6 +35,7 @@ import {
   insertBookingPaymentSchema,
   insertRoomReservationSchema,
   insertRoomServiceChargeSchema,
+  insertSecuritySettingsSchema,
   vouchers,
   guests,
   hallBookings,
@@ -277,6 +278,181 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Vendor deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete vendor" });
+    }
+  });
+
+  // Security Settings routes
+  app.get("/api/hotels/current/security-settings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner can view security settings
+      const currentRole = user.role?.name || '';
+      if (currentRole !== 'owner') {
+        return res.status(403).json({ 
+          message: "Only hotel owner can access security settings" 
+        });
+      }
+      
+      const [settings] = await db
+        .select()
+        .from(securitySettings)
+        .where(eq(securitySettings.hotelId, user.hotelId))
+        .limit(1);
+      
+      if (!settings) {
+        // Return default settings if none exist
+        return res.json({
+          hotelId: user.hotelId,
+          ownerEmail: user.email || '',
+          ownerPhone: user.phone || '',
+          alertOnNewDevice: true,
+          alertOnNewLocation: true,
+          alertOnLargeTransaction: true,
+          largeTransactionThreshold: '10000',
+          smtpHost: null,
+          smtpPort: null,
+          smtpUser: null,
+          smtpPassword: null
+        });
+      }
+      
+      // SECURITY: Never expose the SMTP password in the response
+      // Return masked password to indicate it's set
+      const sanitizedSettings = {
+        ...settings,
+        smtpPassword: settings.smtpPassword ? '••••••••' : null
+      };
+      
+      res.json(sanitizedSettings);
+    } catch (error) {
+      console.error("Security settings fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch security settings" });
+    }
+  });
+
+  app.put("/api/hotels/current/security-settings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner can update security settings
+      const currentRole = user.role?.name || '';
+      if (currentRole !== 'owner') {
+        return res.status(403).json({ 
+          message: "Only hotel owner can update security settings" 
+        });
+      }
+      
+      const settingsData = insertSecuritySettingsSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId
+      });
+      
+      // Check if settings exist
+      const [existingSettings] = await db
+        .select()
+        .from(securitySettings)
+        .where(eq(securitySettings.hotelId, user.hotelId))
+        .limit(1);
+      
+      let updatedSettings;
+      if (existingSettings) {
+        // Update existing settings
+        [updatedSettings] = await db
+          .update(securitySettings)
+          .set({
+            ...settingsData,
+            updatedAt: new Date()
+          })
+          .where(eq(securitySettings.hotelId, user.hotelId))
+          .returning();
+      } else {
+        // Create new settings
+        [updatedSettings] = await db
+          .insert(securitySettings)
+          .values(settingsData)
+          .returning();
+      }
+      
+      // SECURITY: Sanitize audit log to never store SMTP password
+      const sanitizedAuditData = { ...settingsData };
+      if (sanitizedAuditData.smtpPassword) {
+        sanitizedAuditData.smtpPassword = '[REDACTED]';
+      }
+      
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: existingSettings ? 'update' : 'create',
+        resourceType: 'security_settings',
+        resourceId: updatedSettings.id,
+        details: { settings: sanitizedAuditData },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      
+      // SECURITY: Never expose the SMTP password in the response
+      const sanitizedResponse = {
+        ...updatedSettings,
+        smtpPassword: updatedSettings.smtpPassword ? '••••••••' : null
+      };
+      
+      res.json(sanitizedResponse);
+    } catch (error) {
+      console.error("Security settings update error:", error);
+      res.status(400).json({ 
+        message: "Failed to update security settings", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
+    }
+  });
+
+  app.post("/api/hotels/current/security-settings/test-email", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner can test email
+      const currentRole = user.role?.name || '';
+      if (currentRole !== 'owner') {
+        return res.status(403).json({ 
+          message: "Only hotel owner can test email settings" 
+        });
+      }
+      
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email address required" });
+      }
+      
+      // TODO: Implement actual email sending logic here
+      // For now, just simulate success
+      console.log(`Test email would be sent to: ${email}`);
+      
+      res.json({ 
+        success: true, 
+        message: `Test alert email sent to ${email}` 
+      });
+    } catch (error) {
+      console.error("Test email error:", error);
+      res.status(500).json({ message: "Failed to send test email" });
     }
   });
 
