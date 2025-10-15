@@ -7,8 +7,26 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
-import { CalendarIcon, FileText, DollarSign, Package, Users, Settings, History, TrendingUp, ArrowLeft } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { 
+  CalendarIcon, 
+  FileText, 
+  DollarSign, 
+  Users, 
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  ArrowLeft,
+  Download,
+  Activity,
+  Shield,
+  Camera,
+  MapPin,
+  Clock,
+  CheckCircle2,
+  XCircle
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 
@@ -18,14 +36,40 @@ export default function AuditTransparencyPage() {
     from: undefined,
     to: undefined
   });
+  const [activeTab, setActiveTab] = useState("overview");
+
+  // Quick filter handlers
+  const setToday = () => {
+    const today = new Date();
+    setDateRange({ from: startOfDay(today), to: endOfDay(today) });
+  };
+
+  const setLast7Days = () => {
+    const today = new Date();
+    setDateRange({ from: startOfDay(subDays(today, 7)), to: endOfDay(today) });
+  };
+
+  const setLast30Days = () => {
+    const today = new Date();
+    setDateRange({ from: startOfDay(subDays(today, 30)), to: endOfDay(today) });
+  };
+
+  const clearDateRange = () => {
+    setDateRange({ from: undefined, to: undefined });
+  };
+
+  // Export handler
+  const handleExport = (type: 'csv' | 'pdf') => {
+    console.log(`Exporting as ${type}`);
+  };
 
   // Financial Activity - Use financial overview logic (real-time)
-  const { data: transactions = [] } = useQuery<any[]>({
+  const { data: transactions = [], isLoading: loadingTransactions } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/transactions"]
   });
 
   // Maintenance Approvals - Use maintenance requests logic (real-time)
-  const { data: maintenanceRequests = [] } = useQuery<any[]>({
+  const { data: maintenanceRequests = [], isLoading: loadingMaintenance } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/maintenance-requests"]
   });
 
@@ -65,7 +109,7 @@ export default function AuditTransparencyPage() {
     return `${baseUrl}?${params.toString()}`;
   };
 
-  const { data: auditLogs = [] } = useQuery({
+  const { data: auditLogs = [], isLoading: loadingAuditLogs } = useQuery({
     queryKey: ['/api/audit-logs', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
     queryFn: async () => {
       const url = buildQueryUrl('/api/audit-logs', dateRange.from, dateRange.to);
@@ -76,7 +120,7 @@ export default function AuditTransparencyPage() {
     refetchInterval: 5000
   });
 
-  const { data: priceChangeLogs = [] } = useQuery({
+  const { data: priceChangeLogs = [], isLoading: loadingPriceChanges } = useQuery({
     queryKey: ['/api/price-change-logs', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
     queryFn: async () => {
       const url = buildQueryUrl('/api/price-change-logs', dateRange.from, dateRange.to);
@@ -87,17 +131,7 @@ export default function AuditTransparencyPage() {
     refetchInterval: 10000
   });
 
-  const { data: taxChangeLogs = [] } = useQuery({
-    queryKey: ['/api/tax-change-logs'],
-    queryFn: async () => {
-      const res = await fetch('/api/tax-change-logs', { credentials: 'include' });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    refetchInterval: 30000
-  });
-
-  const { data: inventoryMovements = [] } = useQuery({
+  const { data: inventoryMovements = [], isLoading: loadingInventory } = useQuery({
     queryKey: ['/api/inventory-movement-logs', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
     queryFn: async () => {
       const url = buildQueryUrl('/api/inventory-movement-logs', dateRange.from, dateRange.to);
@@ -108,7 +142,7 @@ export default function AuditTransparencyPage() {
     refetchInterval: 10000
   });
 
-  const { data: staffActivity = [] } = useQuery({
+  const { data: staffActivity = [], isLoading: loadingStaffActivity } = useQuery({
     queryKey: ['/api/staff-activity-summary', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
     queryFn: async () => {
       const url = buildQueryUrl('/api/staff-activity-summary', dateRange.from, dateRange.to);
@@ -119,411 +153,713 @@ export default function AuditTransparencyPage() {
     refetchInterval: 10000
   });
 
+  // Calculate stats for Overview Dashboard
+  const today = new Date();
+  const todayTransactions = transactions.filter(t => {
+    const txnDate = new Date(t.createdAt);
+    return txnDate.toDateString() === today.toDateString();
+  });
+
+  const todayRevenue = todayTransactions
+    .filter(t => t.txnType === 'revenue' || t.txnType?.includes('_in'))
+    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+  const todayExpenses = todayTransactions
+    .filter(t => t.txnType === 'expense' || t.txnType?.includes('_out'))
+    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+
+  const activeStaffCount = new Set(staffActivity.map((s: any) => s.userId)).size;
+
+  const pendingApprovalsCount = maintenanceRequests.filter(
+    (m: any) => m.status === 'pending'
+  ).length;
+
+  const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const securityAlertsCount = auditLogs.filter((log: any) => {
+    const logDate = new Date(log.createdAt);
+    return logDate >= last24Hours && !log.success;
+  }).length;
+
+  const cashInOutRatio = todayRevenue > 0 ? (todayRevenue / (todayExpenses || 1)).toFixed(2) : '0.00';
+
+  // Recent activity timeline (last 10 activities from audit logs)
+  const recentActivities = auditLogs.slice(0, 10);
+
+  const isLoading = loadingTransactions || loadingMaintenance || loadingAuditLogs || 
+                    loadingPriceChanges || loadingInventory || loadingStaffActivity;
+
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setLocation("/owner")}
-            data-testid="button-back"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold" data-testid="heading-audit-transparency">Audit & Transparency</h1>
-            <p className="text-muted-foreground">Complete visibility into all hotel operations and changes</p>
+    <div className="space-y-6 p-4 md:p-6 bg-gradient-to-br from-background to-muted/20 min-h-screen">
+      {/* Header Section */}
+      <div className="space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setLocation("/owner")}
+              data-testid="button-back"
+              className="shrink-0"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent" data-testid="heading-audit-transparency">
+                Audit & Transparency Center
+              </h1>
+              <p className="text-muted-foreground mt-1">Complete oversight of all hotel operations and financial activities</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" data-testid="button-date-range" className="min-w-[240px] justify-start">
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateRange.from && dateRange.to ? (
+                    `${format(dateRange.from, "PP")} - ${format(dateRange.to, "PP")}`
+                  ) : (
+                    "Select date range"
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="range"
+                  selected={{ from: dateRange.from, to: dateRange.to }}
+                  onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="icon" data-testid="button-export">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-2" align="end">
+                <div className="flex flex-col gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => handleExport('csv')}
+                    data-testid="button-export-csv"
+                    className="justify-start"
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Export as CSV
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => handleExport('pdf')}
+                    data-testid="button-export-pdf"
+                    className="justify-start"
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Export as PDF
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" data-testid="button-date-range">
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {dateRange.from && dateRange.to ? (
-                `${format(dateRange.from, "PPP")} - ${format(dateRange.to, "PPP")}`
-              ) : (
-                "Select date range (optional)"
-              )}
+
+        {/* Quick Filters */}
+        <div className="flex flex-wrap gap-2">
+          <Button 
+            variant={dateRange.from && dateRange.to && 
+                    dateRange.from.toDateString() === startOfDay(new Date()).toDateString() ? "default" : "outline"} 
+            size="sm" 
+            onClick={setToday}
+            data-testid="button-filter-today"
+          >
+            <Clock className="mr-2 h-3 w-3" />
+            Today
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={setLast7Days}
+            data-testid="button-filter-7days"
+          >
+            Last 7 Days
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={setLast30Days}
+            data-testid="button-filter-30days"
+          >
+            Last 30 Days
+          </Button>
+          {(dateRange.from || dateRange.to) && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={clearDateRange}
+              data-testid="button-filter-clear"
+            >
+              Clear Filter
             </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <Calendar
-              mode="range"
-              selected={{ from: dateRange.from, to: dateRange.to }}
-              onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })}
-              numberOfMonths={2}
-            />
-          </PopoverContent>
-        </Popover>
+          )}
+        </div>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview" data-testid="tab-overview">
-            <History className="mr-2 h-4 w-4" />
-            Overview
+      {/* Tab-based Navigation */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-6 h-auto">
+          <TabsTrigger value="overview" data-testid="tab-overview" className="flex items-center gap-2 py-2">
+            <Activity className="h-4 w-4" />
+            <span className="hidden sm:inline">Overview</span>
           </TabsTrigger>
-          <TabsTrigger value="financial" data-testid="tab-financial">
-            <DollarSign className="mr-2 h-4 w-4" />
-            Financial Activity
+          <TabsTrigger value="financial" data-testid="tab-financial" className="flex items-center gap-2 py-2">
+            <DollarSign className="h-4 w-4" />
+            <span className="hidden sm:inline">Financial</span>
           </TabsTrigger>
-          <TabsTrigger value="maintenance" data-testid="tab-maintenance">
-            <Settings className="mr-2 h-4 w-4" />
-            Maintenance Approvals
+          <TabsTrigger value="staff" data-testid="tab-staff" className="flex items-center gap-2 py-2">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Staff</span>
           </TabsTrigger>
-          <TabsTrigger value="price-changes" data-testid="tab-price-changes">
-            <TrendingUp className="mr-2 h-4 w-4" />
-            Price Changes
+          <TabsTrigger value="security" data-testid="tab-security" className="flex items-center gap-2 py-2">
+            <Shield className="h-4 w-4" />
+            <span className="hidden sm:inline">Security</span>
           </TabsTrigger>
-          <TabsTrigger value="inventory" data-testid="tab-inventory">
-            <Package className="mr-2 h-4 w-4" />
-            Inventory Movements
+          <TabsTrigger value="photos" data-testid="tab-photos" className="flex items-center gap-2 py-2">
+            <Camera className="h-4 w-4" />
+            <span className="hidden sm:inline">Photos</span>
           </TabsTrigger>
-          <TabsTrigger value="staff" data-testid="tab-staff">
-            <Users className="mr-2 h-4 w-4" />
-            Staff Activity
+          <TabsTrigger value="location" data-testid="tab-location" className="flex items-center gap-2 py-2">
+            <MapPin className="h-4 w-4" />
+            <span className="hidden sm:inline">Location</span>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
+        {/* Tab 1: Overview Dashboard */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Stats Grid */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card data-testid="card-total-logs">
+            {/* Total Transactions Today */}
+            <Card data-testid="card-total-transactions" className="border-l-4 border-l-blue-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Audit Logs</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Transactions Today</CardTitle>
+                <Activity className="h-4 w-4 text-blue-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-audit-count">{auditLogs.length}</div>
-                <p className="text-xs text-muted-foreground">In selected period</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-20" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-total-transactions">
+                      {todayTransactions.length}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                      <TrendingUp className="h-3 w-3 text-green-500" />
+                      Active today
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
-            <Card data-testid="card-price-changes">
+            {/* Total Revenue Today */}
+            <Card data-testid="card-total-revenue" className="border-l-4 border-l-green-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Price Changes</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Revenue Today</CardTitle>
+                <TrendingUp className="h-4 w-4 text-green-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-price-changes">{priceChangeLogs.length}</div>
-                <p className="text-xs text-muted-foreground">Items updated</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-total-revenue">
+                      {formatCurrency(todayRevenue)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Cash in today
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
-            <Card data-testid="card-inventory-movements">
+            {/* Total Expenses Today */}
+            <Card data-testid="card-total-expenses" className="border-l-4 border-l-red-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Inventory Movements</CardTitle>
-                <Package className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Expenses Today</CardTitle>
+                <TrendingDown className="h-4 w-4 text-red-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-inventory-count">{inventoryMovements.length}</div>
-                <p className="text-xs text-muted-foreground">Transactions recorded</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-total-expenses">
+                      {formatCurrency(todayExpenses)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Cash out today
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 
-            <Card data-testid="card-active-staff">
+            {/* Active Staff Count */}
+            <Card data-testid="card-active-staff" className="border-l-4 border-l-purple-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Active Staff</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+                <Users className="h-4 w-4 text-purple-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-staff-count">
-                  {new Set(staffActivity.map((s: any) => s.userId)).size}
-                </div>
-                <p className="text-xs text-muted-foreground">Performed actions</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-active-staff">
+                      {activeStaffCount}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Performed actions
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Pending Approvals */}
+            <Card data-testid="card-pending-approvals" className="border-l-4 border-l-orange-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Approvals</CardTitle>
+                <Clock className="h-4 w-4 text-orange-500" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-pending-approvals">
+                      {pendingApprovalsCount}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Awaiting review
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Security Alerts */}
+            <Card data-testid="card-security-alerts" className="border-l-4 border-l-red-600">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Security Alerts</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-security-alerts">
+                      {securityAlertsCount}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Last 24 hours
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Cash In/Out Ratio */}
+            <Card data-testid="card-cash-ratio" className="border-l-4 border-l-indigo-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Cash In/Out Ratio</CardTitle>
+                <DollarSign className="h-4 w-4 text-indigo-500" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-20" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-cash-ratio">
+                      {cashInOutRatio}:1
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Today's ratio
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Wastage This Week - Placeholder */}
+            <Card data-testid="card-wastage" className="border-l-4 border-l-yellow-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Wastage This Week</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-20" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-wastage">
+                      0
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Items reported
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          <Card>
+          {/* Recent Activity Timeline */}
+          <Card data-testid="card-recent-activity">
             <CardHeader>
-              <CardTitle>Recent Audit Logs</CardTitle>
-              <CardDescription>Latest system activities and changes</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Recent Activity Timeline
+              </CardTitle>
+              <CardDescription>Last 10 system activities and changes</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {auditLogs.slice(0, 10).map((log: any) => (
-                  <div key={log.id} className="flex items-start justify-between border-b pb-4" data-testid={`log-${log.id}`}>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium" data-testid={`text-log-action-${log.id}`}>
-                        {log.action} - {log.resourceType}
-                      </p>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-log-time-${log.id}`}>
-                        {new Date(log.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <Badge variant={log.success ? "default" : "destructive"} data-testid={`badge-log-status-${log.id}`}>
-                      {log.success ? "Success" : "Failed"}
-                    </Badge>
-                  </div>
-                ))}
-                {auditLogs.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-logs">
-                    No audit logs found in the selected period.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="financial" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Financial Transaction History</CardTitle>
-              <CardDescription>Complete audit trail of all financial transactions with creator information</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {filteredTransactions.map((txn: any) => (
-                  <div key={txn.id} className="flex items-start justify-between border-b pb-4" data-testid={`transaction-${txn.id}`}>
-                    <div className="space-y-1 flex-1">
-                      <p className="text-sm font-medium" data-testid={`text-txn-purpose-${txn.id}`}>
-                        {txn.purpose || 'Transaction'}
-                      </p>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span data-testid={`text-txn-type-${txn.id}`}>Type: {txn.txnType?.replace(/_/g, ' ')}</span>
-                        <span data-testid={`text-txn-amount-${txn.id}`}>
-                          Amount: NPR {parseFloat(txn.amount || 0).toLocaleString()}
-                        </span>
-                        {txn.paymentMethod && (
-                          <span data-testid={`text-payment-method-${txn.id}`}>
-                            Method: {txn.paymentMethod}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-created-by-${txn.id}`}>
-                        Created by: {txn.creator?.username || 'Unknown'} ({txn.creator?.role?.replace(/_/g, ' ') || 'N/A'}) on{" "}
-                        {new Date(txn.createdAt).toLocaleString()}
-                      </p>
-                      {txn.reference && (
-                        <p className="text-xs text-muted-foreground" data-testid={`text-reference-${txn.id}`}>
-                          Reference: {txn.reference}
-                        </p>
-                      )}
-                    </div>
-                    <Badge 
-                      variant={txn.txnType === 'revenue' || txn.txnType?.includes('_in') ? 'default' : txn.txnType === 'expense' || txn.txnType?.includes('_out') ? 'destructive' : 'secondary'}
-                      data-testid={`badge-txn-type-${txn.id}`}
-                    >
-                      {formatCurrency(parseFloat(txn.amount || 0))}
-                    </Badge>
-                  </div>
-                ))}
-                {filteredTransactions.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-transactions">
-                    No financial transactions found.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="maintenance" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Maintenance Request History</CardTitle>
-              <CardDescription>Track all maintenance requests with approval status and history</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {filteredMaintenance.map((request: any) => (
-                  <div key={request.id} className="flex items-start justify-between border-b pb-4" data-testid={`maintenance-${request.id}`}>
-                    <div className="space-y-1 flex-1">
-                      <p className="text-sm font-medium" data-testid={`text-request-title-${request.id}`}>
-                        {request.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Location: {request.location || 'N/A'}
-                      </p>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-reported-by-${request.id}`}>
-                        Reported by: {request.reportedBy?.username || 'Unknown'} ({request.reportedBy?.role?.name?.replace(/_/g, ' ') || 'N/A'})
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Priority: <Badge variant={request.priority === 'high' ? 'destructive' : request.priority === 'medium' ? 'default' : 'secondary'}>{request.priority}</Badge>
-                      </p>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-request-date-${request.id}`}>
-                        Submitted: {new Date(request.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <Badge 
-                      variant={
-                        request.status === 'approved' ? 'default' : 
-                        request.status === 'resolved' ? 'secondary' :
-                        request.status === 'declined' ? 'destructive' : 
-                        'outline'
-                      }
-                      data-testid={`badge-status-${request.id}`}
-                    >
-                      {request.status?.toUpperCase() || 'PENDING'}
-                    </Badge>
-                  </div>
-                ))}
-                {filteredMaintenance.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-maintenance">
-                    No maintenance requests found.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="price-changes" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Price Change History</CardTitle>
-              <CardDescription>Track all pricing modifications with who made them</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {priceChangeLogs.map((log: any) => (
-                  <div key={log.id} className="flex items-start justify-between border-b pb-4" data-testid={`price-change-${log.id}`}>
-                    <div className="space-y-1 flex-1">
-                      <p className="text-sm font-medium" data-testid={`text-item-name-${log.id}`}>
-                        {log.itemName} ({log.itemType})
-                      </p>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span data-testid={`text-old-price-${log.id}`}>
-                          Old: NPR {parseFloat(log.previousPrice || 0).toLocaleString()}
-                        </span>
-                        <span>→</span>
-                        <span data-testid={`text-new-price-${log.id}`}>
-                          New: NPR {parseFloat(log.newPrice || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-changed-by-${log.id}`}>
-                        Changed by: {log.changedBy?.username} ({log.changedBy?.role}) on{" "}
-                        {new Date(log.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <Badge 
-                      variant={parseFloat(log.newPrice) > parseFloat(log.previousPrice) ? "default" : "secondary"}
-                      data-testid={`badge-price-trend-${log.id}`}
-                    >
-                      {parseFloat(log.newPrice) > parseFloat(log.previousPrice) ? "Increase" : "Decrease"}
-                    </Badge>
-                  </div>
-                ))}
-                {priceChangeLogs.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-price-changes">
-                    No price changes recorded.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {taxChangeLogs.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Tax Configuration Changes</CardTitle>
-                <CardDescription>History of tax rate modifications</CardDescription>
-              </CardHeader>
-              <CardContent>
+              {isLoading ? (
                 <div className="space-y-4">
-                  {taxChangeLogs.map((log: any) => (
-                    <div key={log.id} className="flex items-start justify-between border-b pb-4" data-testid={`tax-change-${log.id}`}>
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium" data-testid={`text-tax-type-${log.id}`}>{log.taxType}</p>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span data-testid={`text-old-tax-${log.id}`}>Old: {log.previousPercent}%</span>
-                          <span>→</span>
-                          <span data-testid={`text-new-tax-${log.id}`}>New: {log.newPercent}%</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground" data-testid={`text-tax-changed-by-${log.id}`}>
-                          Changed by: {log.changedBy?.username} on {new Date(log.createdAt).toLocaleString()}
-                        </p>
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-start gap-4">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
                       </div>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="inventory" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Inventory Movement Tracking</CardTitle>
-              <CardDescription>Detailed logs of all stock movements with responsible persons</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {inventoryMovements.map((movement: any) => (
-                  <div key={movement.id} className="flex items-start justify-between border-b pb-4" data-testid={`inventory-movement-${movement.id}`}>
-                    <div className="space-y-1 flex-1">
-                      <p className="text-sm font-medium" data-testid={`text-item-${movement.id}`}>
-                        {movement.item?.name} ({movement.item?.sku})
-                      </p>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span data-testid={`text-qty-${movement.id}`}>
-                          Qty: {movement.qtyPackage} {movement.item?.unit}
-                        </span>
-                        {movement.department && (
-                          <span data-testid={`text-dept-${movement.id}`}>Dept: {movement.department}</span>
-                        )}
+              ) : (
+                <div className="space-y-4">
+                  {recentActivities.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8" data-testid="text-no-activity">
+                      No recent activities found.
+                    </p>
+                  ) : (
+                    recentActivities.map((log: any, index: number) => (
+                      <div 
+                        key={log.id} 
+                        className="flex items-start gap-4 pb-4 border-b last:border-0" 
+                        data-testid={`activity-${log.id}`}
+                      >
+                        <div className={`rounded-full p-2 ${log.success ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}`}>
+                          {log.success ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <p className="text-sm font-medium" data-testid={`text-activity-action-${log.id}`}>
+                            {log.action} - {log.resourceType}
+                          </p>
+                          <p className="text-xs text-muted-foreground" data-testid={`text-activity-time-${log.id}`}>
+                            {new Date(log.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <Badge 
+                          variant={log.success ? "default" : "destructive"} 
+                          data-testid={`badge-activity-status-${log.id}`}
+                        >
+                          {log.success ? "Success" : "Failed"}
+                        </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-recorded-by-${movement.id}`}>
-                        Recorded by: {movement.recordedBy?.username} ({movement.recordedBy?.role})
-                        {movement.issuedTo && ` | Issued to: ${movement.issuedTo.username} (${movement.issuedTo.role})`}
-                      </p>
-                      {movement.notes && (
-                        <p className="text-xs text-muted-foreground" data-testid={`text-notes-${movement.id}`}>
-                          Notes: {movement.notes}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground" data-testid={`text-time-${movement.id}`}>
-                        {new Date(movement.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                    <Badge data-testid={`badge-transaction-type-${movement.id}`}>
-                      {movement.transactionType}
-                    </Badge>
-                  </div>
-                ))}
-                {inventoryMovements.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-inventory">
-                    No inventory movements recorded.
-                  </p>
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="staff" className="space-y-4">
-          <Card>
+        {/* Tab 2: Financial Activity */}
+        <TabsContent value="financial" className="space-y-6">
+          <Card data-testid="card-financial-activity">
             <CardHeader>
-              <CardTitle>Staff Activity Summary</CardTitle>
-              <CardDescription>Overview of actions performed by each staff member</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Financial Transaction History
+              </CardTitle>
+              <CardDescription>Complete audit trail of all financial transactions with creator information</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {staffActivity.map((activity: any, index: number) => (
-                  <div key={index} className="flex items-start justify-between border-b pb-4" data-testid={`staff-activity-${index}`}>
-                    <div className="space-y-1 flex-1">
-                      <p className="text-sm font-medium" data-testid={`text-staff-${index}`}>
-                        {activity.username} ({activity.role})
-                      </p>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-activity-${index}`}>
-                        {activity.action} on {activity.resourceType}
-                      </p>
-                      <p className="text-xs text-muted-foreground" data-testid={`text-last-${index}`}>
-                        Last activity: {new Date(activity.lastActivity).toLocaleString()}
-                      </p>
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-start gap-4">
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                      <Skeleton className="h-6 w-20" />
                     </div>
-                    <Badge data-testid={`badge-count-${index}`}>{activity.count} times</Badge>
-                  </div>
-                ))}
-                {staffActivity.length === 0 && (
-                  <p className="text-center text-muted-foreground py-8" data-testid="text-no-staff-activity">
-                    No staff activity recorded.
-                  </p>
-                )}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredTransactions.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8" data-testid="text-no-transactions">
+                      No financial transactions found.
+                    </p>
+                  ) : (
+                    filteredTransactions.map((txn: any) => (
+                      <div 
+                        key={txn.id} 
+                        className="flex items-start justify-between border-b pb-4 hover:bg-muted/50 p-2 rounded-lg transition-colors" 
+                        data-testid={`transaction-${txn.id}`}
+                      >
+                        <div className="space-y-1 flex-1">
+                          <p className="text-sm font-medium" data-testid={`text-txn-purpose-${txn.id}`}>
+                            {txn.purpose || 'Transaction'}
+                          </p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span data-testid={`text-txn-type-${txn.id}`}>Type: {txn.txnType?.replace(/_/g, ' ')}</span>
+                            <span data-testid={`text-txn-amount-${txn.id}`}>
+                              Amount: NPR {parseFloat(txn.amount || 0).toLocaleString()}
+                            </span>
+                            {txn.paymentMethod && (
+                              <span data-testid={`text-payment-method-${txn.id}`}>
+                                Method: {txn.paymentMethod}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground" data-testid={`text-created-by-${txn.id}`}>
+                            Created by: {txn.creator?.username || 'Unknown'} ({txn.creator?.role?.replace(/_/g, ' ') || 'N/A'}) on{" "}
+                            {new Date(txn.createdAt).toLocaleString()}
+                          </p>
+                          {txn.reference && (
+                            <p className="text-xs text-muted-foreground" data-testid={`text-reference-${txn.id}`}>
+                              Reference: {txn.reference}
+                            </p>
+                          )}
+                        </div>
+                        <Badge 
+                          variant={txn.txnType === 'revenue' || txn.txnType?.includes('_in') ? 'default' : txn.txnType === 'expense' || txn.txnType?.includes('_out') ? 'destructive' : 'secondary'}
+                          data-testid={`badge-txn-type-${txn.id}`}
+                        >
+                          {formatCurrency(parseFloat(txn.amount || 0))}
+                        </Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab 3: Staff Activity */}
+        <TabsContent value="staff" className="space-y-6">
+          <Card data-testid="card-staff-activity">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Staff Activity Summary
+              </CardTitle>
+              <CardDescription>Track all staff actions and performance metrics</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-start gap-4">
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-1/2" />
+                        <Skeleton className="h-3 w-3/4" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {staffActivity.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8" data-testid="text-no-staff-activity">
+                      No staff activity recorded.
+                    </p>
+                  ) : (
+                    staffActivity.map((activity: any, index: number) => (
+                      <div 
+                        key={index} 
+                        className="flex items-start justify-between border-b pb-4 hover:bg-muted/50 p-2 rounded-lg transition-colors" 
+                        data-testid={`staff-activity-${index}`}
+                      >
+                        <div className="space-y-1 flex-1">
+                          <p className="text-sm font-medium" data-testid={`text-staff-name-${index}`}>
+                            {activity.username} ({activity.role})
+                          </p>
+                          <p className="text-xs text-muted-foreground" data-testid={`text-staff-actions-${index}`}>
+                            Total Actions: {activity.actionCount || 0}
+                          </p>
+                        </div>
+                        <Badge data-testid={`badge-staff-status-${index}`}>
+                          Active
+                        </Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab 4: Security Alerts */}
+        <TabsContent value="security" className="space-y-6">
+          <Card data-testid="card-security-alerts-detail">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Security Alerts & Failed Operations
+              </CardTitle>
+              <CardDescription>Monitor failed login attempts, unauthorized access, and system security events</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-start gap-4">
+                      <Skeleton className="h-10 w-10 rounded" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {auditLogs.filter((log: any) => !log.success).length === 0 ? (
+                    <div className="text-center py-8" data-testid="text-no-alerts">
+                      <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                      <p className="text-muted-foreground">No security alerts. All systems operating normally.</p>
+                    </div>
+                  ) : (
+                    auditLogs
+                      .filter((log: any) => !log.success)
+                      .map((log: any) => (
+                        <div 
+                          key={log.id} 
+                          className="flex items-start gap-4 p-4 border-l-4 border-l-red-500 bg-red-50 dark:bg-red-900/10 rounded" 
+                          data-testid={`security-alert-${log.id}`}
+                        >
+                          <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+                          <div className="flex-1 space-y-1">
+                            <p className="text-sm font-medium" data-testid={`text-alert-action-${log.id}`}>
+                              {log.action} - {log.resourceType}
+                            </p>
+                            <p className="text-xs text-muted-foreground" data-testid={`text-alert-time-${log.id}`}>
+                              {new Date(log.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                          <Badge variant="destructive" data-testid={`badge-alert-status-${log.id}`}>
+                            Failed
+                          </Badge>
+                        </div>
+                      ))
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab 5: Photo Evidence */}
+        <TabsContent value="photos" className="space-y-6">
+          <Card data-testid="card-photo-evidence">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Camera className="h-5 w-5" />
+                Photo Evidence & Documentation
+              </CardTitle>
+              <CardDescription>View all photos attached to maintenance requests, incidents, and operations</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {[...Array(8)].map((_, i) => (
+                    <Skeleton key={i} className="h-48 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredMaintenance.filter((m: any) => m.photoUrls && m.photoUrls.length > 0).length === 0 ? (
+                    <div className="text-center py-8" data-testid="text-no-photos">
+                      <Camera className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No photos available for the selected period.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {filteredMaintenance
+                        .filter((m: any) => m.photoUrls && m.photoUrls.length > 0)
+                        .flatMap((m: any) => 
+                          m.photoUrls.map((url: string, idx: number) => (
+                            <div 
+                              key={`${m.id}-${idx}`} 
+                              className="relative group cursor-pointer overflow-hidden rounded-lg border"
+                              data-testid={`photo-${m.id}-${idx}`}
+                            >
+                              <img 
+                                src={url} 
+                                alt={`Maintenance ${m.id} - Photo ${idx + 1}`}
+                                className="w-full h-48 object-cover transition-transform group-hover:scale-110"
+                              />
+                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                                <p className="text-white text-xs">{m.title}</p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab 6: Device & Location History */}
+        <TabsContent value="location" className="space-y-6">
+          <Card data-testid="card-location-history">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Device & Location History
+              </CardTitle>
+              <CardDescription>Track staff login locations, devices used, and access patterns</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex items-start gap-4">
+                      <Skeleton className="h-10 w-10 rounded" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-2/3" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12" data-testid="text-no-location">
+                  <MapPin className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground mb-2">Device and location tracking not yet implemented</p>
+                  <p className="text-xs text-muted-foreground">This feature will track IP addresses, devices, and login locations</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
