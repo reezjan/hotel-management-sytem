@@ -5,7 +5,7 @@ import { setupAuth, requireActiveUser } from "./auth";
 import { logAudit } from "./audit";
 import { db } from "./db";
 import { wsEvents } from "./websocket";
-import { uploadWastagePhoto } from "./upload";
+import { uploadWastagePhoto, uploadBillDocument } from "./upload";
 import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings } from "@shared/schema";
 import { eq, and, isNull, asc, desc, sql, ne } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
@@ -3605,6 +3605,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // CRITICAL: Validate cash_out transactions - require bill documentation
+      if (sanitizedBody.txnType === 'cash_out') {
+        // Require bill invoice number
+        if (!sanitizedBody.billInvoiceNumber || sanitizedBody.billInvoiceNumber.trim() === '') {
+          return res.status(400).json({ 
+            message: "Bill invoice number is required for cash out transactions" 
+          });
+        }
+        
+        // Require at least one bill document (photo or PDF)
+        if (!sanitizedBody.billPhotoUrl && !sanitizedBody.billPdfUrl) {
+          return res.status(400).json({ 
+            message: "Bill photo or PDF is required for cash out transactions" 
+          });
+        }
+      }
+      
       const transactionData = insertTransactionSchema.parse({
         ...sanitizedBody,
         hotelId: currentUser.hotelId,
@@ -4334,6 +4351,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true,
         photoUrl,
         message: "Photo uploaded successfully"
+      });
+    });
+  });
+
+  app.post("/api/upload/bill-document", requireActiveUser, (req, res, next) => {
+    uploadBillDocument.single('billDocument')(req, res, (err) => {
+      if (err) {
+        if (err.message.includes('Invalid file type')) {
+          return res.status(400).json({ message: "Invalid file type. Only JPEG, JPG, PNG images and PDF files are allowed." });
+        }
+        if (err.message.includes('File too large')) {
+          return res.status(400).json({ message: "File size exceeds 10MB limit." });
+        }
+        console.error("Bill document upload error:", err);
+        return res.status(400).json({ message: err.message || "Failed to upload bill document" });
+      }
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "No bill document provided" });
+      }
+
+      const fileUrl = `/uploads/bill-documents/${req.file.filename}`;
+      const isPdf = req.file.mimetype === 'application/pdf';
+      
+      res.status(200).json({
+        success: true,
+        fileUrl,
+        isPdf,
+        message: "Bill document uploaded successfully"
       });
     });
   });
