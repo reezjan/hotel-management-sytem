@@ -292,19 +292,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
-      // Only owner can view security settings
+      // Only owner or super_admin can view security settings
       const currentRole = user.role?.name || '';
-      if (currentRole !== 'owner') {
+      if (!['owner', 'super_admin'].includes(currentRole)) {
         return res.status(403).json({ 
-          message: "Only hotel owner can access security settings" 
+          message: "Only hotel owner or super admin can access security settings" 
         });
       }
       
-      const [settings] = await db
-        .select()
-        .from(securitySettings)
-        .where(eq(securitySettings.hotelId, user.hotelId))
-        .limit(1);
+      const settings = await storage.getSecuritySettings(user.hotelId);
       
       if (!settings) {
         // Return default settings if none exist
@@ -347,11 +343,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
-      // Only owner can update security settings
+      // Only owner or super_admin can update security settings
       const currentRole = user.role?.name || '';
-      if (currentRole !== 'owner') {
+      if (!['owner', 'super_admin'].includes(currentRole)) {
         return res.status(403).json({ 
-          message: "Only hotel owner can update security settings" 
+          message: "Only hotel owner or super admin can update security settings" 
         });
       }
       
@@ -360,31 +356,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hotelId: user.hotelId
       });
       
-      // Check if settings exist
-      const [existingSettings] = await db
-        .select()
-        .from(securitySettings)
-        .where(eq(securitySettings.hotelId, user.hotelId))
-        .limit(1);
-      
-      let updatedSettings;
-      if (existingSettings) {
-        // Update existing settings
-        [updatedSettings] = await db
-          .update(securitySettings)
-          .set({
-            ...settingsData,
-            updatedAt: new Date()
-          })
-          .where(eq(securitySettings.hotelId, user.hotelId))
-          .returning();
-      } else {
-        // Create new settings
-        [updatedSettings] = await db
-          .insert(securitySettings)
-          .values(settingsData)
-          .returning();
-      }
+      const existingSettings = await storage.getSecuritySettings(user.hotelId);
+      const updatedSettings = await storage.upsertSecuritySettings(user.hotelId, settingsData);
       
       // SECURITY: Sanitize audit log to never store SMTP password
       const sanitizedAuditData = { ...settingsData };
@@ -429,11 +402,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
-      // Only owner can test email
+      // Only owner or super_admin can test email
       const currentRole = user.role?.name || '';
-      if (currentRole !== 'owner') {
+      if (!['owner', 'super_admin'].includes(currentRole)) {
         return res.status(403).json({ 
-          message: "Only hotel owner can test email settings" 
+          message: "Only hotel owner or super admin can test email settings" 
         });
       }
       
