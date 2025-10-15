@@ -120,7 +120,10 @@ import {
   type InsertRoomStatusLog,
   securityAlerts,
   type SecurityAlert,
-  type InsertSecurityAlert
+  type InsertSecurityAlert,
+  loginHistory,
+  type LoginHistory,
+  type InsertLoginHistory
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, not, isNull, desc, asc, sql, gte, lte, gt, lt, ne, inArray } from "drizzle-orm";
@@ -405,6 +408,12 @@ export interface IStorage {
   
   // Price change log operations
   createPriceChangeLog(log: { hotelId: string; itemId: string; itemType: string; itemName: string; previousPrice: string | number; newPrice: string | number; changedBy: string }): Promise<any>;
+  
+  // Login history operations
+  createLoginHistory(data: InsertLoginHistory): Promise<LoginHistory>;
+  getLoginHistoryByUser(userId: string): Promise<LoginHistory[]>;
+  checkDeviceExists(userId: string, deviceFingerprint: string): Promise<boolean>;
+  checkLocationExists(userId: string, location: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3651,6 +3660,50 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return priceChangeLog;
+  }
+
+  // Login history operations
+  async createLoginHistory(data: InsertLoginHistory): Promise<LoginHistory> {
+    const [history] = await db
+      .insert(loginHistory)
+      .values(data)
+      .returning();
+    
+    return history;
+  }
+
+  async getLoginHistoryByUser(userId: string): Promise<LoginHistory[]> {
+    return await db
+      .select()
+      .from(loginHistory)
+      .where(eq(loginHistory.userId, userId))
+      .orderBy(desc(loginHistory.loginAt));
+  }
+
+  async checkDeviceExists(userId: string, deviceFingerprint: string): Promise<boolean> {
+    const result = await db
+      .select({ id: loginHistory.id })
+      .from(loginHistory)
+      .where(and(
+        eq(loginHistory.userId, userId),
+        eq(loginHistory.deviceFingerprint, deviceFingerprint)
+      ))
+      .limit(1);
+    
+    return result.length > 0;
+  }
+
+  async checkLocationExists(userId: string, location: string): Promise<boolean> {
+    const result = await db
+      .select({ id: loginHistory.id })
+      .from(loginHistory)
+      .where(and(
+        eq(loginHistory.userId, userId),
+        eq(loginHistory.location, location)
+      ))
+      .limit(1);
+    
+    return result.length > 0;
   }
 }
 
