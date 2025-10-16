@@ -1377,6 +1377,577 @@ function SecurityAlertsTab({ dateRange }: { dateRange: { from: Date | undefined;
   );
 }
 
+// Photo Evidence Tab Component
+function PhotoEvidenceTab({ 
+  dateRange, 
+  transactions, 
+  maintenanceRequests,
+  isLoading 
+}: { 
+  dateRange: { from: Date | undefined; to: Date | undefined };
+  transactions: any[];
+  maintenanceRequests: any[];
+  isLoading: boolean;
+}) {
+  const [wastageFilter, setWastageFilter] = useState<string>("all");
+  const [billFilter, setBillFilter] = useState<string>("all");
+  const [staffFilter, setStaffFilter] = useState<string>("all");
+  const [approvalStatusFilter, setApprovalStatusFilter] = useState<string>("all");
+  const [amountRange, setAmountRange] = useState<{ min: string; max: string }>({ min: "", max: "" });
+  const [selectedImage, setSelectedImage] = useState<string>("");
+  const [showLightbox, setShowLightbox] = useState(false);
+
+  // Fetch wastages data
+  const { data: wastages = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/wastages"]
+  });
+
+  // Fetch users for staff filter
+  const { data: allUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/users"]
+  });
+
+  // Fetch inventory items for item names
+  const { data: inventoryItems = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/inventory/items"]
+  });
+
+  // Real-time updates
+  useRealtimeQuery({
+    queryKey: ["/api/hotels/current/wastages"],
+    events: ['wastage:created', 'wastage:updated']
+  });
+
+  // Helper functions to get item and user details
+  const getItemName = (itemId: string) => {
+    const item = inventoryItems.find((i: any) => i.id === itemId);
+    return item?.name || 'Unknown Item';
+  };
+
+  const getUserName = (userId: string) => {
+    const user = allUsers.find((u: any) => u.id === userId);
+    return user?.username || 'Unknown';
+  };
+
+  // Filter wastages by date if range is selected
+  const filteredWastages = dateRange.from && dateRange.to 
+    ? wastages.filter(w => {
+        const wastageDate = new Date(w.createdAt);
+        return wastageDate >= dateRange.from! && wastageDate <= dateRange.to!;
+      })
+    : wastages;
+
+  // Section 1: Evidence Summary
+  const totalWastagePhotos = filteredWastages.filter(w => w.photoUrl).length;
+  const totalBillPhotos = transactions.filter(t => t.billPhotoUrl).length;
+  const totalBillPdfs = transactions.filter(t => t.billPdfUrl).length;
+  const totalMaintenancePhotos = maintenanceRequests.filter((m: any) => {
+    // Handle both photo (single) and photoUrls (array) fields
+    return (m.photo && m.photo.trim() !== '') || (m.photoUrls && m.photoUrls.length > 0);
+  }).length;
+  
+  const wastagesWithoutPhotos = filteredWastages.filter(w => !w.photoUrl).length;
+  const cashOutsWithoutBills = transactions.filter(t => 
+    t.txnType === 'cash_out' && !t.billPhotoUrl && !t.billPdfUrl
+  ).length;
+  const totalMissingEvidence = wastagesWithoutPhotos + cashOutsWithoutBills;
+
+  // Section 2: Wastage Photo Gallery with filters
+  const filteredWastagePhotos = useMemo(() => {
+    let result = filteredWastages.filter(w => w.photoUrl);
+
+    if (staffFilter !== "all") {
+      result = result.filter(w => w.recordedBy === staffFilter);
+    }
+
+    if (approvalStatusFilter !== "all") {
+      result = result.filter(w => w.status === approvalStatusFilter);
+    }
+
+    return result;
+  }, [filteredWastages, staffFilter, approvalStatusFilter]);
+
+  // Section 3: Bill Documents Gallery with filters
+  const filteredBillDocuments = useMemo(() => {
+    let result = transactions.filter(t => t.billPhotoUrl || t.billPdfUrl);
+
+    if (staffFilter !== "all") {
+      result = result.filter(t => t.createdBy === staffFilter);
+    }
+
+    if (amountRange.min && !isNaN(parseFloat(amountRange.min))) {
+      result = result.filter(t => parseFloat(t.amount || 0) >= parseFloat(amountRange.min));
+    }
+
+    if (amountRange.max && !isNaN(parseFloat(amountRange.max))) {
+      result = result.filter(t => parseFloat(t.amount || 0) <= parseFloat(amountRange.max));
+    }
+
+    return result;
+  }, [transactions, staffFilter, amountRange]);
+
+  // Section 4: Missing Evidence
+  const wastagesNoPhoto = filteredWastages.filter(w => !w.photoUrl);
+  const cashOutsNoBill = transactions.filter(t => 
+    t.txnType === 'cash_out' && !t.billPhotoUrl && !t.billPdfUrl
+  );
+
+  const openLightbox = (url: string) => {
+    setSelectedImage(url);
+    setShowLightbox(true);
+  };
+
+  const downloadImage = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
+  const downloadAllPhotos = () => {
+    console.log('Download all photos as ZIP - implementation needed');
+    // In production, this would create a ZIP file of all filtered photos
+  };
+
+  const activeStaff = allUsers.filter((u: any) => u.isActive && !u.deletedAt);
+
+  return (
+    <div className="space-y-6">
+      {/* Section 1: Evidence Summary */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <Card data-testid="card-wastage-photos" className="border-l-4 border-l-orange-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Wastage Photos</CardTitle>
+            <Camera className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-wastage-photos-count">
+              {totalWastagePhotos}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">With photo evidence</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-bill-photos" className="border-l-4 border-l-blue-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Bill Photos</CardTitle>
+            <ImageIcon className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-bill-photos-count">
+              {totalBillPhotos}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Image bills</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-bill-pdfs" className="border-l-4 border-l-purple-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Bill PDFs</CardTitle>
+            <FileText className="h-4 w-4 text-purple-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-bill-pdfs-count">
+              {totalBillPdfs}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">PDF documents</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-maintenance-photos" className="border-l-4 border-l-green-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Maintenance Photos</CardTitle>
+            <FilePlus className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-maintenance-photos-count">
+              {totalMaintenancePhotos}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Maintenance evidence</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-missing-evidence" className="border-l-4 border-l-red-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Missing Evidence</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600" data-testid="text-missing-evidence-count">
+              {totalMissingEvidence}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Requires investigation</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Section 2: Wastage Photo Gallery */}
+      <Card data-testid="card-wastage-gallery">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Camera className="h-5 w-5" />
+                Wastage Photo Gallery
+              </CardTitle>
+              <CardDescription>All wastage reports with photo evidence</CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadAllPhotos}
+              data-testid="button-download-all-wastage"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download All
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2">
+            <Select value={staffFilter} onValueChange={setStaffFilter}>
+              <SelectTrigger className="w-[200px]" data-testid="select-wastage-staff-filter">
+                <SelectValue placeholder="All Staff" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Staff</SelectItem>
+                {activeStaff.map((staff: any) => (
+                  <SelectItem key={staff.id} value={staff.id}>{staff.username}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={approvalStatusFilter} onValueChange={setApprovalStatusFilter}>
+              <SelectTrigger className="w-[200px]" data-testid="select-approval-filter">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="pending_approval">Pending Approval</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Photo Grid */}
+          {isLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {[...Array(8)].map((_, i) => (
+                <Skeleton key={i} className="h-64 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : filteredWastagePhotos.length === 0 ? (
+            <div className="text-center py-12" data-testid="text-no-wastage-photos">
+              <Camera className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No wastage photos found for the selected filters.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredWastagePhotos.map((wastage: any) => (
+                <div 
+                  key={wastage.id}
+                  className="relative group border rounded-lg overflow-hidden"
+                  data-testid={`wastage-photo-${wastage.id}`}
+                >
+                  <img
+                    src={wastage.photoUrl}
+                    alt={`Wastage ${wastage.id}`}
+                    loading="lazy"
+                    className="w-full h-48 object-cover cursor-pointer transition-transform group-hover:scale-105"
+                    onClick={() => openLightbox(wastage.photoUrl)}
+                  />
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadImage(wastage.photoUrl, `wastage-${wastage.id}.jpg`);
+                      }}
+                      data-testid={`button-download-wastage-${wastage.id}`}
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="p-3 bg-background">
+                    <p className="font-medium text-sm truncate" data-testid={`wastage-item-${wastage.id}`}>
+                      {getItemName(wastage.itemId)}
+                    </p>
+                    <p className="text-xs text-muted-foreground" data-testid={`wastage-qty-${wastage.id}`}>
+                      Qty: {wastage.qty} {wastage.unit}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate" data-testid={`wastage-staff-${wastage.id}`}>
+                      By: {getUserName(wastage.recordedBy)}
+                    </p>
+                    <p className="text-xs text-muted-foreground" data-testid={`wastage-date-${wastage.id}`}>
+                      {new Date(wastage.createdAt).toLocaleDateString()}
+                    </p>
+                    <p className="text-xs mt-1 text-muted-foreground truncate" title={wastage.reason}>
+                      {wastage.reason}
+                    </p>
+                    <Badge 
+                      className="mt-2 text-xs"
+                      variant={wastage.status === 'approved' ? 'default' : wastage.status === 'rejected' ? 'destructive' : 'secondary'}
+                      data-testid={`wastage-status-${wastage.id}`}
+                    >
+                      {wastage.status?.replace(/_/g, ' ')}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 3: Bill Documents Gallery */}
+      <Card data-testid="card-bill-gallery">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                Bill Documents Gallery
+              </CardTitle>
+              <CardDescription>All cash-out transactions with bill proofs</CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadAllPhotos}
+              data-testid="button-download-all-bills"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download All
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2">
+            <Select value={staffFilter} onValueChange={setStaffFilter}>
+              <SelectTrigger className="w-[200px]" data-testid="select-bill-staff-filter">
+                <SelectValue placeholder="All Staff" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Staff</SelectItem>
+                {activeStaff.map((staff: any) => (
+                  <SelectItem key={staff.id} value={staff.id}>{staff.username}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Input
+              type="number"
+              placeholder="Min Amount"
+              value={amountRange.min}
+              onChange={(e) => setAmountRange({ ...amountRange, min: e.target.value })}
+              className="w-[150px]"
+              data-testid="input-min-amount"
+            />
+
+            <Input
+              type="number"
+              placeholder="Max Amount"
+              value={amountRange.max}
+              onChange={(e) => setAmountRange({ ...amountRange, max: e.target.value })}
+              className="w-[150px]"
+              data-testid="input-max-amount"
+            />
+          </div>
+
+          {/* Bill Grid */}
+          {isLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {[...Array(8)].map((_, i) => (
+                <Skeleton key={i} className="h-64 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : filteredBillDocuments.length === 0 ? (
+            <div className="text-center py-12" data-testid="text-no-bills">
+              <Receipt className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No bill documents found for the selected filters.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredBillDocuments.map((txn: any) => (
+                <div 
+                  key={txn.id}
+                  className="relative group border rounded-lg overflow-hidden"
+                  data-testid={`bill-doc-${txn.id}`}
+                >
+                  {txn.billPdfUrl ? (
+                    <div className="h-48 flex items-center justify-center bg-gray-100 dark:bg-gray-800 cursor-pointer"
+                         onClick={() => window.open(txn.billPdfUrl, '_blank')}>
+                      <FileText className="h-16 w-16 text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <img
+                      src={txn.billPhotoUrl}
+                      alt={`Bill ${txn.id}`}
+                      loading="lazy"
+                      className="w-full h-48 object-cover cursor-pointer transition-transform group-hover:scale-105"
+                      onClick={() => openLightbox(txn.billPhotoUrl)}
+                    />
+                  )}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const url = txn.billPdfUrl || txn.billPhotoUrl;
+                        const ext = txn.billPdfUrl ? 'pdf' : 'jpg';
+                        downloadImage(url, `bill-${txn.id}.${ext}`);
+                      }}
+                      data-testid={`button-download-bill-${txn.id}`}
+                    >
+                      <Download className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="p-3 bg-background">
+                    {txn.billInvoiceNumber && (
+                      <p className="font-medium text-sm truncate" data-testid={`bill-invoice-${txn.id}`}>
+                        Invoice: {txn.billInvoiceNumber}
+                      </p>
+                    )}
+                    <p className="text-sm font-bold text-blue-600" data-testid={`bill-amount-${txn.id}`}>
+                      {formatCurrency(parseFloat(txn.amount || 0))}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate" data-testid={`bill-staff-${txn.id}`}>
+                      By: {txn.creator?.username || 'Unknown'}
+                    </p>
+                    <p className="text-xs text-muted-foreground" data-testid={`bill-date-${txn.id}`}>
+                      {new Date(txn.createdAt).toLocaleDateString()}
+                    </p>
+                    <Badge className="mt-2 text-xs" data-testid={`bill-type-${txn.id}`}>
+                      {txn.billPdfUrl ? 'PDF' : 'Image'}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 4: Missing Evidence Alert */}
+      {totalMissingEvidence > 0 && (
+        <Card data-testid="card-missing-evidence-alert" className="border-l-4 border-l-red-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Missing Evidence Alert
+            </CardTitle>
+            <CardDescription>Items requiring photo or bill documentation</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Wastages without photos */}
+            {wastagesNoPhoto.length > 0 && (
+              <div>
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <Camera className="h-4 w-4" />
+                  Wastages Without Photos ({wastagesNoPhoto.length})
+                </h4>
+                <div className="space-y-2">
+                  {wastagesNoPhoto.slice(0, 10).map((wastage: any) => (
+                    <div 
+                      key={wastage.id}
+                      className="flex items-center justify-between p-3 border rounded-lg bg-red-50 dark:bg-red-900/10"
+                      data-testid={`missing-wastage-${wastage.id}`}
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{getItemName(wastage.itemId)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Qty: {wastage.qty} {wastage.unit} • By: {getUserName(wastage.recordedBy)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(wastage.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <Badge variant="destructive">No Photo</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cash-outs without bills */}
+            {cashOutsNoBill.length > 0 && (
+              <div>
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <Receipt className="h-4 w-4" />
+                  Cash-outs Without Bills ({cashOutsNoBill.length})
+                </h4>
+                <div className="space-y-2">
+                  {cashOutsNoBill.slice(0, 10).map((txn: any) => (
+                    <div 
+                      key={txn.id}
+                      className="flex items-center justify-between p-3 border rounded-lg bg-red-50 dark:bg-red-900/10"
+                      data-testid={`missing-bill-${txn.id}`}
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{txn.purpose || 'No description'}</p>
+                        <p className="text-sm font-bold text-red-600">
+                          {formatCurrency(parseFloat(txn.amount || 0))}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          By: {txn.creator?.username || 'Unknown'} • {new Date(txn.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <Badge variant="destructive">No Bill</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Image Lightbox Modal */}
+      <Dialog open={showLightbox} onOpenChange={setShowLightbox}>
+        <DialogContent className="max-w-5xl max-h-[90vh]" data-testid="modal-lightbox">
+          <DialogHeader>
+            <DialogTitle>Photo Evidence</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center max-h-[75vh] overflow-auto">
+            {selectedImage && (
+              <img
+                src={selectedImage}
+                alt="Evidence"
+                className="max-w-full max-h-full object-contain"
+                data-testid="lightbox-image"
+              />
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => downloadImage(selectedImage, 'evidence.jpg')}
+              data-testid="button-download-lightbox"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function AuditTransparencyPage() {
   const [, setLocation] = useLocation();
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -2651,56 +3222,12 @@ export default function AuditTransparencyPage() {
 
         {/* Tab 5: Photo Evidence */}
         <TabsContent value="photos" className="space-y-6">
-          <Card data-testid="card-photo-evidence">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Camera className="h-5 w-5" />
-                Photo Evidence & Documentation
-              </CardTitle>
-              <CardDescription>View all photos attached to maintenance requests, incidents, and operations</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {[...Array(8)].map((_, i) => (
-                    <Skeleton key={i} className="h-48 w-full rounded-lg" />
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {filteredMaintenance.filter((m: any) => m.photoUrls && m.photoUrls.length > 0).length === 0 ? (
-                    <div className="text-center py-8" data-testid="text-no-photos">
-                      <Camera className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No photos available for the selected period.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {filteredMaintenance
-                        .filter((m: any) => m.photoUrls && m.photoUrls.length > 0)
-                        .flatMap((m: any) => 
-                          m.photoUrls.map((url: string, idx: number) => (
-                            <div 
-                              key={`${m.id}-${idx}`} 
-                              className="relative group cursor-pointer overflow-hidden rounded-lg border"
-                              data-testid={`photo-${m.id}-${idx}`}
-                            >
-                              <img 
-                                src={url} 
-                                alt={`Maintenance ${m.id} - Photo ${idx + 1}`}
-                                className="w-full h-48 object-cover transition-transform group-hover:scale-110"
-                              />
-                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
-                                <p className="text-white text-xs">{m.title}</p>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <PhotoEvidenceTab 
+            dateRange={dateRange}
+            transactions={filteredTransactions}
+            maintenanceRequests={filteredMaintenance}
+            isLoading={isLoading}
+          />
         </TabsContent>
 
         {/* Tab 6: Device & Location History */}
