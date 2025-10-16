@@ -458,6 +458,317 @@ class AlertService {
       return false;
     }
   }
+
+  async sendDailySummaryEmail(hotelId: string): Promise<AlertResult> {
+    try {
+      // Fetch security settings from database
+      const securitySettings = await storage.getSecuritySettings(hotelId);
+      
+      if (!securitySettings || !securitySettings.ownerEmail) {
+        console.warn(`[AlertService] No security settings or owner email configured for hotel ${hotelId}`);
+        return { success: false, error: 'No security settings configured' };
+      }
+
+      // Validate SMTP configuration
+      if (!securitySettings.smtpHost || !securitySettings.smtpUser || !securitySettings.smtpPassword) {
+        console.warn(`[AlertService] Incomplete SMTP configuration for hotel ${hotelId}`);
+        return { success: false, error: 'Incomplete SMTP configuration' };
+      }
+
+      // Fetch hotel details
+      const hotel = await storage.getHotel(hotelId);
+      if (!hotel) {
+        console.error(`[AlertService] Hotel ${hotelId} not found`);
+        return { success: false, error: 'Hotel not found' };
+      }
+
+      // Calculate yesterday's date range
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayEnd = new Date(yesterday);
+      yesterdayEnd.setHours(23, 59, 59, 999);
+
+      // Fetch yesterday's data
+      const [
+        allTransactions,
+        allWastages,
+        allAttendance,
+        pendingLeaveRequests
+      ] = await Promise.all([
+        storage.getTransactionsByHotel(hotelId),
+        storage.getWastagesByHotel(hotelId),
+        storage.getAllAttendanceByHotel(hotelId, yesterday, yesterdayEnd),
+        storage.getPendingLeaveRequestsForApprover('owner', hotelId)
+      ]);
+
+      // Filter transactions for yesterday
+      const yesterdayTransactions = allTransactions.filter((t: any) => {
+        const tDate = new Date(t.createdAt);
+        return tDate >= yesterday && tDate <= yesterdayEnd;
+      });
+
+      // Filter wastages for yesterday
+      const yesterdayWastages = allWastages.filter((w: any) => {
+        const wDate = new Date(w.createdAt);
+        return wDate >= yesterday && wDate <= yesterdayEnd;
+      });
+
+      // Calculate financial metrics
+      const revenue = yesterdayTransactions
+        .filter((t: any) => t.txnType === 'revenue' || t.txnType === 'room_revenue' || t.txnType === 'restaurant_revenue')
+        .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0);
+
+      const expenses = yesterdayTransactions
+        .filter((t: any) => t.txnType === 'expense')
+        .reduce((sum: number, t: any) => sum + parseFloat(t.amount || 0), 0);
+
+      const profit = revenue - expenses;
+
+      // Count security alerts (new devices and new locations from yesterday)
+      const securityAlertCount = yesterdayTransactions.filter((t: any) => 
+        t.details?.isNewDevice || t.details?.isNewLocation
+      ).length;
+
+      // Get pending approvals (transactions that require approval but haven't been approved yet)
+      const pendingTransactionApprovals = allTransactions.filter((t: any) => t.requiresApproval && !t.approvedBy).length;
+      const missingBillProofs = allTransactions.filter((t: any) => !t.billPhotoUrl && !t.billPdfUrl && t.txnType === 'expense').length;
+
+      // Build formatted HTML email
+      const { subject, html } = this.formatDailySummaryEmail({
+        hotelName: hotel.name,
+        date: yesterday,
+        totalTransactions: yesterdayTransactions.length,
+        revenue,
+        expenses,
+        profit,
+        wastagesCount: yesterdayWastages.length,
+        securityAlertsCount: securityAlertCount,
+        attendanceSummary: {
+          present: allAttendance.filter((a: any) => a.status === 'present').length,
+          absent: allAttendance.filter((a: any) => a.status === 'absent').length,
+          late: allAttendance.filter((a: any) => a.status === 'late').length
+        },
+        pendingApprovals: {
+          transactions: pendingTransactionApprovals,
+          leaveRequests: pendingLeaveRequests.length,
+          missingBillProofs
+        }
+      });
+
+      // Get SMTP configuration from security settings
+      const smtpConfig = {
+        host: securitySettings.smtpHost,
+        port: securitySettings.smtpPort || 587,
+        user: securitySettings.smtpUser,
+        password: securitySettings.smtpPassword
+      };
+
+      // Send email using configured SMTP
+      const emailResult = await this.sendEmail({
+        from: securitySettings.smtpUser,
+        to: securitySettings.ownerEmail,
+        subject,
+        html,
+        smtpConfig
+      });
+
+      // Log the summary email attempt in audit logs
+      await logAudit({
+        userId: null as any,
+        hotelId,
+        action: 'send_daily_summary',
+        resourceType: 'email',
+        resourceId: hotelId,
+        details: {
+          emailSent: emailResult.success,
+          error: emailResult.error,
+          date: yesterday.toISOString()
+        },
+        success: emailResult.success,
+        errorMessage: emailResult.error
+      });
+
+      if (emailResult.success) {
+        console.log(`[AlertService] Daily summary email sent successfully to ${securitySettings.ownerEmail}`);
+      }
+
+      return emailResult;
+    } catch (error) {
+      console.error('[AlertService] Error sending daily summary email:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Log failed attempt
+      await logAudit({
+        userId: null as any,
+        hotelId,
+        action: 'send_daily_summary',
+        resourceType: 'email',
+        resourceId: hotelId,
+        details: { error: errorMessage },
+        success: false,
+        errorMessage
+      });
+
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  formatDailySummaryEmail(data: {
+    hotelName: string;
+    date: Date;
+    totalTransactions: number;
+    revenue: number;
+    expenses: number;
+    profit: number;
+    wastagesCount: number;
+    securityAlertsCount: number;
+    attendanceSummary: {
+      present: number;
+      absent: number;
+      late: number;
+    };
+    pendingApprovals: {
+      transactions: number;
+      leaveRequests: number;
+      missingBillProofs: number;
+    };
+  }): { subject: string; html: string } {
+    const { hotelName, date, totalTransactions, revenue, expenses, profit, wastagesCount, securityAlertsCount, attendanceSummary, pendingApprovals } = data;
+
+    const dateStr = date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    
+    const subject = `📊 Daily Summary Report - ${hotelName} - ${dateStr}`;
+
+    const profitColor = profit >= 0 ? '#10b981' : '#ef4444';
+    const profitIcon = profit >= 0 ? '📈' : '📉';
+
+    const content = `
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0; font-size: 28px;">📊 Daily Summary Report</h1>
+        <p style="margin: 10px 0 0 0; opacity: 0.9; font-size: 16px;">${dateStr}</p>
+      </div>
+
+      <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none;">
+        <!-- Executive Summary -->
+        <div style="background-color: #f3f4f6; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #1f2937; font-size: 20px;">📋 Executive Summary</h2>
+          <p style="margin: 0; font-size: 16px; color: #4b5563;">
+            Total Transactions: <strong>${totalTransactions}</strong>
+          </p>
+        </div>
+
+        <!-- Financial Highlights -->
+        <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #065f46; font-size: 20px;">💰 Financial Highlights</h2>
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+            <tr style="background-color: #d1fae5;">
+              <td style="padding: 12px; font-weight: bold; color: #065f46;">Total Revenue:</td>
+              <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: bold; color: #10b981;">Rs. ${revenue.toLocaleString()}</td>
+            </tr>
+            <tr style="background-color: #fee2e2;">
+              <td style="padding: 12px; font-weight: bold; color: #991b1b;">Total Expenses:</td>
+              <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: bold; color: #ef4444;">Rs. ${expenses.toLocaleString()}</td>
+            </tr>
+            <tr style="background-color: ${profit >= 0 ? '#d1fae5' : '#fee2e2'};">
+              <td style="padding: 12px; font-weight: bold; color: #1f2937;">Net Profit/Loss:</td>
+              <td style="padding: 12px; text-align: right; font-size: 20px; font-weight: bold; color: ${profitColor};">
+                ${profitIcon} Rs. ${profit.toLocaleString()}
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Operations Highlights -->
+        <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #1e40af; font-size: 20px;">🏨 Operations Highlights</h2>
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+            <tr style="background-color: #bfdbfe;">
+              <td style="padding: 12px; font-weight: bold;">Staff Attendance:</td>
+              <td style="padding: 12px; text-align: right;">
+                Present: <strong style="color: #10b981;">${attendanceSummary.present}</strong> | 
+                Absent: <strong style="color: #ef4444;">${attendanceSummary.absent}</strong> | 
+                Late: <strong style="color: #f59e0b;">${attendanceSummary.late}</strong>
+              </td>
+            </tr>
+            <tr style="background-color: #dbeafe;">
+              <td style="padding: 12px; font-weight: bold;">Wastages Reported:</td>
+              <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: bold;">${wastagesCount}</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Security Highlights -->
+        ${securityAlertsCount > 0 ? `
+        <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #92400e; font-size: 20px;">🔒 Security Highlights</h2>
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+            <tr style="background-color: #fde68a;">
+              <td style="padding: 12px; font-weight: bold;">Security Alerts:</td>
+              <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: bold; color: #f59e0b;">${securityAlertsCount}</td>
+            </tr>
+          </table>
+          <p style="margin: 10px 0 0 0; color: #92400e; font-size: 14px;">
+            ⚠️ New device/location logins detected. Review audit logs for details.
+          </p>
+        </div>
+        ` : ''}
+
+        <!-- Action Items -->
+        ${(pendingApprovals.transactions + pendingApprovals.leaveRequests + pendingApprovals.missingBillProofs) > 0 ? `
+        <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #991b1b; font-size: 20px;">⚠️ Action Items Required</h2>
+          <ul style="margin: 10px 0; padding-left: 20px; color: #991b1b;">
+            ${pendingApprovals.transactions > 0 ? `<li><strong>${pendingApprovals.transactions}</strong> transactions pending your approval</li>` : ''}
+            ${pendingApprovals.leaveRequests > 0 ? `<li><strong>${pendingApprovals.leaveRequests}</strong> leave requests pending your approval</li>` : ''}
+            ${pendingApprovals.missingBillProofs > 0 ? `<li><strong>${pendingApprovals.missingBillProofs}</strong> expenses missing bill proof documentation</li>` : ''}
+          </ul>
+        </div>
+        ` : `
+        <div style="background-color: #d1fae5; border-left: 4px solid #10b981; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #065f46; font-size: 20px;">✅ All Clear</h2>
+          <p style="margin: 0; color: #065f46;">No pending action items at this time.</p>
+        </div>
+        `}
+
+        <!-- Link to Dashboard -->
+        <div style="text-align: center; margin-top: 30px;">
+          <p style="margin: 0 0 15px 0; color: #6b7280; font-size: 14px;">
+            View detailed analytics and audit logs in your dashboard
+          </p>
+          <a href="${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '#'}" 
+             style="display: inline-block; background-color: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+            View Full Dashboard
+          </a>
+        </div>
+      </div>
+    `;
+
+    // Wrap content in professional email template
+    const html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Daily Summary Report</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #374151; max-width: 650px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+        ${content}
+        
+        <div style="text-align: center; margin-top: 20px; padding: 20px; color: #6b7280; font-size: 14px;">
+          <p style="margin: 0;">This is an automated daily summary from your Hotel Management System</p>
+          <p style="margin: 5px 0 0 0;">Please do not reply to this email</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 15px 0;">
+          <p style="margin: 0; font-size: 12px;">© ${new Date().getFullYear()} ${hotelName}. All rights reserved.</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return { subject, html };
+  }
 }
 
 export const alertService = new AlertService();
