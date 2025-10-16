@@ -752,6 +752,631 @@ function StaffActivityTab({ dateRange }: { dateRange: { from: Date | undefined; 
   );
 }
 
+// Security Alerts Tab Component
+function SecurityAlertsTab({ dateRange }: { dateRange: { from: Date | undefined; to: Date | undefined } }) {
+  const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [sortField, setSortField] = useState<string>("createdAt");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [selectedAlert, setSelectedAlert] = useState<any>(null);
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertNotes, setAlertNotes] = useState<string>("");
+
+  // Fetch data
+  const buildQueryUrl = (baseUrl: string, from?: Date, to?: Date) => {
+    if (!from || !to) return baseUrl;
+    const params = new URLSearchParams({
+      startDate: from.toISOString(),
+      endDate: to.toISOString()
+    });
+    return `${baseUrl}?${params.toString()}`;
+  };
+
+  const { data: auditLogs = [], isLoading: loadingAuditLogs } = useQuery({
+    queryKey: ['/api/audit-logs', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
+    queryFn: async () => {
+      const url = buildQueryUrl('/api/audit-logs', dateRange.from, dateRange.to);
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 5000
+  });
+
+  const { data: transactions = [], isLoading: loadingTransactions } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/transactions"]
+  });
+
+  const { data: wastages = [], isLoading: loadingWastages } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/wastages"]
+  });
+
+  // Real-time updates
+  useRealtimeQuery({
+    queryKey: ['/api/audit-logs'],
+    events: ['audit:created']
+  });
+
+  useRealtimeQuery({
+    queryKey: ["/api/hotels/current/transactions"],
+    events: ['transaction:created', 'transaction:updated']
+  });
+
+  const isLoading = loadingAuditLogs || loadingTransactions || loadingWastages;
+
+  // Define alert types and their priorities
+  const calculateAlertPriority = (alert: any): 'critical' | 'high' | 'medium' | 'low' => {
+    // Critical: Multiple new devices, foreign country login, very large transactions
+    if (alert.type === 'multiple_new_devices') return 'critical';
+    if (alert.type === 'foreign_login') return 'critical';
+    if (alert.type === 'very_large_transaction' && parseFloat(alert.amount || 0) > 100000) return 'critical';
+    
+    // High: New device + new location, large cash out without bill
+    if (alert.type === 'new_device_and_location') return 'high';
+    if (alert.type === 'large_no_bill' && parseFloat(alert.amount || 0) > 50000) return 'high';
+    
+    // Medium: New device OR new location, wastage without approval
+    if (alert.type === 'new_device') return 'medium';
+    if (alert.type === 'new_location') return 'medium';
+    if (alert.type === 'wastage_no_approval') return 'medium';
+    
+    // Low: Information only
+    return 'low';
+  };
+
+  // Generate alerts from data
+  const alerts = useMemo(() => {
+    const generatedAlerts: any[] = [];
+
+    // New device logins
+    auditLogs.forEach((log: any) => {
+      if (log.action === 'login' && log.details?.isNewDevice && log.details?.isNewLocation) {
+        generatedAlerts.push({
+          id: `alert-${log.id}`,
+          type: 'new_device_and_location',
+          description: `Login from new device AND new location`,
+          staff: log.user,
+          timestamp: log.createdAt,
+          ipAddress: log.ipAddress,
+          userAgent: log.userAgent,
+          status: 'unresolved',
+          relatedData: log
+        });
+      } else if (log.action === 'login' && log.details?.isNewDevice) {
+        generatedAlerts.push({
+          id: `alert-${log.id}`,
+          type: 'new_device',
+          description: `Login from new device`,
+          staff: log.user,
+          timestamp: log.createdAt,
+          ipAddress: log.ipAddress,
+          userAgent: log.userAgent,
+          status: 'unresolved',
+          relatedData: log
+        });
+      } else if (log.action === 'login' && log.details?.isNewLocation) {
+        generatedAlerts.push({
+          id: `alert-${log.id}`,
+          type: 'new_location',
+          description: `Login from new location`,
+          staff: log.user,
+          timestamp: log.createdAt,
+          ipAddress: log.ipAddress,
+          userAgent: log.userAgent,
+          status: 'unresolved',
+          relatedData: log
+        });
+      }
+    });
+
+    // Large transactions without bill proof
+    transactions.forEach((txn: any) => {
+      const amount = parseFloat(txn.amount || 0);
+      if (amount >= 50000 && txn.txnType?.includes('_out') && !txn.billPhotoUrl && !txn.billPdfUrl) {
+        generatedAlerts.push({
+          id: `alert-txn-${txn.id}`,
+          type: 'large_no_bill',
+          description: `Large cash out (${amount.toLocaleString()}) without bill proof`,
+          staff: txn.creator,
+          timestamp: txn.createdAt,
+          amount: amount,
+          status: 'unresolved',
+          relatedData: txn
+        });
+      } else if (amount >= 100000) {
+        generatedAlerts.push({
+          id: `alert-txn-large-${txn.id}`,
+          type: 'very_large_transaction',
+          description: `Very large transaction (${amount.toLocaleString()})`,
+          staff: txn.creator,
+          timestamp: txn.createdAt,
+          amount: amount,
+          status: txn.approvedBy ? 'resolved' : 'unresolved',
+          relatedData: txn
+        });
+      }
+    });
+
+    // Wastages without approval
+    wastages.forEach((wastage: any) => {
+      if (wastage.status === 'pending_approval') {
+        generatedAlerts.push({
+          id: `alert-wastage-${wastage.id}`,
+          type: 'wastage_no_approval',
+          description: `Wastage recorded without approval`,
+          staff: { id: wastage.recordedBy, username: 'Staff Member' }, // recordedByUser not included in API
+          timestamp: wastage.createdAt,
+          status: 'unresolved',
+          relatedData: wastage
+        });
+      }
+    });
+
+    // Add priority to each alert
+    return generatedAlerts.map(alert => ({
+      ...alert,
+      priority: calculateAlertPriority(alert)
+    }));
+  }, [auditLogs, transactions, wastages]);
+
+  // Time-based alerts
+  const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const alertsLast24h = alerts.filter(a => new Date(a.timestamp) >= last24Hours).length;
+  const alertsLast7d = alerts.filter(a => new Date(a.timestamp) >= last7Days).length;
+  const alertsLast30d = alerts.filter(a => new Date(a.timestamp) >= last30Days).length;
+
+  const newDeviceLogins = alerts.filter(a => a.type === 'new_device' || a.type === 'new_device_and_location').length;
+  const newLocationLogins = alerts.filter(a => a.type === 'new_location' || a.type === 'new_device_and_location').length;
+  const largeTransactions = alerts.filter(a => a.type === 'large_no_bill' || a.type === 'very_large_transaction').length;
+  const unresolvedAlerts = alerts.filter(a => a.status === 'unresolved').length;
+
+  // Filter and sort alerts
+  const filteredAlerts = useMemo(() => {
+    let result = [...alerts];
+
+    if (filterPriority !== 'all') {
+      result = result.filter(a => a.priority === filterPriority);
+    }
+
+    if (filterType !== 'all') {
+      result = result.filter(a => a.type === filterType);
+    }
+
+    if (filterStatus !== 'all') {
+      result = result.filter(a => a.status === filterStatus);
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      if (sortField === 'timestamp') {
+        aVal = new Date(aVal).getTime();
+        bVal = new Date(bVal).getTime();
+      }
+
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+
+    return result;
+  }, [alerts, filterPriority, filterType, filterStatus, sortField, sortDirection]);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    const colors = {
+      critical: 'bg-red-500 text-white',
+      high: 'bg-orange-500 text-white',
+      medium: 'bg-yellow-500 text-white',
+      low: 'bg-blue-500 text-white'
+    };
+    return colors[priority as keyof typeof colors] || 'bg-gray-500 text-white';
+  };
+
+  const getPriorityBorderColor = (priority: string) => {
+    const colors = {
+      critical: 'border-l-red-500',
+      high: 'border-l-orange-500',
+      medium: 'border-l-yellow-500',
+      low: 'border-l-blue-500'
+    };
+    return colors[priority as keyof typeof colors] || 'border-l-gray-500';
+  };
+
+  const uniqueTypes = useMemo(() => {
+    return Array.from(new Set(alerts.map(a => a.type))).filter(Boolean) as string[];
+  }, [alerts]);
+
+  const viewAlertDetails = (alert: any) => {
+    setSelectedAlert(alert);
+    setAlertNotes("");
+    setShowAlertModal(true);
+  };
+
+  const markAsResolved = async (alertId: string) => {
+    console.log('Marking alert as resolved:', alertId);
+    // In a real implementation, this would call an API endpoint
+    setShowAlertModal(false);
+  };
+
+  const markAsFalsePositive = async (alertId: string) => {
+    console.log('Marking alert as false positive:', alertId);
+    setShowAlertModal(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Section 1: Alert Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <Card data-testid="card-alerts-24h" className="border-l-4 border-l-blue-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Last 24 Hours</CardTitle>
+            <Clock className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-alerts-24h">{alertsLast24h}</div>
+            <p className="text-xs text-muted-foreground mt-1">New alerts</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-new-devices" className="border-l-4 border-l-orange-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">New Device Logins</CardTitle>
+            <Shield className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-new-devices">{newDeviceLogins}</div>
+            <p className="text-xs text-muted-foreground mt-1">Suspicious devices</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-new-locations" className="border-l-4 border-l-purple-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">New Location Logins</CardTitle>
+            <MapPin className="h-4 w-4 text-purple-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-new-locations">{newLocationLogins}</div>
+            <p className="text-xs text-muted-foreground mt-1">Unusual locations</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-large-transactions" className="border-l-4 border-l-yellow-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Large Transactions</CardTitle>
+            <DollarSign className="h-4 w-4 text-yellow-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-large-txns">{largeTransactions}</div>
+            <p className="text-xs text-muted-foreground mt-1">Flagged amounts</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-unresolved" className="border-l-4 border-l-red-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Unresolved</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-unresolved">{unresolvedAlerts}</div>
+            <p className="text-xs text-muted-foreground mt-1">Need attention</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Section 2: Alert Priority Levels */}
+      <Card data-testid="card-priority-info">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            Alert Priority Levels
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border-l-4 border-l-red-500">
+            <Badge className="bg-red-500 text-white">Critical</Badge>
+            <p className="text-sm">Multiple new devices, foreign country login, very large transactions (&gt; NPR 100,000)</p>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/10 border-l-4 border-l-orange-500">
+            <Badge className="bg-orange-500 text-white">High</Badge>
+            <p className="text-sm">New device + new location combo, large cash out without bill (&gt; NPR 50,000)</p>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border-l-4 border-l-yellow-500">
+            <Badge className="bg-yellow-500 text-white">Medium</Badge>
+            <p className="text-sm">New device OR new location, wastage without approval</p>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border-l-4 border-l-blue-500">
+            <Badge className="bg-blue-500 text-white">Low</Badge>
+            <p className="text-sm">Information only, routine monitoring</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 3: Alerts Table */}
+      <Card data-testid="card-alerts-table">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Security Alerts
+          </CardTitle>
+          <CardDescription>All security alerts and suspicious activities</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2">
+            <Select value={filterPriority} onValueChange={setFilterPriority}>
+              <SelectTrigger className="w-[180px]" data-testid="select-priority-filter">
+                <SelectValue placeholder="All Priorities" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priorities</SelectItem>
+                <SelectItem value="critical">Critical</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-[200px]" data-testid="select-type-filter">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {uniqueTypes.map(type => (
+                  <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[180px]" data-testid="select-status-filter">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="unresolved">Unresolved</SelectItem>
+                <SelectItem value="resolved">Resolved</SelectItem>
+                <SelectItem value="false_positive">False Positive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Table */}
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="cursor-pointer" onClick={() => handleSort('priority')} data-testid="th-priority">
+                    <div className="flex items-center gap-1">
+                      Priority
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </TableHead>
+                  <TableHead className="cursor-pointer" onClick={() => handleSort('type')} data-testid="th-type">
+                    <div className="flex items-center gap-1">
+                      Alert Type
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </TableHead>
+                  <TableHead data-testid="th-description">Description</TableHead>
+                  <TableHead data-testid="th-staff">Staff Involved</TableHead>
+                  <TableHead className="cursor-pointer" onClick={() => handleSort('timestamp')} data-testid="th-timestamp">
+                    <div className="flex items-center gap-1">
+                      Time
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </TableHead>
+                  <TableHead data-testid="th-alert-status">Status</TableHead>
+                  <TableHead data-testid="th-alert-actions">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  [...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                      {[...Array(7)].map((_, j) => (
+                        <TableCell key={j}>
+                          <Skeleton className="h-4 w-full" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : filteredAlerts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8" data-testid="text-no-alerts">
+                      <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                      <p className="text-muted-foreground">No security alerts found.</p>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredAlerts.map((alert: any) => (
+                    <TableRow 
+                      key={alert.id}
+                      className={`cursor-pointer border-l-4 ${getPriorityBorderColor(alert.priority)}`}
+                      onClick={() => viewAlertDetails(alert)}
+                      data-testid={`alert-row-${alert.id}`}
+                    >
+                      <TableCell data-testid={`td-priority-${alert.id}`}>
+                        <Badge className={getPriorityBadge(alert.priority)}>
+                          {alert.priority}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-type-${alert.id}`}>
+                        {alert.type.replace(/_/g, ' ')}
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[300px]" data-testid={`td-desc-${alert.id}`}>
+                        {alert.description}
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-staff-${alert.id}`}>
+                        {alert.staff?.username || 'Unknown'}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap" data-testid={`td-time-${alert.id}`}>
+                        {new Date(alert.timestamp).toLocaleString()}
+                      </TableCell>
+                      <TableCell data-testid={`td-status-${alert.id}`}>
+                        <Badge variant={alert.status === 'resolved' ? 'default' : 'destructive'} className="text-xs">
+                          {alert.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            viewAlertDetails(alert);
+                          }}
+                          data-testid={`button-view-alert-${alert.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 4: Alert Details Modal */}
+      <Dialog open={showAlertModal} onOpenChange={setShowAlertModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="modal-alert-details">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Security Alert Details
+            </DialogTitle>
+            <DialogDescription>
+              Review and take action on this security alert
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedAlert && (
+            <div className="space-y-6">
+              {/* Alert Header */}
+              <div className={`p-4 rounded-lg border-l-4 ${getPriorityBorderColor(selectedAlert.priority)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <Badge className={getPriorityBadge(selectedAlert.priority)}>
+                    {selectedAlert.priority} Priority
+                  </Badge>
+                  <Badge variant="outline">{selectedAlert.type.replace(/_/g, ' ')}</Badge>
+                </div>
+                <p className="font-medium">{selectedAlert.description}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {new Date(selectedAlert.timestamp).toLocaleString()}
+                </p>
+              </div>
+
+              {/* Staff Details */}
+              <div>
+                <h4 className="font-semibold mb-3">Staff Member</h4>
+                <div className="p-4 border rounded-lg space-y-2">
+                  <p className="text-sm"><span className="font-medium">Name:</span> {selectedAlert.staff?.username || 'Unknown'}</p>
+                  <p className="text-sm"><span className="font-medium">Role:</span> {selectedAlert.staff?.role?.name || 'N/A'}</p>
+                  <p className="text-sm"><span className="font-medium">Email:</span> {selectedAlert.staff?.email || 'N/A'}</p>
+                </div>
+              </div>
+
+              {/* Device & Location Info */}
+              {(selectedAlert.ipAddress || selectedAlert.userAgent) && (
+                <div>
+                  <h4 className="font-semibold mb-3">Device & Location Information</h4>
+                  <div className="p-4 border rounded-lg space-y-2">
+                    {selectedAlert.ipAddress && (
+                      <p className="text-sm"><span className="font-medium">IP Address:</span> {selectedAlert.ipAddress}</p>
+                    )}
+                    {selectedAlert.userAgent && (
+                      <p className="text-sm"><span className="font-medium">User Agent:</span> {selectedAlert.userAgent}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Transaction Details */}
+              {selectedAlert.amount && (
+                <div>
+                  <h4 className="font-semibold mb-3">Transaction Details</h4>
+                  <div className="p-4 border rounded-lg space-y-2">
+                    <p className="text-sm"><span className="font-medium">Amount:</span> NPR {selectedAlert.amount.toLocaleString()}</p>
+                    <p className="text-sm"><span className="font-medium">Purpose:</span> {selectedAlert.relatedData?.purpose || 'N/A'}</p>
+                    <p className="text-sm"><span className="font-medium">Payment Method:</span> {selectedAlert.relatedData?.paymentMethod || 'N/A'}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Notes Section */}
+              <div>
+                <h4 className="font-semibold mb-3">Investigation Notes</h4>
+                <Input
+                  placeholder="Add your notes about this alert..."
+                  value={alertNotes}
+                  onChange={(e) => setAlertNotes(e.target.value)}
+                  data-testid="input-alert-notes"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap gap-2 pt-4 border-t">
+                <Button
+                  onClick={() => markAsResolved(selectedAlert.id)}
+                  className="bg-green-600 hover:bg-green-700"
+                  data-testid="button-resolve-alert"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Mark as Resolved
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => markAsFalsePositive(selectedAlert.id)}
+                  data-testid="button-false-positive"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Mark as False Positive
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => console.log('Contact staff:', selectedAlert.staff)}
+                  data-testid="button-contact-staff"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Contact Staff
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => console.log('Block device')}
+                  data-testid="button-block-device"
+                >
+                  <Ban className="h-4 w-4 mr-2" />
+                  Block Device
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function AuditTransparencyPage() {
   const [, setLocation] = useLocation();
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -2021,62 +2646,7 @@ export default function AuditTransparencyPage() {
 
         {/* Tab 4: Security Alerts */}
         <TabsContent value="security" className="space-y-6">
-          <Card data-testid="card-security-alerts-detail">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Security Alerts & Failed Operations
-              </CardTitle>
-              <CardDescription>Monitor failed login attempts, unauthorized access, and system security events</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="flex items-start gap-4">
-                      <Skeleton className="h-10 w-10 rounded" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-3 w-1/2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {auditLogs.filter((log: any) => !log.success).length === 0 ? (
-                    <div className="text-center py-8" data-testid="text-no-alerts">
-                      <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                      <p className="text-muted-foreground">No security alerts. All systems operating normally.</p>
-                    </div>
-                  ) : (
-                    auditLogs
-                      .filter((log: any) => !log.success)
-                      .map((log: any) => (
-                        <div 
-                          key={log.id} 
-                          className="flex items-start gap-4 p-4 border-l-4 border-l-red-500 bg-red-50 dark:bg-red-900/10 rounded" 
-                          data-testid={`security-alert-${log.id}`}
-                        >
-                          <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
-                          <div className="flex-1 space-y-1">
-                            <p className="text-sm font-medium" data-testid={`text-alert-action-${log.id}`}>
-                              {log.action} - {log.resourceType}
-                            </p>
-                            <p className="text-xs text-muted-foreground" data-testid={`text-alert-time-${log.id}`}>
-                              {new Date(log.createdAt).toLocaleString()}
-                            </p>
-                          </div>
-                          <Badge variant="destructive" data-testid={`badge-alert-status-${log.id}`}>
-                            Failed
-                          </Badge>
-                        </div>
-                      ))
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <SecurityAlertsTab dateRange={dateRange} />
         </TabsContent>
 
         {/* Tab 5: Photo Evidence */}
