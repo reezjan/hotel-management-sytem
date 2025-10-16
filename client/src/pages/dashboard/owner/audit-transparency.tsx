@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { 
   CalendarIcon, 
@@ -25,7 +29,16 @@ import {
   MapPin,
   Clock,
   CheckCircle2,
-  XCircle
+  XCircle,
+  ArrowUpDown,
+  Eye,
+  Image as ImageIcon,
+  FilePlus,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  Receipt,
+  Ban
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useRealtimeQuery } from "@/hooks/use-realtime-query";
@@ -37,6 +50,22 @@ export default function AuditTransparencyPage() {
     to: undefined
   });
   const [activeTab, setActiveTab] = useState("overview");
+
+  // Financial Tab States
+  const [sortField, setSortField] = useState<string>("createdAt");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [filterTxnType, setFilterTxnType] = useState<string>("all");
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>("all");
+  const [filterStaff, setFilterStaff] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  // Modals
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [viewBillUrl, setViewBillUrl] = useState<string>("");
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [showBillModal, setShowBillModal] = useState(false);
 
   // Quick filter handlers
   const setToday = () => {
@@ -184,6 +213,158 @@ export default function AuditTransparencyPage() {
 
   // Recent activity timeline (last 10 activities from audit logs)
   const recentActivities = auditLogs.slice(0, 10);
+
+  // Financial Tab Calculations
+  const totalRevenue = useMemo(() => {
+    return filteredTransactions
+      .filter(t => t.txnType === 'revenue' || t.txnType?.includes('_in'))
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+  }, [filteredTransactions]);
+
+  const totalExpenses = useMemo(() => {
+    return filteredTransactions
+      .filter(t => t.txnType === 'expense' || t.txnType?.includes('_out'))
+      .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+  }, [filteredTransactions]);
+
+  const netProfitLoss = totalRevenue - totalExpenses;
+
+  const largestTransaction = useMemo(() => {
+    if (filteredTransactions.length === 0) return null;
+    return filteredTransactions.reduce((max, t) => 
+      parseFloat(t.amount || 0) > parseFloat(max.amount || 0) ? t : max
+    , filteredTransactions[0]);
+  }, [filteredTransactions]);
+
+  const voidedTransactionsCount = useMemo(() => {
+    return filteredTransactions.filter(t => t.isVoided).length;
+  }, [filteredTransactions]);
+
+  // Payment method breakdown
+  const paymentMethodBreakdown = useMemo(() => {
+    const breakdown = {
+      cash: 0,
+      pos: 0,
+      fonepay: 0,
+      other: 0
+    };
+    filteredTransactions.forEach(t => {
+      const amount = parseFloat(t.amount || 0);
+      const method = t.paymentMethod?.toLowerCase() || 'other';
+      if (method === 'cash') breakdown.cash += amount;
+      else if (method === 'pos') breakdown.pos += amount;
+      else if (method === 'fonepay') breakdown.fonepay += amount;
+      else breakdown.other += amount;
+    });
+    return breakdown;
+  }, [filteredTransactions]);
+
+  const totalPayments = paymentMethodBreakdown.cash + paymentMethodBreakdown.pos + 
+                        paymentMethodBreakdown.fonepay + paymentMethodBreakdown.other;
+
+  // Flagged transactions
+  const flaggedTransactions = useMemo(() => {
+    const threshold = 50000; // Large transaction threshold
+    return {
+      large: filteredTransactions.filter(t => parseFloat(t.amount || 0) >= threshold),
+      noBillProof: filteredTransactions.filter(t => 
+        t.txnType?.includes('_out') && !t.billPhotoUrl && !t.billPdfUrl
+      ),
+      voided: filteredTransactions.filter(t => t.isVoided),
+      requiresApproval: filteredTransactions.filter(t => t.requiresApproval && !t.approvedBy)
+    };
+  }, [filteredTransactions]);
+
+  // Sorting and filtering for transactions table
+  const processedTransactions = useMemo(() => {
+    let result = [...filteredTransactions];
+
+    // Filter by transaction type
+    if (filterTxnType !== 'all') {
+      result = result.filter(t => t.txnType === filterTxnType);
+    }
+
+    // Filter by payment method
+    if (filterPaymentMethod !== 'all') {
+      result = result.filter(t => t.paymentMethod?.toLowerCase() === filterPaymentMethod.toLowerCase());
+    }
+
+    // Filter by staff
+    if (filterStaff !== 'all') {
+      result = result.filter(t => t.createdBy === filterStaff);
+    }
+
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(t => 
+        t.purpose?.toLowerCase().includes(query) ||
+        t.reference?.toLowerCase().includes(query) ||
+        t.creator?.username?.toLowerCase().includes(query)
+      );
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      if (sortField === 'amount') {
+        aVal = parseFloat(aVal || 0);
+        bVal = parseFloat(bVal || 0);
+      } else if (sortField === 'createdAt') {
+        aVal = new Date(aVal).getTime();
+        bVal = new Date(bVal).getTime();
+      }
+
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+
+    return result;
+  }, [filteredTransactions, filterTxnType, filterPaymentMethod, filterStaff, searchQuery, sortField, sortDirection]);
+
+  // Pagination
+  const totalPages = Math.ceil(processedTransactions.length / itemsPerPage);
+  const paginatedTransactions = processedTransactions.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Get unique values for filters
+  const uniqueTxnTypes = useMemo(() => {
+    return Array.from(new Set(transactions.map(t => t.txnType))).filter(Boolean);
+  }, [transactions]);
+
+  const uniquePaymentMethods = useMemo(() => {
+    return Array.from(new Set(transactions.map(t => t.paymentMethod))).filter(Boolean);
+  }, [transactions]);
+
+  const uniqueStaff = useMemo(() => {
+    return Array.from(new Set(transactions.map(t => t.creator).filter(Boolean)));
+  }, [transactions]);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const viewTransactionDetails = (txn: any) => {
+    setSelectedTransaction(txn);
+    setShowTransactionModal(true);
+  };
+
+  const viewBill = (url: string) => {
+    setViewBillUrl(url);
+    setShowBillModal(true);
+  };
 
   const isLoading = loadingTransactions || loadingMaintenance || loadingAuditLogs || 
                     loadingPriceChanges || loadingInventory || loadingStaffActivity;
@@ -586,73 +767,537 @@ export default function AuditTransparencyPage() {
 
         {/* Tab 2: Financial Activity */}
         <TabsContent value="financial" className="space-y-6">
-          <Card data-testid="card-financial-activity">
+          {/* Section 1: Transaction Summary Cards */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <Card data-testid="card-financial-revenue" className="border-l-4 border-l-green-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                <TrendingUp className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-financial-revenue">
+                      {formatCurrency(totalRevenue)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      All income transactions
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-financial-expenses" className="border-l-4 border-l-red-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+                <TrendingDown className="h-4 w-4 text-red-500" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-financial-expenses">
+                      {formatCurrency(totalExpenses)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      All outgoing transactions
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-net-profit" className={`border-l-4 ${netProfitLoss >= 0 ? 'border-l-green-600' : 'border-l-red-600'}`}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Net Profit/Loss</CardTitle>
+                <DollarSign className={`h-4 w-4 ${netProfitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <>
+                    <div className={`text-2xl font-bold ${netProfitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`} data-testid="text-net-profit">
+                      {formatCurrency(Math.abs(netProfitLoss))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {netProfitLoss >= 0 ? 'Profit' : 'Loss'}
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-largest-transaction" className="border-l-4 border-l-purple-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Largest Transaction</CardTitle>
+                <Receipt className="h-4 w-4 text-purple-500" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-largest-transaction">
+                      {largestTransaction ? formatCurrency(parseFloat(largestTransaction.amount || 0)) : 'N/A'}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      {largestTransaction?.purpose || 'No transactions'}
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-voided-transactions" className="border-l-4 border-l-orange-500">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Voided Transactions</CardTitle>
+                <Ban className="h-4 w-4 text-orange-500" />
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-16" />
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold" data-testid="text-voided-count">
+                      {voidedTransactionsCount}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Cancelled transactions
+                    </p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Section 2: Payment Method Breakdown */}
+          <Card data-testid="card-payment-breakdown">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5" />
-                Financial Transaction History
+                Payment Method Breakdown
               </CardTitle>
-              <CardDescription>Complete audit trail of all financial transactions with creator information</CardDescription>
+              <CardDescription>Distribution of transactions by payment method</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-3">
+                  {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Cash */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">Cash</span>
+                      <span data-testid="text-cash-amount">{formatCurrency(paymentMethodBreakdown.cash)}</span>
+                    </div>
+                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-green-500 transition-all"
+                        style={{ width: `${totalPayments > 0 ? (paymentMethodBreakdown.cash / totalPayments) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* POS */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">POS</span>
+                      <span data-testid="text-pos-amount">{formatCurrency(paymentMethodBreakdown.pos)}</span>
+                    </div>
+                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 transition-all"
+                        style={{ width: `${totalPayments > 0 ? (paymentMethodBreakdown.pos / totalPayments) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fonepay */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">Fonepay</span>
+                      <span data-testid="text-fonepay-amount">{formatCurrency(paymentMethodBreakdown.fonepay)}</span>
+                    </div>
+                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-purple-500 transition-all"
+                        style={{ width: `${totalPayments > 0 ? (paymentMethodBreakdown.fonepay / totalPayments) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Other */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">Other</span>
+                      <span data-testid="text-other-amount">{formatCurrency(paymentMethodBreakdown.other)}</span>
+                    </div>
+                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gray-500 transition-all"
+                        style={{ width: `${totalPayments > 0 ? (paymentMethodBreakdown.other / totalPayments) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Section 3: Transactions Table */}
+          <Card data-testid="card-transactions-table">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Detailed Transaction Records
+              </CardTitle>
+              <CardDescription>Complete audit trail with filtering and sorting capabilities</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Filters */}
+              <div className="grid gap-4 md:grid-cols-4">
+                <Input
+                  placeholder="Search purpose, reference, staff..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  data-testid="input-search"
+                  className="md:col-span-1"
+                />
+
+                <Select value={filterTxnType} onValueChange={setFilterTxnType}>
+                  <SelectTrigger data-testid="select-txn-type">
+                    <SelectValue placeholder="Transaction Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    {uniqueTxnTypes.map(type => (
+                      <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterPaymentMethod} onValueChange={setFilterPaymentMethod}>
+                  <SelectTrigger data-testid="select-payment-method">
+                    <SelectValue placeholder="Payment Method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Methods</SelectItem>
+                    {uniquePaymentMethods.map(method => (
+                      <SelectItem key={method} value={method}>{method}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterStaff} onValueChange={setFilterStaff}>
+                  <SelectTrigger data-testid="select-staff">
+                    <SelectValue placeholder="Staff Member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Staff</SelectItem>
+                    {uniqueStaff.map(staff => (
+                      <SelectItem key={staff.id} value={staff.id}>{staff.username}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Table */}
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort('createdAt')} data-testid="th-date">
+                        <div className="flex items-center gap-1">
+                          Date/Time
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort('txnType')} data-testid="th-type">
+                        <div className="flex items-center gap-1">
+                          Type
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort('amount')} data-testid="th-amount">
+                        <div className="flex items-center gap-1">
+                          Amount
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      <TableHead data-testid="th-payment">Payment Method</TableHead>
+                      <TableHead data-testid="th-purpose">Purpose</TableHead>
+                      <TableHead data-testid="th-created-by">Created By</TableHead>
+                      <TableHead data-testid="th-bill">Bill Proof</TableHead>
+                      <TableHead data-testid="th-status">Status</TableHead>
+                      <TableHead data-testid="th-actions">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      [...Array(5)].map((_, i) => (
+                        <TableRow key={i}>
+                          {[...Array(9)].map((_, j) => (
+                            <TableCell key={j}>
+                              <Skeleton className="h-4 w-full" />
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : paginatedTransactions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground" data-testid="text-no-table-data">
+                          No transactions found matching the filters.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      paginatedTransactions.map((txn: any) => (
+                        <TableRow 
+                          key={txn.id} 
+                          className="cursor-pointer" 
+                          onClick={() => viewTransactionDetails(txn)}
+                          data-testid={`table-row-${txn.id}`}
+                        >
+                          <TableCell className="text-xs" data-testid={`td-date-${txn.id}`}>
+                            {new Date(txn.createdAt).toLocaleString()}
+                          </TableCell>
+                          <TableCell data-testid={`td-type-${txn.id}`}>
+                            <Badge variant="outline" className="text-xs">
+                              {txn.txnType?.replace(/_/g, ' ')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium" data-testid={`td-amount-${txn.id}`}>
+                            {formatCurrency(parseFloat(txn.amount || 0))}
+                          </TableCell>
+                          <TableCell className="text-xs" data-testid={`td-payment-${txn.id}`}>
+                            {txn.paymentMethod || 'N/A'}
+                          </TableCell>
+                          <TableCell className="text-xs max-w-[200px] truncate" data-testid={`td-purpose-${txn.id}`}>
+                            {txn.purpose || '-'}
+                          </TableCell>
+                          <TableCell className="text-xs" data-testid={`td-creator-${txn.id}`}>
+                            {txn.creator?.username || 'Unknown'}
+                          </TableCell>
+                          <TableCell data-testid={`td-bill-${txn.id}`}>
+                            {(txn.billPhotoUrl || txn.billPdfUrl) ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  viewBill(txn.billPhotoUrl || txn.billPdfUrl);
+                                }}
+                                data-testid={`button-view-bill-${txn.id}`}
+                              >
+                                <ImageIcon className="h-4 w-4 text-blue-500" />
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell data-testid={`td-status-${txn.id}`}>
+                            {txn.isVoided ? (
+                              <Badge variant="destructive" className="text-xs">Voided</Badge>
+                            ) : txn.requiresApproval && !txn.approvedBy ? (
+                              <Badge variant="outline" className="text-xs">Pending</Badge>
+                            ) : txn.approvedBy ? (
+                              <Badge variant="default" className="text-xs">Approved</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs">Active</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                viewTransactionDetails(txn);
+                              }}
+                              data-testid={`button-view-details-${txn.id}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground" data-testid="text-pagination-info">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, processedTransactions.length)} of {processedTransactions.length} transactions
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      data-testid="button-prev-page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+                    <span className="text-sm" data-testid="text-current-page">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      data-testid="button-next-page"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Section 4: Flagged Transactions */}
+          <Card data-testid="card-flagged-transactions">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-orange-500" />
+                Flagged Transactions
+              </CardTitle>
+              <CardDescription>Transactions requiring attention or review</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? (
                 <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="flex items-start gap-4">
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-3/4" />
-                        <Skeleton className="h-3 w-1/2" />
-                      </div>
-                      <Skeleton className="h-6 w-20" />
-                    </div>
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-20 w-full" />
                   ))}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredTransactions.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8" data-testid="text-no-transactions">
-                      No financial transactions found.
-                    </p>
-                  ) : (
-                    filteredTransactions.map((txn: any) => (
-                      <div 
-                        key={txn.id} 
-                        className="flex items-start justify-between border-b pb-4 hover:bg-muted/50 p-2 rounded-lg transition-colors" 
-                        data-testid={`transaction-${txn.id}`}
-                      >
-                        <div className="space-y-1 flex-1">
-                          <p className="text-sm font-medium" data-testid={`text-txn-purpose-${txn.id}`}>
-                            {txn.purpose || 'Transaction'}
-                          </p>
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            <span data-testid={`text-txn-type-${txn.id}`}>Type: {txn.txnType?.replace(/_/g, ' ')}</span>
-                            <span data-testid={`text-txn-amount-${txn.id}`}>
-                              Amount: NPR {parseFloat(txn.amount || 0).toLocaleString()}
-                            </span>
-                            {txn.paymentMethod && (
-                              <span data-testid={`text-payment-method-${txn.id}`}>
-                                Method: {txn.paymentMethod}
-                              </span>
-                            )}
+                  {/* Large Transactions */}
+                  {flaggedTransactions.large.length > 0 && (
+                    <div className="p-4 border border-yellow-200 dark:border-yellow-800 rounded-lg bg-yellow-50 dark:bg-yellow-900/10" data-testid="section-large-transactions">
+                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                        <Receipt className="h-4 w-4" />
+                        Large Transactions (≥ NPR 50,000)
+                        <Badge variant="outline">{flaggedTransactions.large.length}</Badge>
+                      </h4>
+                      <div className="space-y-2">
+                        {flaggedTransactions.large.slice(0, 3).map((txn: any) => (
+                          <div 
+                            key={txn.id} 
+                            className="flex items-center justify-between text-sm hover:bg-yellow-100 dark:hover:bg-yellow-900/20 p-2 rounded cursor-pointer"
+                            onClick={() => viewTransactionDetails(txn)}
+                            data-testid={`flagged-large-${txn.id}`}
+                          >
+                            <span className="truncate flex-1">{txn.purpose || 'Large Transaction'}</span>
+                            <span className="font-medium ml-4">{formatCurrency(parseFloat(txn.amount || 0))}</span>
                           </div>
-                          <p className="text-xs text-muted-foreground" data-testid={`text-created-by-${txn.id}`}>
-                            Created by: {txn.creator?.username || 'Unknown'} ({txn.creator?.role?.replace(/_/g, ' ') || 'N/A'}) on{" "}
-                            {new Date(txn.createdAt).toLocaleString()}
-                          </p>
-                          {txn.reference && (
-                            <p className="text-xs text-muted-foreground" data-testid={`text-reference-${txn.id}`}>
-                              Reference: {txn.reference}
-                            </p>
-                          )}
-                        </div>
-                        <Badge 
-                          variant={txn.txnType === 'revenue' || txn.txnType?.includes('_in') ? 'default' : txn.txnType === 'expense' || txn.txnType?.includes('_out') ? 'destructive' : 'secondary'}
-                          data-testid={`badge-txn-type-${txn.id}`}
-                        >
-                          {formatCurrency(parseFloat(txn.amount || 0))}
-                        </Badge>
+                        ))}
                       </div>
-                    ))
+                    </div>
+                  )}
+
+                  {/* Cash Out Without Bill Proof */}
+                  {flaggedTransactions.noBillProof.length > 0 && (
+                    <div className="p-4 border border-red-200 dark:border-red-800 rounded-lg bg-red-50 dark:bg-red-900/10" data-testid="section-no-bill">
+                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                        <FilePlus className="h-4 w-4" />
+                        Cash Out Without Bill Proof
+                        <Badge variant="outline">{flaggedTransactions.noBillProof.length}</Badge>
+                      </h4>
+                      <div className="space-y-2">
+                        {flaggedTransactions.noBillProof.slice(0, 3).map((txn: any) => (
+                          <div 
+                            key={txn.id} 
+                            className="flex items-center justify-between text-sm hover:bg-red-100 dark:hover:bg-red-900/20 p-2 rounded cursor-pointer"
+                            onClick={() => viewTransactionDetails(txn)}
+                            data-testid={`flagged-no-bill-${txn.id}`}
+                          >
+                            <span className="truncate flex-1">{txn.purpose || 'No Bill Proof'}</span>
+                            <span className="font-medium ml-4">{formatCurrency(parseFloat(txn.amount || 0))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Voided Transactions */}
+                  {flaggedTransactions.voided.length > 0 && (
+                    <div className="p-4 border border-orange-200 dark:border-orange-800 rounded-lg bg-orange-50 dark:bg-orange-900/10" data-testid="section-voided">
+                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                        <Ban className="h-4 w-4" />
+                        Voided Transactions
+                        <Badge variant="outline">{flaggedTransactions.voided.length}</Badge>
+                      </h4>
+                      <div className="space-y-2">
+                        {flaggedTransactions.voided.slice(0, 3).map((txn: any) => (
+                          <div 
+                            key={txn.id} 
+                            className="flex items-center justify-between text-sm hover:bg-orange-100 dark:hover:bg-orange-900/20 p-2 rounded cursor-pointer"
+                            onClick={() => viewTransactionDetails(txn)}
+                            data-testid={`flagged-voided-${txn.id}`}
+                          >
+                            <div className="flex-1">
+                              <p className="truncate">{txn.purpose || 'Voided Transaction'}</p>
+                              {txn.voidReason && (
+                                <p className="text-xs text-muted-foreground truncate">Reason: {txn.voidReason}</p>
+                              )}
+                            </div>
+                            <span className="font-medium ml-4">{formatCurrency(parseFloat(txn.amount || 0))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Requires Approval */}
+                  {flaggedTransactions.requiresApproval.length > 0 && (
+                    <div className="p-4 border border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/10" data-testid="section-requires-approval">
+                      <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        Requires Approval
+                        <Badge variant="outline">{flaggedTransactions.requiresApproval.length}</Badge>
+                      </h4>
+                      <div className="space-y-2">
+                        {flaggedTransactions.requiresApproval.slice(0, 3).map((txn: any) => (
+                          <div 
+                            key={txn.id} 
+                            className="flex items-center justify-between text-sm hover:bg-blue-100 dark:hover:bg-blue-900/20 p-2 rounded cursor-pointer"
+                            onClick={() => viewTransactionDetails(txn)}
+                            data-testid={`flagged-approval-${txn.id}`}
+                          >
+                            <span className="truncate flex-1">{txn.purpose || 'Pending Approval'}</span>
+                            <span className="font-medium ml-4">{formatCurrency(parseFloat(txn.amount || 0))}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* No Flagged Transactions */}
+                  {flaggedTransactions.large.length === 0 && 
+                   flaggedTransactions.noBillProof.length === 0 && 
+                   flaggedTransactions.voided.length === 0 && 
+                   flaggedTransactions.requiresApproval.length === 0 && (
+                    <div className="text-center py-8" data-testid="text-no-flagged">
+                      <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+                      <p className="text-muted-foreground">No flagged transactions. All transactions are in good standing.</p>
+                    </div>
                   )}
                 </div>
               )}
@@ -864,6 +1509,104 @@ export default function AuditTransparencyPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Transaction Details Modal */}
+      <Dialog open={showTransactionModal} onOpenChange={setShowTransactionModal}>
+        <DialogContent className="max-w-2xl" data-testid="modal-transaction-details">
+          <DialogHeader>
+            <DialogTitle>Transaction Details</DialogTitle>
+            <DialogDescription>Complete information about this transaction</DialogDescription>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Transaction ID</p>
+                  <p className="text-sm" data-testid="modal-txn-id">{selectedTransaction.id}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Date & Time</p>
+                  <p className="text-sm" data-testid="modal-txn-date">{new Date(selectedTransaction.createdAt).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Type</p>
+                  <Badge data-testid="modal-txn-type">{selectedTransaction.txnType?.replace(/_/g, ' ')}</Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Amount</p>
+                  <p className="text-lg font-bold" data-testid="modal-txn-amount">{formatCurrency(parseFloat(selectedTransaction.amount || 0))}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Payment Method</p>
+                  <p className="text-sm" data-testid="modal-txn-payment">{selectedTransaction.paymentMethod || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Created By</p>
+                  <p className="text-sm" data-testid="modal-txn-creator">{selectedTransaction.creator?.username || 'Unknown'}</p>
+                </div>
+                {selectedTransaction.reference && (
+                  <div className="col-span-2">
+                    <p className="text-sm font-medium text-muted-foreground">Reference</p>
+                    <p className="text-sm" data-testid="modal-txn-reference">{selectedTransaction.reference}</p>
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <p className="text-sm font-medium text-muted-foreground">Purpose</p>
+                  <p className="text-sm" data-testid="modal-txn-purpose">{selectedTransaction.purpose || '-'}</p>
+                </div>
+                {selectedTransaction.isVoided && (
+                  <div className="col-span-2">
+                    <p className="text-sm font-medium text-muted-foreground">Void Reason</p>
+                    <p className="text-sm text-red-600" data-testid="modal-txn-void-reason">{selectedTransaction.voidReason || 'No reason provided'}</p>
+                  </div>
+                )}
+                {(selectedTransaction.billPhotoUrl || selectedTransaction.billPdfUrl) && (
+                  <div className="col-span-2">
+                    <p className="text-sm font-medium text-muted-foreground mb-2">Bill Proof</p>
+                    <Button
+                      variant="outline"
+                      onClick={() => viewBill(selectedTransaction.billPhotoUrl || selectedTransaction.billPdfUrl)}
+                      data-testid="modal-button-view-bill"
+                    >
+                      <ImageIcon className="mr-2 h-4 w-4" />
+                      View Bill
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Bill View Modal */}
+      <Dialog open={showBillModal} onOpenChange={setShowBillModal}>
+        <DialogContent className="max-w-4xl" data-testid="modal-bill-view">
+          <DialogHeader>
+            <DialogTitle>Bill Proof</DialogTitle>
+            <DialogDescription>Transaction bill documentation</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[600px] overflow-auto">
+            {viewBillUrl && (
+              viewBillUrl.endsWith('.pdf') ? (
+                <iframe
+                  src={viewBillUrl}
+                  className="w-full h-[600px]"
+                  title="Bill PDF"
+                  data-testid="iframe-bill-pdf"
+                />
+              ) : (
+                <img
+                  src={viewBillUrl}
+                  alt="Bill Proof"
+                  className="w-full h-auto"
+                  data-testid="img-bill-photo"
+                />
+              )
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
