@@ -6,8 +6,8 @@ import { logAudit } from "./audit";
 import { db } from "./db";
 import { wsEvents } from "./websocket";
 import { uploadWastagePhoto, uploadBillDocument } from "./upload";
-import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings, loginHistory } from "@shared/schema";
-import { eq, and, isNull, asc, desc, sql, ne } from "drizzle-orm";
+import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings, loginHistory, roleLimits } from "@shared/schema";
+import { eq, and, isNull, asc, desc, sql, ne, gte, lt } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
 import {
   insertUserSchema,
@@ -432,6 +432,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Test email error:", error);
       res.status(500).json({ message: "Failed to send test email" });
+    }
+  });
+
+  // Role Limits routes
+  app.get("/api/hotels/current/role-limits", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner can view role limits
+      const currentRole = user.role?.name || '';
+      if (currentRole !== 'owner') {
+        return res.status(403).json({ 
+          message: "Only hotel owner can access role limits configuration" 
+        });
+      }
+      
+      // Get all roles
+      const allRoles = await db.query.roles.findMany();
+      
+      // Get existing role limits for this hotel
+      const existingLimits = await db.query.roleLimits.findMany({
+        where: eq(roleLimits.hotelId, user.hotelId)
+      });
+      
+      // Create a map for easy lookup
+      const limitsMap = new Map(existingLimits.map(limit => [limit.roleId, limit]));
+      
+      // Return all roles with their limits (or defaults if not set)
+      const roleLimitsData = allRoles.map(role => {
+        const existingLimit = limitsMap.get(role.id);
+        return {
+          roleId: role.id,
+          roleName: role.name,
+          roleDescription: role.description,
+          ...existingLimit,
+          // Provide defaults if no limit exists
+          maxTransactionAmount: existingLimit?.maxTransactionAmount || null,
+          maxDailyAmount: existingLimit?.maxDailyAmount || null,
+          requiresApprovalAbove: existingLimit?.requiresApprovalAbove || null,
+          canVoidTransactions: existingLimit?.canVoidTransactions || false,
+          canApproveWastage: existingLimit?.canApproveWastage || false
+        };
+      });
+      
+      res.json(roleLimitsData);
+    } catch (error) {
+      console.error("Role limits fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch role limits" });
+    }
+  });
+
+  app.put("/api/hotels/current/role-limits", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner can update role limits
+      const currentRole = user.role?.name || '';
+      if (currentRole !== 'owner') {
+        return res.status(403).json({ 
+          message: "Only hotel owner can update role limits" 
+        });
+      }
+      
+      const limits = req.body as Array<{
+        roleId: number;
+        maxTransactionAmount?: string | null;
+        maxDailyAmount?: string | null;
+        requiresApprovalAbove?: string | null;
+        canVoidTransactions?: boolean;
+        canApproveWastage?: boolean;
+      }>;
+      
+      if (!Array.isArray(limits)) {
+        return res.status(400).json({ message: "Invalid request body, expected array of role limits" });
+      }
+      
+      // Update or create role limits for each role
+      for (const limit of limits) {
+        // Check if limit already exists
+        const existing = await db.query.roleLimits.findFirst({
+          where: and(
+            eq(roleLimits.hotelId, user.hotelId),
+            eq(roleLimits.roleId, limit.roleId)
+          )
+        });
+        
+        const limitData = {
+          hotelId: user.hotelId,
+          roleId: limit.roleId,
+          maxTransactionAmount: limit.maxTransactionAmount || null,
+          maxDailyAmount: limit.maxDailyAmount || null,
+          requiresApprovalAbove: limit.requiresApprovalAbove || null,
+          canVoidTransactions: limit.canVoidTransactions || false,
+          canApproveWastage: limit.canApproveWastage || false,
+          updatedAt: new Date()
+        };
+        
+        if (existing) {
+          // Update existing
+          await db.update(roleLimits)
+            .set(limitData)
+            .where(eq(roleLimits.id, existing.id));
+        } else {
+          // Create new
+          await db.insert(roleLimits).values(limitData);
+        }
+      }
+      
+      // Log the update
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'update',
+        resourceType: 'role_limits',
+        resourceId: user.hotelId,
+        details: { limitsCount: limits.length },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      
+      res.json({ success: true, message: "Role limits updated successfully" });
+    } catch (error) {
+      console.error("Role limits update error:", error);
+      res.status(400).json({ 
+        message: "Failed to update role limits", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
     }
   });
 
@@ -3940,6 +4073,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if approval is required
       let requiresApproval = false;
       const transactionAmount = Number(sanitizedBody.amount) || 0;
+      
+      // ROLE-BASED TRANSACTION LIMITS
+      // Get user's role limits if they have a roleId
+      if (currentUser.roleId) {
+        const roleLimit = await db.query.roleLimits.findFirst({
+          where: and(
+            eq(roleLimits.hotelId, currentUser.hotelId),
+            eq(roleLimits.roleId, currentUser.roleId)
+          )
+        });
+        
+        if (roleLimit) {
+          // Check if transaction exceeds max transaction amount
+          if (roleLimit.maxTransactionAmount && transactionAmount > Number(roleLimit.maxTransactionAmount)) {
+            return res.status(403).json({ 
+              message: `Transaction amount (${transactionAmount}) exceeds your role's maximum limit (${roleLimit.maxTransactionAmount})` 
+            });
+          }
+          
+          // Check if transaction exceeds requiresApprovalAbove threshold
+          if (roleLimit.requiresApprovalAbove && transactionAmount > Number(roleLimit.requiresApprovalAbove)) {
+            requiresApproval = true;
+          }
+          
+          // Check total transactions for user today against maxDailyAmount
+          if (roleLimit.maxDailyAmount) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const todayTransactions = await db.query.transactions.findMany({
+              where: and(
+                eq(transactions.hotelId, currentUser.hotelId),
+                eq(transactions.createdBy, currentUser.id),
+                gte(transactions.createdAt, today),
+                lt(transactions.createdAt, tomorrow),
+                eq(transactions.isVoided, false)
+              )
+            });
+            
+            const totalToday = todayTransactions.reduce((sum, txn) => sum + Number(txn.amount || 0), 0);
+            const newTotal = totalToday + transactionAmount;
+            
+            if (newTotal > Number(roleLimit.maxDailyAmount)) {
+              return res.status(403).json({ 
+                message: `Daily transaction limit exceeded. Current: ${totalToday}, Limit: ${roleLimit.maxDailyAmount}, Requested: ${transactionAmount}` 
+              });
+            }
+          }
+        }
+      }
       
       // CRITICAL: Validate vendor payments - prevent unauthorized payments
       const isVendorPayment = sanitizedBody.vendorId || 
