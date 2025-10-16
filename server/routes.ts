@@ -832,6 +832,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/devices/update-trust-status", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can manage device trust
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can manage device trust status" 
+        });
+      }
+      
+      const { userId, deviceFingerprint, trustStatus } = req.body;
+      
+      if (!userId || !deviceFingerprint || !trustStatus) {
+        return res.status(400).json({ message: "userId, deviceFingerprint, and trustStatus are required" });
+      }
+      
+      if (!['trusted', 'suspicious', 'blocked'].includes(trustStatus)) {
+        return res.status(400).json({ message: "Invalid trust status. Must be 'trusted', 'suspicious', or 'blocked'" });
+      }
+      
+      // Check if device exists, if not create it first
+      const existingDevice = await storage.getKnownDevice(userId, deviceFingerprint);
+      if (!existingDevice) {
+        // Create the device entry before updating trust status
+        await storage.upsertKnownDevice(userId, deviceFingerprint, { hotelId: user.hotelId });
+      }
+      
+      const updatedDevice = await storage.updateDeviceTrustStatus(userId, deviceFingerprint, trustStatus);
+      
+      // Log the action
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'device_trust_updated',
+        resourceType: 'device',
+        resourceId: deviceFingerprint,
+        details: { 
+          targetUserId: userId,
+          deviceFingerprint,
+          trustStatus,
+          previousStatus: existingDevice?.trustStatus || 'new'
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: true
+      });
+      
+      res.json(updatedDevice);
+    } catch (error) {
+      console.error("Update device trust status error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to update device trust status" 
+      });
+    }
+  });
+
   app.post("/api/hotels/current/audit/send-summary", requireActiveUser, async (req, res) => {
     try {
       const user = req.user as any;
