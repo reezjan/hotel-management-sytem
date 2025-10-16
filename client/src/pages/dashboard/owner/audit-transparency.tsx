@@ -43,6 +43,715 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 
+// Staff Activity Tab Component
+function StaffActivityTab({ dateRange }: { dateRange: { from: Date | undefined; to: Date | undefined } }) {
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("all");
+  const [filterAction, setFilterAction] = useState<string>("all");
+  const [filterRole, setFilterRole] = useState<string>("all");
+  const [sortField, setSortField] = useState<string>("createdAt");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Fetch users data
+  const { data: allUsers = [], isLoading: loadingUsers } = useQuery<any[]>({
+    queryKey: ["/api/users"]
+  });
+
+  // Fetch leave requests
+  const { data: leaveRequests = [], isLoading: loadingLeaves } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/leave-requests"]
+  });
+
+  // Fetch audit logs for staff activity
+  const buildQueryUrl = (baseUrl: string, from?: Date, to?: Date) => {
+    if (!from || !to) return baseUrl;
+    const params = new URLSearchParams({
+      startDate: from.toISOString(),
+      endDate: to.toISOString()
+    });
+    return `${baseUrl}?${params.toString()}`;
+  };
+
+  const { data: auditLogs = [], isLoading: loadingAuditLogs } = useQuery({
+    queryKey: ['/api/audit-logs', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
+    queryFn: async () => {
+      const url = buildQueryUrl('/api/audit-logs', dateRange.from, dateRange.to);
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 5000
+  });
+
+  // Real-time updates
+  useRealtimeQuery({
+    queryKey: ["/api/users"],
+    events: ['user:updated']
+  });
+
+  useRealtimeQuery({
+    queryKey: ['/api/audit-logs'],
+    events: ['audit:created']
+  });
+
+  const isLoading = loadingUsers || loadingLeaves || loadingAuditLogs;
+
+  // Filter active staff
+  const activeStaff = allUsers.filter(u => u.isActive && !u.deletedAt);
+  
+  // Filter online staff
+  const onlineStaff = activeStaff.filter(u => u.isOnline);
+  
+  // Filter staff on leave today
+  const today = new Date();
+  const staffOnLeaveToday = leaveRequests.filter((lr: any) => {
+    if (lr.status !== 'approved') return false;
+    const startDate = new Date(lr.startDate);
+    const endDate = new Date(lr.endDate);
+    return today >= startDate && today <= endDate;
+  });
+
+  // Calculate most active staff
+  const activityCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    auditLogs.forEach((log: any) => {
+      if (log.userId) {
+        counts[log.userId] = (counts[log.userId] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [auditLogs]);
+
+  const mostActiveStaff = useMemo(() => {
+    if (Object.keys(activityCounts).length === 0) return null;
+    const sortedEntries = Object.entries(activityCounts).sort((a, b) => b[1] - a[1]);
+    const [userId, count] = sortedEntries[0];
+    const user = allUsers.find(u => u.id === userId);
+    return { user, count };
+  }, [activityCounts, allUsers]);
+
+  // Filter and sort audit logs for activity table
+  const filteredAuditLogs = useMemo(() => {
+    let result = [...auditLogs];
+
+    if (selectedStaffId !== "all") {
+      result = result.filter(log => log.userId === selectedStaffId);
+    }
+
+    if (filterAction !== "all") {
+      result = result.filter(log => log.action === filterAction);
+    }
+
+    if (filterRole !== "all") {
+      result = result.filter(log => log.user?.role?.name === filterRole);
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      if (sortField === 'createdAt') {
+        aVal = new Date(aVal).getTime();
+        bVal = new Date(bVal).getTime();
+      }
+
+      if (sortDirection === 'asc') {
+        return aVal > bVal ? 1 : -1;
+      } else {
+        return aVal < bVal ? 1 : -1;
+      }
+    });
+
+    return result;
+  }, [auditLogs, selectedStaffId, filterAction, filterRole, sortField, sortDirection]);
+
+  // Get login/logout events
+  const loginHistory = useMemo(() => {
+    return auditLogs.filter((log: any) => 
+      log.action === 'login' || log.action === 'logout'
+    ).map((log: any) => {
+      // Parse user agent for device info
+      const ua = log.userAgent || '';
+      let browser = 'Unknown';
+      let os = 'Unknown';
+      
+      if (ua.includes('Chrome')) browser = 'Chrome';
+      else if (ua.includes('Firefox')) browser = 'Firefox';
+      else if (ua.includes('Safari')) browser = 'Safari';
+      else if (ua.includes('Edge')) browser = 'Edge';
+
+      if (ua.includes('Windows')) os = 'Windows';
+      else if (ua.includes('Mac')) os = 'MacOS';
+      else if (ua.includes('Linux')) os = 'Linux';
+      else if (ua.includes('Android')) os = 'Android';
+      else if (ua.includes('iOS')) os = 'iOS';
+
+      return {
+        ...log,
+        browser,
+        os,
+        device: `${browser} on ${os}`,
+        isNewDevice: log.details?.isNewDevice || false,
+        isNewLocation: log.details?.isNewLocation || false
+      };
+    });
+  }, [auditLogs]);
+
+  // Group login/logout events by user
+  const loginSessions = useMemo(() => {
+    const sessions: any[] = [];
+    const userLogins: Record<string, any> = {};
+
+    loginHistory.forEach((log: any) => {
+      if (log.action === 'login') {
+        userLogins[log.userId] = log;
+      } else if (log.action === 'logout' && userLogins[log.userId]) {
+        const loginLog = userLogins[log.userId];
+        const loginTime = new Date(loginLog.createdAt);
+        const logoutTime = new Date(log.createdAt);
+        const duration = (logoutTime.getTime() - loginTime.getTime()) / (1000 * 60); // minutes
+
+        sessions.push({
+          user: loginLog.user,
+          loginTime: loginLog.createdAt,
+          logoutTime: log.createdAt,
+          duration: duration.toFixed(0),
+          device: loginLog.device,
+          browser: loginLog.browser,
+          os: loginLog.os,
+          location: loginLog.ipAddress,
+          isNewDevice: loginLog.isNewDevice,
+          isNewLocation: loginLog.isNewLocation
+        });
+
+        delete userLogins[log.userId];
+      }
+    });
+
+    // Add active sessions (login without logout)
+    Object.values(userLogins).forEach((loginLog: any) => {
+      sessions.push({
+        user: loginLog.user,
+        loginTime: loginLog.createdAt,
+        logoutTime: null,
+        duration: null,
+        device: loginLog.device,
+        browser: loginLog.browser,
+        os: loginLog.os,
+        location: loginLog.ipAddress,
+        isNewDevice: loginLog.isNewDevice,
+        isNewLocation: loginLog.isNewLocation
+      });
+    });
+
+    return sessions.sort((a, b) => 
+      new Date(b.loginTime).getTime() - new Date(a.loginTime).getTime()
+    );
+  }, [loginHistory]);
+
+  // Get action color
+  const getActionColor = (action: string) => {
+    if (action === 'create') return 'text-green-600 dark:text-green-400';
+    if (action === 'update') return 'text-blue-600 dark:text-blue-400';
+    if (action === 'delete' || action === 'void') return 'text-red-600 dark:text-red-400';
+    if (action === 'approve') return 'text-yellow-600 dark:text-yellow-400';
+    return 'text-gray-600 dark:text-gray-400';
+  };
+
+  const getActionBgColor = (action: string) => {
+    if (action === 'create') return 'bg-green-50 dark:bg-green-900/10';
+    if (action === 'update') return 'bg-blue-50 dark:bg-blue-900/10';
+    if (action === 'delete' || action === 'void') return 'bg-red-50 dark:bg-red-900/10';
+    if (action === 'approve') return 'bg-yellow-50 dark:bg-yellow-900/10';
+    return 'bg-gray-50 dark:bg-gray-900/10';
+  };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // Get unique values for filters
+  const uniqueActions = useMemo(() => {
+    return Array.from(new Set(auditLogs.map((log: any) => log.action))).filter(Boolean) as string[];
+  }, [auditLogs]);
+
+  const uniqueRoles = useMemo(() => {
+    return Array.from(new Set(auditLogs.map((log: any) => log.user?.role?.name).filter(Boolean))) as string[];
+  }, [auditLogs]);
+
+  // Get selected staff details
+  const selectedStaffDetails = useMemo(() => {
+    if (selectedStaffId === "all") return null;
+    
+    const staff = allUsers.find(u => u.id === selectedStaffId);
+    if (!staff) return null;
+
+    const staffLogs = auditLogs.filter((log: any) => log.userId === selectedStaffId);
+    const staffTransactions = staffLogs.filter((log: any) => log.resourceType === 'transaction');
+    const staffApprovals = staffLogs.filter((log: any) => log.action === 'approve');
+    const staffLogins = loginHistory.filter((log: any) => log.userId === selectedStaffId);
+    
+    const devices = Array.from(new Set(staffLogins.map((log: any) => log.device))) as string[];
+
+    return {
+      staff,
+      totalActions: staffLogs.length,
+      transactions: staffTransactions.length,
+      approvals: staffApprovals.length,
+      logins: staffLogins.length,
+      devices,
+      recentActivity: staffLogs.slice(0, 10)
+    };
+  }, [selectedStaffId, allUsers, auditLogs, loginHistory]);
+
+  return (
+    <div className="space-y-6">
+      {/* Section 1: Staff Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card data-testid="card-total-active-staff" className="border-l-4 border-l-blue-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Active Staff</CardTitle>
+            <Users className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold" data-testid="text-active-staff-count">
+                  {activeStaff.length}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Active employees
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-online-staff" className="border-l-4 border-l-green-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Currently Online</CardTitle>
+            <Activity className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold" data-testid="text-online-staff-count">
+                  {onlineStaff.length}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Staff online now
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-staff-on-leave" className="border-l-4 border-l-orange-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Staff on Leave Today</CardTitle>
+            <Clock className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold" data-testid="text-on-leave-count">
+                  {staffOnLeaveToday.length}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  On approved leave
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-most-active-staff" className="border-l-4 border-l-purple-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Most Active Staff</CardTitle>
+            <TrendingUp className="h-4 w-4 text-purple-500" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-full" />
+            ) : mostActiveStaff ? (
+              <>
+                <div className="text-lg font-bold truncate" data-testid="text-most-active-name">
+                  {mostActiveStaff.user?.username || 'N/A'}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1" data-testid="text-most-active-count">
+                  {mostActiveStaff.count} actions
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No activity</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Section 2: Staff Activity Table */}
+      <Card data-testid="card-staff-activity-table">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Staff Activity Log
+          </CardTitle>
+          <CardDescription>Detailed log of all staff actions and operations</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2">
+            <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+              <SelectTrigger className="w-[200px]" data-testid="select-staff-filter">
+                <SelectValue placeholder="All Staff" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Staff</SelectItem>
+                {activeStaff.map(staff => (
+                  <SelectItem key={staff.id} value={staff.id}>{staff.username}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterAction} onValueChange={setFilterAction}>
+              <SelectTrigger className="w-[200px]" data-testid="select-action-filter">
+                <SelectValue placeholder="All Actions" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Actions</SelectItem>
+                {uniqueActions.map(action => (
+                  <SelectItem key={action} value={action}>{action}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterRole} onValueChange={setFilterRole}>
+              <SelectTrigger className="w-[200px]" data-testid="select-role-filter">
+                <SelectValue placeholder="All Roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {uniqueRoles.map(role => (
+                  <SelectItem key={role} value={role}>{role}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Activity Table */}
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="cursor-pointer" onClick={() => handleSort('user')} data-testid="th-staff-name">
+                    <div className="flex items-center gap-1">
+                      Staff Name
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </TableHead>
+                  <TableHead data-testid="th-role">Role</TableHead>
+                  <TableHead className="cursor-pointer" onClick={() => handleSort('action')} data-testid="th-action">
+                    <div className="flex items-center gap-1">
+                      Action
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </TableHead>
+                  <TableHead data-testid="th-resource">Resource</TableHead>
+                  <TableHead data-testid="th-details">Details</TableHead>
+                  <TableHead data-testid="th-device-info">Device</TableHead>
+                  <TableHead data-testid="th-location">Location</TableHead>
+                  <TableHead className="cursor-pointer" onClick={() => handleSort('createdAt')} data-testid="th-time">
+                    <div className="flex items-center gap-1">
+                      Time
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  [...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                      {[...Array(8)].map((_, j) => (
+                        <TableCell key={j}>
+                          <Skeleton className="h-4 w-full" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : filteredAuditLogs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground" data-testid="text-no-activity">
+                      No staff activity found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredAuditLogs.slice(0, 50).map((log: any) => (
+                    <TableRow 
+                      key={log.id} 
+                      className={getActionBgColor(log.action)}
+                      data-testid={`activity-row-${log.id}`}
+                    >
+                      <TableCell className="font-medium text-xs" data-testid={`td-staff-${log.id}`}>
+                        {log.user?.username || 'Unknown'}
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-role-${log.id}`}>
+                        {log.user?.role?.name || '-'}
+                      </TableCell>
+                      <TableCell data-testid={`td-action-${log.id}`}>
+                        <Badge className={getActionColor(log.action)}>
+                          {log.action}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-resource-${log.id}`}>
+                        {log.resourceType || '-'}
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[200px] truncate" data-testid={`td-details-${log.id}`}>
+                        {log.resourceId || '-'}
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-device-${log.id}`}>
+                        {log.userAgent ? (
+                          <span className="truncate max-w-[150px] block" title={log.userAgent}>
+                            {log.userAgent.split(' ')[0]}
+                          </span>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-location-${log.id}`}>
+                        {log.ipAddress || '-'}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap" data-testid={`td-time-${log.id}`}>
+                        {new Date(log.createdAt).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 3: Login History */}
+      <Card data-testid="card-login-history">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Login History
+          </CardTitle>
+          <CardDescription>All login and logout events with device information</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead data-testid="th-login-staff">Staff Name</TableHead>
+                  <TableHead data-testid="th-login-time">Login Time</TableHead>
+                  <TableHead data-testid="th-logout-time">Logout Time</TableHead>
+                  <TableHead data-testid="th-duration">Duration</TableHead>
+                  <TableHead data-testid="th-browser">Browser</TableHead>
+                  <TableHead data-testid="th-os">OS</TableHead>
+                  <TableHead data-testid="th-ip">Location (IP)</TableHead>
+                  <TableHead data-testid="th-flags">Flags</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  [...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                      {[...Array(8)].map((_, j) => (
+                        <TableCell key={j}>
+                          <Skeleton className="h-4 w-full" />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : loginSessions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground" data-testid="text-no-logins">
+                      No login history found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  loginSessions.slice(0, 30).map((session: any, index: number) => (
+                    <TableRow 
+                      key={index}
+                      className={session.isNewDevice || session.isNewLocation ? 'bg-red-50 dark:bg-red-900/10' : ''}
+                      data-testid={`login-row-${index}`}
+                    >
+                      <TableCell className="font-medium text-xs" data-testid={`td-login-staff-${index}`}>
+                        {session.user?.username || 'Unknown'}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap" data-testid={`td-login-time-${index}`}>
+                        {new Date(session.loginTime).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap" data-testid={`td-logout-time-${index}`}>
+                        {session.logoutTime ? new Date(session.logoutTime).toLocaleString() : (
+                          <Badge variant="outline" className="text-green-600">Active</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-duration-${index}`}>
+                        {session.duration ? `${session.duration} min` : '-'}
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-browser-${index}`}>
+                        {session.browser}
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-os-${index}`}>
+                        {session.os}
+                      </TableCell>
+                      <TableCell className="text-xs" data-testid={`td-ip-${index}`}>
+                        {session.location || '-'}
+                      </TableCell>
+                      <TableCell data-testid={`td-flags-${index}`}>
+                        {session.isNewDevice && (
+                          <Badge variant="destructive" className="text-xs mr-1">New Device</Badge>
+                        )}
+                        {session.isNewLocation && (
+                          <Badge variant="destructive" className="text-xs">New Location</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 4: Per-Staff Drill-Down */}
+      <Card data-testid="card-staff-drilldown">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Eye className="h-5 w-5" />
+            Staff Detail View
+          </CardTitle>
+          <CardDescription>Select a staff member to view their detailed activity timeline</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Select value={selectedStaffId} onValueChange={setSelectedStaffId}>
+            <SelectTrigger data-testid="select-staff-drilldown">
+              <SelectValue placeholder="Select a staff member" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Select a staff member</SelectItem>
+              {activeStaff.map(staff => (
+                <SelectItem key={staff.id} value={staff.id}>
+                  {staff.username} ({staff.role?.name || 'N/A'})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {selectedStaffDetails && (
+            <div className="space-y-4">
+              {/* Staff Summary */}
+              <div className="grid gap-4 md:grid-cols-4">
+                <Card className="border-l-4 border-l-blue-500">
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold" data-testid="text-staff-total-actions">
+                      {selectedStaffDetails.totalActions}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Total Actions</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-green-500">
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold" data-testid="text-staff-transactions">
+                      {selectedStaffDetails.transactions}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Transactions</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-yellow-500">
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold" data-testid="text-staff-approvals">
+                      {selectedStaffDetails.approvals}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Approvals Given</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-purple-500">
+                  <CardContent className="pt-6">
+                    <div className="text-2xl font-bold" data-testid="text-staff-logins">
+                      {selectedStaffDetails.logins}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Login Sessions</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Devices Used */}
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Devices Used</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedStaffDetails.devices.length > 0 ? (
+                    selectedStaffDetails.devices.map((device: string, idx: number) => (
+                      <Badge key={idx} variant="outline" data-testid={`badge-device-${idx}`}>
+                        {device}
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No device information available</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Recent Activity Timeline */}
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Recent Activity Timeline</h4>
+                <div className="space-y-2">
+                  {selectedStaffDetails.recentActivity.length > 0 ? (
+                    selectedStaffDetails.recentActivity.map((activity: any, idx: number) => (
+                      <div 
+                        key={idx} 
+                        className={`flex items-center justify-between p-3 rounded-lg ${getActionBgColor(activity.action)}`}
+                        data-testid={`timeline-item-${idx}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Badge className={getActionColor(activity.action)}>
+                            {activity.action}
+                          </Badge>
+                          <div>
+                            <p className="text-sm font-medium">{activity.resourceType}</p>
+                            <p className="text-xs text-muted-foreground">{activity.resourceId || 'N/A'}</p>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(activity.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No recent activity</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedStaffId === "all" && (
+            <div className="text-center py-8 text-muted-foreground" data-testid="text-select-staff">
+              Please select a staff member to view their detailed activity
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function AuditTransparencyPage() {
   const [, setLocation] = useLocation();
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -1307,58 +2016,7 @@ export default function AuditTransparencyPage() {
 
         {/* Tab 3: Staff Activity */}
         <TabsContent value="staff" className="space-y-6">
-          <Card data-testid="card-staff-activity">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Staff Activity Summary
-              </CardTitle>
-              <CardDescription>Track all staff actions and performance metrics</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="flex items-start gap-4">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-1/2" />
-                        <Skeleton className="h-3 w-3/4" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {staffActivity.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8" data-testid="text-no-staff-activity">
-                      No staff activity recorded.
-                    </p>
-                  ) : (
-                    staffActivity.map((activity: any, index: number) => (
-                      <div 
-                        key={index} 
-                        className="flex items-start justify-between border-b pb-4 hover:bg-muted/50 p-2 rounded-lg transition-colors" 
-                        data-testid={`staff-activity-${index}`}
-                      >
-                        <div className="space-y-1 flex-1">
-                          <p className="text-sm font-medium" data-testid={`text-staff-name-${index}`}>
-                            {activity.username} ({activity.role})
-                          </p>
-                          <p className="text-xs text-muted-foreground" data-testid={`text-staff-actions-${index}`}>
-                            Total Actions: {activity.actionCount || 0}
-                          </p>
-                        </div>
-                        <Badge data-testid={`badge-staff-status-${index}`}>
-                          Active
-                        </Badge>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <StaffActivityTab dateRange={dateRange} />
         </TabsContent>
 
         {/* Tab 4: Security Alerts */}
