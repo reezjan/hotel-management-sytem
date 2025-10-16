@@ -8,6 +8,7 @@ import { db } from "./db";
 import { kotOrders, type KotOrder, users, hotels } from "@shared/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { patternDetector } from "./pattern-detector";
+import { alertService } from "./alert-service";
 
 // Set timezone to Nepal
 process.env.TZ = 'Asia/Kathmandu';
@@ -159,6 +160,35 @@ app.use('/uploads', express.static('uploads'));
   });
   
   log('Daily pattern detection audit scheduled (every day at 6 AM)');
+
+  // Set up daily owner summary email - runs every day at 7 AM
+  cron.schedule('0 7 * * *', async () => {
+    try {
+      log('Sending daily owner summary emails...');
+      
+      // Get all active hotels
+      const activeHotels = await db
+        .select()
+        .from(hotels)
+        .where(eq(hotels.isActive, true));
+      
+      // Send summary email for each hotel
+      for (const hotel of activeHotels) {
+        const result = await alertService.sendDailySummaryEmail(hotel.id);
+        if (result.success) {
+          log(`Daily summary sent for hotel: ${hotel.name}`);
+        } else {
+          log(`Failed to send summary for hotel ${hotel.name}: ${result.error}`);
+        }
+      }
+      
+      log(`Daily summary emails sent for ${activeHotels.length} hotels`);
+    } catch (error) {
+      console.error('Error in daily summary email cron job:', error);
+    }
+  });
+  
+  log('Daily owner summary email scheduled (every day at 7 AM)');
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.
