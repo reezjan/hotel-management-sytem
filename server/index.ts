@@ -5,8 +5,9 @@ import { setupWebSocket } from "./websocket";
 import cron from "node-cron";
 import { storage } from "./storage";
 import { db } from "./db";
-import { kotOrders, type KotOrder, users } from "@shared/schema";
+import { kotOrders, type KotOrder, users, hotels } from "@shared/schema";
 import { and, eq, isNull } from "drizzle-orm";
+import { patternDetector } from "./pattern-detector";
 
 // Set timezone to Nepal
 process.env.TZ = 'Asia/Kathmandu';
@@ -134,6 +135,30 @@ app.use('/uploads', express.static('uploads'));
   });
   
   log('Annual leave balance reset cron job scheduled (every January 1st)');
+
+  // Set up daily pattern detection audit - runs every day at 6 AM
+  cron.schedule('0 6 * * *', async () => {
+    try {
+      log('Running daily pattern detection audit...');
+      
+      // Get all active hotels
+      const activeHotels = await db
+        .select()
+        .from(hotels)
+        .where(eq(hotels.isActive, true));
+      
+      // Run audit for each hotel
+      for (const hotel of activeHotels) {
+        await patternDetector.runDailyAudit(hotel.id);
+      }
+      
+      log(`Daily audit completed for ${activeHotels.length} hotels`);
+    } catch (error) {
+      console.error('Error in daily pattern detection audit:', error);
+    }
+  });
+  
+  log('Daily pattern detection audit scheduled (every day at 6 AM)');
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.
