@@ -430,6 +430,270 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Audit Dashboard routes
+  app.get("/api/hotels/current/audit/overview", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view audit overview
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access audit dashboard" 
+        });
+      }
+      
+      const overview = await storage.getAuditOverview(user.hotelId);
+      res.json(overview);
+    } catch (error) {
+      console.error("Audit overview error:", error);
+      res.status(500).json({ message: "Failed to fetch audit overview" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/financial-activity", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view financial activity
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access financial audit data" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.txnType) {
+        filters.txnType = req.query.txnType as string;
+      }
+      if (req.query.paymentMethod) {
+        filters.paymentMethod = req.query.paymentMethod as string;
+      }
+      if (req.query.staffId) {
+        filters.staffId = req.query.staffId as string;
+      }
+      
+      const activity = await storage.getFinancialActivity(user.hotelId, filters);
+      res.json(activity);
+    } catch (error) {
+      console.error("Financial activity error:", error);
+      res.status(500).json({ message: "Failed to fetch financial activity" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/staff-activity", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view staff activity
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access staff audit data" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.staffId) {
+        filters.staffId = req.query.staffId as string;
+      }
+      if (req.query.actionType) {
+        filters.actionType = req.query.actionType as string;
+      }
+      
+      const activity = await storage.getStaffActivity(user.hotelId, filters);
+      res.json(activity);
+    } catch (error) {
+      console.error("Staff activity error:", error);
+      res.status(500).json({ message: "Failed to fetch staff activity" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/security-alerts", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view security alerts
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access security alerts" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.alertType) {
+        filters.alertType = req.query.alertType as string;
+      }
+      if (req.query.status) {
+        filters.status = req.query.status as string;
+      }
+      
+      const alerts = await storage.getSecurityAlerts(user.hotelId, filters);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Security alerts error:", error);
+      res.status(500).json({ message: "Failed to fetch security alerts" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/photo-evidence", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view photo evidence
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access photo evidence" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.evidenceType) {
+        filters.evidenceType = req.query.evidenceType as string;
+      }
+      
+      const evidence = await storage.getPhotoEvidence(user.hotelId, filters);
+      res.json(evidence);
+    } catch (error) {
+      console.error("Photo evidence error:", error);
+      res.status(500).json({ message: "Failed to fetch photo evidence" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/device-history", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view device history
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access device history" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.userId) {
+        filters.userId = req.query.userId as string;
+      }
+      
+      const history = await storage.getDeviceHistory(user.hotelId, filters);
+      res.json(history);
+    } catch (error) {
+      console.error("Device history error:", error);
+      res.status(500).json({ message: "Failed to fetch device history" });
+    }
+  });
+
+  app.post("/api/hotels/current/audit/alerts/:id/resolve", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can resolve alerts
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can resolve security alerts" 
+        });
+      }
+      
+      const { id } = req.params;
+      const { resolution, notes } = req.body;
+      
+      if (!resolution || !notes) {
+        return res.status(400).json({ message: "Resolution and notes are required" });
+      }
+      
+      const alert = await storage.resolveSecurityAlert(id, resolution, notes);
+      res.json(alert);
+    } catch (error) {
+      console.error("Resolve alert error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to resolve alert" 
+      });
+    }
+  });
+
   // Guest routes
   app.get("/api/hotels/current/guests", async (req, res) => {
     try {
