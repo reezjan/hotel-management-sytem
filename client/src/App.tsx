@@ -26,6 +26,7 @@ const OwnerReports = lazy(() => import("@/pages/dashboard/owner/reports"));
 const OwnerReport = lazy(() => import("@/pages/dashboard/owner/report"));
 const OwnerAuditTransparency = lazy(() => import("@/pages/dashboard/owner/audit-transparency"));
 const OwnerAmenities = lazy(() => import("@/pages/dashboard/owner/amenities"));
+const OwnerApprovals = lazy(() => import("@/pages/dashboard/owner/approvals"));
 const ManagerDashboard = lazy(() => import("@/pages/dashboard/manager"));
 const StaffManagement = lazy(() => import("@/pages/dashboard/manager/staff-management"));
 const AttendanceReports = lazy(() => import("@/pages/dashboard/manager/attendance-reports"));
@@ -146,6 +147,7 @@ function Router() {
         <ProtectedRoute path="/owner/reports" component={OwnerReports} allowedRoles={["owner"]} />
         <ProtectedRoute path="/owner/audit-transparency" component={OwnerAuditTransparency} allowedRoles={["owner"]} />
         <ProtectedRoute path="/owner/amenities" component={OwnerAmenities} allowedRoles={["owner"]} />
+        <ProtectedRoute path="/owner/approvals" component={OwnerApprovals} allowedRoles={["owner"]} />
         <ProtectedRoute path="/owner/vouchers" component={DiscountVouchers} allowedRoles={["owner"]} />
         
         <ProtectedRoute path="/manager" component={ManagerDashboard} allowedRoles={["manager"]} />
