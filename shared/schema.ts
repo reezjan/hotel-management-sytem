@@ -120,6 +120,23 @@ export const loginHistory = pgTable("login_history", {
   logoutAt: timestamp("logout_at", { withTimezone: true })
 });
 
+// Known Devices Table (for device trust management)
+export const knownDevices = pgTable("known_devices", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  deviceFingerprint: text("device_fingerprint").notNull(),
+  browser: text("browser"),
+  os: text("os"),
+  trustStatus: text("trust_status").notNull().default('trusted'),
+  firstSeen: timestamp("first_seen", { withTimezone: true }).defaultNow(),
+  lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+}, (table) => ({
+  uniqueUserDevice: unique().on(table.userId, table.deviceFingerprint)
+}));
+
 // Security Settings Table
 export const securitySettings = pgTable("security_settings", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1583,3 +1600,15 @@ export const insertSecuritySettingsSchema = createInsertSchema(securitySettings)
 
 export type InsertSecuritySettings = z.infer<typeof insertSecuritySettingsSchema>;
 export type SecuritySettings = typeof securitySettings.$inferSelect;
+
+// Known Devices
+export const insertKnownDeviceSchema = createInsertSchema(knownDevices).omit({
+  id: true,
+  firstSeen: true,
+  lastSeen: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertKnownDevice = z.infer<typeof insertKnownDeviceSchema>;
+export type KnownDevice = typeof knownDevices.$inferSelect;
