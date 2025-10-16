@@ -6,7 +6,7 @@ import { logAudit } from "./audit";
 import { db } from "./db";
 import { wsEvents } from "./websocket";
 import { uploadWastagePhoto, uploadBillDocument } from "./upload";
-import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings } from "@shared/schema";
+import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings, loginHistory } from "@shared/schema";
 import { eq, and, isNull, asc, desc, sql, ne } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
 import {
@@ -7368,6 +7368,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Audit log fetch error:", error);
       res.status(500).json({ message: "Failed to fetch audit logs" });
+    }
+  });
+
+  // Login History Endpoint
+  app.get("/api/login-history", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      if (!currentUser || !currentUser.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only managers and owners can view login history
+      const canViewLoginHistory = ['manager', 'owner', 'finance', 'super_admin'].includes(currentUser.role?.name || '');
+      if (!canViewLoginHistory) {
+        return res.status(403).json({ 
+          message: "Only managers can view login history" 
+        });
+      }
+      
+      const { startDate, endDate, userId } = req.query;
+      
+      // Build query with filters
+      const conditions: any[] = [eq(loginHistory.hotelId, currentUser.hotelId)];
+      
+      if (userId && typeof userId === 'string') {
+        conditions.push(eq(loginHistory.userId, userId));
+      }
+      
+      // Add date filters if provided
+      if (startDate && typeof startDate === 'string') {
+        conditions.push(sql`${loginHistory.loginAt} >= ${new Date(startDate).toISOString()}`);
+      }
+      if (endDate && typeof endDate === 'string') {
+        conditions.push(sql`${loginHistory.loginAt} <= ${new Date(endDate).toISOString()}`);
+      }
+      
+      const history = await db
+        .select({
+          id: loginHistory.id,
+          userId: loginHistory.userId,
+          hotelId: loginHistory.hotelId,
+          deviceFingerprint: loginHistory.deviceFingerprint,
+          browser: loginHistory.browser,
+          os: loginHistory.os,
+          ip: loginHistory.ip,
+          location: loginHistory.location,
+          isNewDevice: loginHistory.isNewDevice,
+          isNewLocation: loginHistory.isNewLocation,
+          loginAt: loginHistory.loginAt,
+          logoutAt: loginHistory.logoutAt,
+          user: sql`json_build_object(
+            'id', ${users.id},
+            'username', ${users.username},
+            'email', ${users.email},
+            'role', json_build_object(
+              'id', ${roles.id},
+              'name', ${roles.name}
+            )
+          )`
+        })
+        .from(loginHistory)
+        .leftJoin(users, eq(loginHistory.userId, users.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
+        .where(and(...conditions))
+        .orderBy(sql`${loginHistory.loginAt} DESC`)
+        .limit(1000);
+      
+      res.json(history);
+    } catch (error) {
+      console.error("Login history fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch login history" });
     }
   });
 
