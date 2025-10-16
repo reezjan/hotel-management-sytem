@@ -1948,6 +1948,726 @@ function PhotoEvidenceTab({
   );
 }
 
+// Device & Location History Tab Component
+function DeviceLocationTab({ dateRange }: { dateRange: { from: Date | undefined; to: Date | undefined } }) {
+  const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>("all");
+  const [deviceTrustStatus, setDeviceTrustStatus] = useState<Record<string, 'trusted' | 'suspicious' | 'blocked'>>({});
+  const [selectedDevice, setSelectedDevice] = useState<any>(null);
+  const [showDeviceModal, setShowDeviceModal] = useState(false);
+
+  // Fetch login history
+  const buildQueryUrl = (baseUrl: string, from?: Date, to?: Date) => {
+    if (!from || !to) return baseUrl;
+    const params = new URLSearchParams({
+      startDate: from.toISOString(),
+      endDate: to.toISOString()
+    });
+    return `${baseUrl}?${params.toString()}`;
+  };
+
+  const { data: loginHistoryData = [], isLoading } = useQuery({
+    queryKey: ['/api/login-history', dateRange.from?.toISOString(), dateRange.to?.toISOString()],
+    queryFn: async () => {
+      const url = buildQueryUrl('/api/login-history', dateRange.from, dateRange.to);
+      const res = await fetch(url, { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: 30000
+  });
+
+  // Fetch users for filtering
+  const { data: allUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/users"]
+  });
+
+  // Real-time updates
+  useRealtimeQuery({
+    queryKey: ['/api/login-history'],
+    events: ['login:created']
+  });
+
+  // Section 1: Known Devices
+  const knownDevices = useMemo(() => {
+    const deviceMap = new Map();
+    
+    loginHistoryData.forEach((login: any) => {
+      const fingerprint = login.deviceFingerprint || 'unknown';
+      
+      if (!deviceMap.has(fingerprint)) {
+        deviceMap.set(fingerprint, {
+          fingerprint,
+          browser: login.browser || 'Unknown',
+          os: login.os || 'Unknown',
+          firstSeen: login.loginAt,
+          lastSeen: login.loginAt,
+          loginCount: 0,
+          users: new Set(),
+          logins: []
+        });
+      }
+      
+      const device = deviceMap.get(fingerprint);
+      device.loginCount++;
+      device.users.add(login.user?.username || 'Unknown');
+      device.logins.push(login);
+      
+      // Update first and last seen
+      if (new Date(login.loginAt) < new Date(device.firstSeen)) {
+        device.firstSeen = login.loginAt;
+      }
+      if (new Date(login.loginAt) > new Date(device.lastSeen)) {
+        device.lastSeen = login.loginAt;
+      }
+    });
+    
+    return Array.from(deviceMap.values()).map(d => ({
+      ...d,
+      users: Array.from(d.users),
+      trustStatus: deviceTrustStatus[d.fingerprint] || 'trusted'
+    })).sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+  }, [loginHistoryData, deviceTrustStatus]);
+
+  // Section 2: Location Map/List
+  const knownLocations = useMemo(() => {
+    const locationMap = new Map();
+    
+    loginHistoryData.forEach((login: any) => {
+      const location = login.location || 'Unknown';
+      const [city, country] = location.split(', ');
+      const ip = login.ip || 'Unknown';
+      
+      const key = location;
+      
+      if (!locationMap.has(key)) {
+        locationMap.set(key, {
+          city: city || 'Unknown',
+          country: country || 'Unknown',
+          location,
+          ip,
+          firstSeen: login.loginAt,
+          lastSeen: login.loginAt,
+          loginCount: 0,
+          users: new Set(),
+          logins: []
+        });
+      }
+      
+      const loc = locationMap.get(key);
+      loc.loginCount++;
+      loc.users.add(login.user?.username || 'Unknown');
+      loc.logins.push(login);
+      
+      if (new Date(login.loginAt) < new Date(loc.firstSeen)) {
+        loc.firstSeen = login.loginAt;
+      }
+      if (new Date(login.loginAt) > new Date(loc.lastSeen)) {
+        loc.lastSeen = login.loginAt;
+      }
+    });
+    
+    return Array.from(locationMap.values()).map(l => ({
+      ...l,
+      users: Array.from(l.users)
+    })).sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+  }, [loginHistoryData]);
+
+  // Section 3: Anomaly Detection
+  const anomalies = useMemo(() => {
+    const detected: any[] = [];
+    
+    // Group logins by user and time
+    const userLogins = new Map();
+    loginHistoryData.forEach((login: any) => {
+      const userId = login.userId;
+      if (!userLogins.has(userId)) {
+        userLogins.set(userId, []);
+      }
+      userLogins.get(userId).push(login);
+    });
+    
+    // Check for anomalies
+    userLogins.forEach((logins, userId) => {
+      const sortedLogins = logins.sort((a: any, b: any) => 
+        new Date(a.loginAt).getTime() - new Date(b.loginAt).getTime()
+      );
+      
+      // Check for impossible travel (same user, different locations, short time)
+      for (let i = 0; i < sortedLogins.length - 1; i++) {
+        const login1 = sortedLogins[i];
+        const login2 = sortedLogins[i + 1];
+        
+        const timeDiff = (new Date(login2.loginAt).getTime() - new Date(login1.loginAt).getTime()) / (1000 * 60); // minutes
+        
+        if (login1.location !== login2.location && timeDiff < 60) {
+          detected.push({
+            type: 'impossible_travel',
+            severity: 'high',
+            user: login1.user,
+            description: `${login1.user?.username || 'User'} logged in from ${login2.location} just ${Math.round(timeDiff)} minutes after logging in from ${login1.location}`,
+            timestamp: login2.loginAt,
+            details: { login1, login2 }
+          });
+        }
+      }
+      
+      // Check for foreign country login
+      logins.forEach((login: any) => {
+        const [, country] = (login.location || '').split(', ');
+        if (country && country !== 'Nepal' && country !== 'Unknown') {
+          detected.push({
+            type: 'foreign_login',
+            severity: 'medium',
+            user: login.user,
+            description: `${login.user?.username || 'User'} logged in from ${login.location}`,
+            timestamp: login.loginAt,
+            details: { login }
+          });
+        }
+      });
+      
+      // Check for new device used multiple times quickly
+      const deviceLogins = new Map();
+      logins.forEach((login: any) => {
+        if (login.isNewDevice) {
+          const fp = login.deviceFingerprint;
+          if (!deviceLogins.has(fp)) {
+            deviceLogins.set(fp, []);
+          }
+          deviceLogins.get(fp).push(login);
+        }
+      });
+      
+      deviceLogins.forEach((devLogins) => {
+        if (devLogins.length > 2) {
+          const firstLogin = devLogins[0];
+          detected.push({
+            type: 'new_device_multiple',
+            severity: 'medium',
+            user: firstLogin.user,
+            description: `New device used ${devLogins.length} times by ${firstLogin.user?.username || 'User'}`,
+            timestamp: firstLogin.loginAt,
+            details: { logins: devLogins }
+          });
+        }
+      });
+    });
+    
+    // Check for device shared by multiple users
+    const deviceUsers = new Map();
+    loginHistoryData.forEach((login: any) => {
+      const fp = login.deviceFingerprint;
+      if (!deviceUsers.has(fp)) {
+        deviceUsers.set(fp, new Set());
+      }
+      deviceUsers.get(fp).add(login.user?.username);
+    });
+    
+    deviceUsers.forEach((users, fp) => {
+      if (users.size > 1) {
+        const device = knownDevices.find(d => d.fingerprint === fp);
+        detected.push({
+          type: 'shared_device',
+          severity: 'low',
+          user: { username: 'Multiple Users' },
+          description: `Device shared by ${users.size} users: ${Array.from(users).join(', ')}`,
+          timestamp: device?.lastSeen || new Date().toISOString(),
+          details: { device, users: Array.from(users) }
+        });
+      }
+    });
+    
+    return detected.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }, [loginHistoryData, knownDevices]);
+
+  // Section 4: Access Timeline
+  const timelineEvents = useMemo(() => {
+    return loginHistoryData.map((login: any) => ({
+      ...login,
+      novelty: login.isNewDevice ? 'new-device' : login.isNewLocation ? 'new-location' : 'normal'
+    })).sort((a: any, b: any) => 
+      new Date(b.loginAt).getTime() - new Date(a.loginAt).getTime()
+    );
+  }, [loginHistoryData]);
+
+  // Filtered timeline events
+  const filteredTimelineEvents = useMemo(() => {
+    if (selectedStaffFilter === 'all') return timelineEvents;
+    return timelineEvents.filter((e: any) => e.userId === selectedStaffFilter);
+  }, [timelineEvents, selectedStaffFilter]);
+
+  const markDeviceAs = (fingerprint: string, status: 'trusted' | 'suspicious' | 'blocked') => {
+    setDeviceTrustStatus(prev => ({ ...prev, [fingerprint]: status }));
+  };
+
+  const viewDeviceDetails = (device: any) => {
+    setSelectedDevice(device);
+    setShowDeviceModal(true);
+  };
+
+  const maskIP = (ip: string) => {
+    if (!ip || ip === 'Unknown') return 'Unknown';
+    const parts = ip.split('.');
+    if (parts.length === 4) {
+      return `${parts[0]}.${parts[1]}.***.**`;
+    }
+    return ip.substring(0, 10) + '...';
+  };
+
+  const maskFingerprint = (fp: string) => {
+    if (!fp || fp === 'unknown') return 'Unknown';
+    return fp.substring(0, 12) + '...';
+  };
+
+  const getSeverityColor = (severity: string) => {
+    if (severity === 'high') return 'text-red-600 dark:text-red-400';
+    if (severity === 'medium') return 'text-orange-600 dark:text-orange-400';
+    return 'text-yellow-600 dark:text-yellow-400';
+  };
+
+  const getSeverityBgColor = (severity: string) => {
+    if (severity === 'high') return 'bg-red-50 dark:bg-red-900/10 border-l-4 border-l-red-500';
+    if (severity === 'medium') return 'bg-orange-50 dark:bg-orange-900/10 border-l-4 border-l-orange-500';
+    return 'bg-yellow-50 dark:bg-yellow-900/10 border-l-4 border-l-yellow-500';
+  };
+
+  const getNoveltyColor = (novelty: string) => {
+    if (novelty === 'new-device') return 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300';
+    if (novelty === 'new-location') return 'bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300';
+    return 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300';
+  };
+
+  const getTrustStatusBadge = (status: string) => {
+    if (status === 'trusted') return 'bg-green-500 text-white';
+    if (status === 'suspicious') return 'bg-orange-500 text-white';
+    if (status === 'blocked') return 'bg-red-500 text-white';
+    return 'bg-gray-500 text-white';
+  };
+
+  const exportData = () => {
+    const data = {
+      devices: knownDevices,
+      locations: knownLocations,
+      anomalies,
+      timeline: timelineEvents
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `device-location-history-${new Date().toISOString()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header with Export */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Device & Location History</h3>
+          <p className="text-sm text-muted-foreground">Track staff access patterns, devices, and locations</p>
+        </div>
+        <Button onClick={exportData} variant="outline" data-testid="button-export-device-history">
+          <Download className="h-4 w-4 mr-2" />
+          Export Data
+        </Button>
+      </div>
+
+      {/* Section 1: Known Devices */}
+      <Card data-testid="card-known-devices">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Known Devices
+          </CardTitle>
+          <CardDescription>All unique devices that have accessed the system</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : knownDevices.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground" data-testid="text-no-devices">
+              No device history found.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {knownDevices.map((device: any) => (
+                <div 
+                  key={device.fingerprint} 
+                  className="p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => viewDeviceDetails(device)}
+                  data-testid={`device-${device.fingerprint.substring(0, 8)}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                          {maskFingerprint(device.fingerprint)}
+                        </code>
+                        <Badge className={getTrustStatusBadge(device.trustStatus)}>
+                          {device.trustStatus}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Browser & OS</p>
+                          <p className="font-medium">{device.browser} on {device.os}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">First Seen</p>
+                          <p className="font-medium">{new Date(device.firstSeen).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Last Seen</p>
+                          <p className="font-medium">{new Date(device.lastSeen).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Logins</p>
+                          <p className="font-medium">{device.loginCount}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-sm">Associated Users</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {device.users.map((user: string) => (
+                            <Badge key={user} variant="outline" className="text-xs">{user}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          markDeviceAs(device.fingerprint, 'trusted');
+                        }}
+                        data-testid={`button-trust-${device.fingerprint.substring(0, 8)}`}
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          markDeviceAs(device.fingerprint, 'blocked');
+                        }}
+                        data-testid={`button-block-${device.fingerprint.substring(0, 8)}`}
+                      >
+                        <Ban className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 2: Location Map/List */}
+      <Card data-testid="card-known-locations">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Known Locations
+          </CardTitle>
+          <CardDescription>All unique locations from where staff logged in</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : knownLocations.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground" data-testid="text-no-locations">
+              No location history found.
+            </p>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead data-testid="th-location">Location</TableHead>
+                    <TableHead data-testid="th-ip">IP Address</TableHead>
+                    <TableHead data-testid="th-first-seen">First Seen</TableHead>
+                    <TableHead data-testid="th-last-seen">Last Seen</TableHead>
+                    <TableHead data-testid="th-login-count">Login Count</TableHead>
+                    <TableHead data-testid="th-users">Users</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {knownLocations.map((loc: any, idx: number) => (
+                    <TableRow key={idx} data-testid={`location-row-${idx}`}>
+                      <TableCell className="font-medium" data-testid={`td-location-${idx}`}>
+                        <div>
+                          <p>{loc.city}</p>
+                          <p className="text-xs text-muted-foreground">{loc.country}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm" data-testid={`td-ip-${idx}`}>
+                        {maskIP(loc.ip)}
+                      </TableCell>
+                      <TableCell className="text-sm" data-testid={`td-first-${idx}`}>
+                        {new Date(loc.firstSeen).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-sm" data-testid={`td-last-${idx}`}>
+                        {new Date(loc.lastSeen).toLocaleString()}
+                      </TableCell>
+                      <TableCell data-testid={`td-count-${idx}`}>
+                        <Badge variant="outline">{loc.loginCount}</Badge>
+                      </TableCell>
+                      <TableCell data-testid={`td-users-${idx}`}>
+                        <div className="flex flex-wrap gap-1">
+                          {loc.users.slice(0, 3).map((user: string) => (
+                            <Badge key={user} variant="secondary" className="text-xs">{user}</Badge>
+                          ))}
+                          {loc.users.length > 3 && (
+                            <Badge variant="secondary" className="text-xs">+{loc.users.length - 3}</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 3: Anomaly Detection */}
+      <Card data-testid="card-anomalies">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-orange-500" />
+            Anomaly Detection
+          </CardTitle>
+          <CardDescription>Unusual access patterns and security alerts</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : anomalies.length === 0 ? (
+            <div className="text-center py-8" data-testid="text-no-anomalies">
+              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+              <p className="text-muted-foreground">No anomalies detected. All access patterns are normal.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {anomalies.map((anomaly: any, idx: number) => (
+                <div 
+                  key={idx} 
+                  className={`p-4 rounded-lg ${getSeverityBgColor(anomaly.severity)}`}
+                  data-testid={`anomaly-${idx}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge className={getSeverityColor(anomaly.severity)}>
+                          {anomaly.severity.toUpperCase()}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {anomaly.type.replace(/_/g, ' ')}
+                        </Badge>
+                      </div>
+                      <p className="font-medium">{anomaly.description}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {new Date(anomaly.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 4: Access Timeline */}
+      <Card data-testid="card-access-timeline">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Access Timeline
+          </CardTitle>
+          <CardDescription>Chronological view of all login events</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filter */}
+          <Select value={selectedStaffFilter} onValueChange={setSelectedStaffFilter}>
+            <SelectTrigger className="w-[250px]" data-testid="select-timeline-staff">
+              <SelectValue placeholder="Filter by staff" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Staff</SelectItem>
+              {allUsers.filter((u: any) => u.isActive && !u.deletedAt).map((user: any) => (
+                <SelectItem key={user.id} value={user.id}>{user.username}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Timeline */}
+          {isLoading ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : filteredTimelineEvents.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground" data-testid="text-no-timeline">
+              No login events found.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {filteredTimelineEvents.slice(0, 50).map((event: any, idx: number) => (
+                <div 
+                  key={idx} 
+                  className="flex items-center gap-4 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                  data-testid={`timeline-event-${idx}`}
+                >
+                  <div className={`w-2 h-2 rounded-full ${getNoveltyColor(event.novelty)}`}></div>
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2 text-sm">
+                    <div>
+                      <p className="font-medium">{event.user?.username || 'Unknown'}</p>
+                      <p className="text-xs text-muted-foreground">{event.user?.role?.name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Device</p>
+                      <p>{event.browser} / {event.os}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Location</p>
+                      <p>{event.location || 'Unknown'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Time</p>
+                      <p>{new Date(event.loginAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <Badge className={getNoveltyColor(event.novelty)} variant="outline">
+                      {event.novelty === 'new-device' ? 'New Device' : 
+                       event.novelty === 'new-location' ? 'New Location' : 'Normal'}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Device Details Modal */}
+      <Dialog open={showDeviceModal} onOpenChange={setShowDeviceModal}>
+        <DialogContent className="max-w-3xl" data-testid="modal-device-details">
+          <DialogHeader>
+            <DialogTitle>Device Details</DialogTitle>
+            <DialogDescription>Complete information about this device</DialogDescription>
+          </DialogHeader>
+          {selectedDevice && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Device Fingerprint</p>
+                  <code className="text-sm font-mono">{selectedDevice.fingerprint}</code>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Trust Status</p>
+                  <Badge className={getTrustStatusBadge(selectedDevice.trustStatus)}>
+                    {selectedDevice.trustStatus}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Browser</p>
+                  <p className="text-sm">{selectedDevice.browser}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Operating System</p>
+                  <p className="text-sm">{selectedDevice.os}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">First Seen</p>
+                  <p className="text-sm">{new Date(selectedDevice.firstSeen).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Last Seen</p>
+                  <p className="text-sm">{new Date(selectedDevice.lastSeen).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Logins</p>
+                  <p className="text-sm">{selectedDevice.loginCount}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Associated Users</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {selectedDevice.users.map((user: string) => (
+                      <Badge key={user} variant="outline" className="text-xs">{user}</Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Recent Login History</p>
+                <div className="max-h-[200px] overflow-y-auto space-y-2">
+                  {selectedDevice.logins.slice(0, 10).map((login: any, idx: number) => (
+                    <div key={idx} className="text-sm p-2 border rounded">
+                      <p><strong>{login.user?.username}</strong> - {new Date(login.loginAt).toLocaleString()}</p>
+                      <p className="text-muted-foreground text-xs">{login.location}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 pt-4 border-t">
+                <Button
+                  onClick={() => {
+                    markDeviceAs(selectedDevice.fingerprint, 'trusted');
+                    setShowDeviceModal(false);
+                  }}
+                  className="bg-green-600 hover:bg-green-700"
+                  data-testid="button-modal-trust"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Mark as Trusted
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    markDeviceAs(selectedDevice.fingerprint, 'blocked');
+                    setShowDeviceModal(false);
+                  }}
+                  data-testid="button-modal-block"
+                >
+                  <Ban className="h-4 w-4 mr-2" />
+                  Block Device
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function AuditTransparencyPage() {
   const [, setLocation] = useLocation();
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -3232,36 +3952,7 @@ export default function AuditTransparencyPage() {
 
         {/* Tab 6: Device & Location History */}
         <TabsContent value="location" className="space-y-6">
-          <Card data-testid="card-location-history">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                Device & Location History
-              </CardTitle>
-              <CardDescription>Track staff login locations, devices used, and access patterns</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="flex items-start gap-4">
-                      <Skeleton className="h-10 w-10 rounded" />
-                      <div className="flex-1 space-y-2">
-                        <Skeleton className="h-4 w-2/3" />
-                        <Skeleton className="h-3 w-1/2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12" data-testid="text-no-location">
-                  <MapPin className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-2">Device and location tracking not yet implemented</p>
-                  <p className="text-xs text-muted-foreground">This feature will track IP addresses, devices, and login locations</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <DeviceLocationTab dateRange={dateRange} />
         </TabsContent>
       </Tabs>
 
