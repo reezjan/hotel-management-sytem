@@ -124,6 +124,9 @@ import {
   loginHistory,
   type LoginHistory,
   type InsertLoginHistory,
+  knownDevices,
+  type KnownDevice,
+  type InsertKnownDevice,
   securitySettings,
   type SecuritySettings,
   type InsertSecuritySettings
@@ -417,6 +420,12 @@ export interface IStorage {
   getLoginHistoryByUser(userId: string): Promise<LoginHistory[]>;
   checkDeviceExists(userId: string, deviceFingerprint: string): Promise<boolean>;
   checkLocationExists(userId: string, location: string): Promise<boolean>;
+  
+  // Known devices operations (device trust management)
+  upsertKnownDevice(userId: string, deviceFingerprint: string, deviceInfo: { browser?: string; os?: string; hotelId?: string }): Promise<any>;
+  getKnownDevice(userId: string, deviceFingerprint: string): Promise<any | undefined>;
+  updateDeviceTrustStatus(userId: string, deviceFingerprint: string, trustStatus: 'trusted' | 'suspicious' | 'blocked'): Promise<any>;
+  isDeviceBlocked(userId: string, deviceFingerprint: string): Promise<boolean>;
   
   // Security settings operations
   getSecuritySettings(hotelId: string): Promise<SecuritySettings | undefined>;
@@ -3727,6 +3736,77 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     
     return result.length > 0;
+  }
+  
+  // Known devices operations (device trust management)
+  async upsertKnownDevice(userId: string, deviceFingerprint: string, deviceInfo: { browser?: string; os?: string; hotelId?: string }): Promise<any> {
+    const existing = await this.getKnownDevice(userId, deviceFingerprint);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(knownDevices)
+        .set({
+          lastSeen: new Date(),
+          browser: deviceInfo.browser || existing.browser,
+          os: deviceInfo.os || existing.os,
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(knownDevices.userId, userId),
+          eq(knownDevices.deviceFingerprint, deviceFingerprint)
+        ))
+        .returning();
+      
+      return updated;
+    } else {
+      const [newDevice] = await db
+        .insert(knownDevices)
+        .values({
+          userId,
+          deviceFingerprint,
+          browser: deviceInfo.browser || 'unknown',
+          os: deviceInfo.os || 'unknown',
+          hotelId: deviceInfo.hotelId || null,
+          trustStatus: 'trusted'
+        })
+        .returning();
+      
+      return newDevice;
+    }
+  }
+  
+  async getKnownDevice(userId: string, deviceFingerprint: string): Promise<any | undefined> {
+    const [device] = await db
+      .select()
+      .from(knownDevices)
+      .where(and(
+        eq(knownDevices.userId, userId),
+        eq(knownDevices.deviceFingerprint, deviceFingerprint)
+      ))
+      .limit(1);
+    
+    return device;
+  }
+  
+  async updateDeviceTrustStatus(userId: string, deviceFingerprint: string, trustStatus: 'trusted' | 'suspicious' | 'blocked'): Promise<any> {
+    const [updated] = await db
+      .update(knownDevices)
+      .set({
+        trustStatus,
+        updatedAt: new Date()
+      })
+      .where(and(
+        eq(knownDevices.userId, userId),
+        eq(knownDevices.deviceFingerprint, deviceFingerprint)
+      ))
+      .returning();
+    
+    return updated;
+  }
+  
+  async isDeviceBlocked(userId: string, deviceFingerprint: string): Promise<boolean> {
+    const device = await this.getKnownDevice(userId, deviceFingerprint);
+    return device?.trustStatus === 'blocked';
   }
   
   // Security settings operations
