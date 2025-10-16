@@ -48,6 +48,22 @@ export const roleCreationPermissions = pgTable("role_creation_permissions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
+// Role Limits Table
+export const roleLimits = pgTable("role_limits", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }).notNull(),
+  roleId: integer("role_id").references(() => roles.id).notNull(),
+  maxTransactionAmount: numeric("max_transaction_amount", { precision: 12, scale: 2 }),
+  maxDailyAmount: numeric("max_daily_amount", { precision: 12, scale: 2 }),
+  requiresApprovalAbove: numeric("requires_approval_above", { precision: 12, scale: 2 }),
+  canVoidTransactions: boolean("can_void_transactions").default(false),
+  canApproveWastage: boolean("can_approve_wastage").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+}, (table) => ({
+  uniqueHotelRole: unique().on(table.hotelId, table.roleId)
+}));
+
 // Users Table
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1052,6 +1068,12 @@ export const insertHotelSchema = createInsertSchema(hotels).omit({
   deletedAt: true
 });
 
+export const insertRoleLimitSchema = createInsertSchema(roleLimits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
 export const insertRoomSchema = createInsertSchema(rooms).omit({
   id: true,
   createdAt: true,
@@ -1371,6 +1393,8 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type Hotel = typeof hotels.$inferSelect;
 export type InsertHotel = z.infer<typeof insertHotelSchema>;
+export type RoleLimit = typeof roleLimits.$inferSelect;
+export type InsertRoleLimit = z.infer<typeof insertRoleLimitSchema>;
 export type Room = typeof rooms.$inferSelect;
 export type InsertRoom = z.infer<typeof insertRoomSchema>;
 export type RoomStatusLog = typeof roomStatusLogs.$inferSelect;
