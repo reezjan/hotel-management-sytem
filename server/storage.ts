@@ -421,6 +421,15 @@ export interface IStorage {
   // Security settings operations
   getSecuritySettings(hotelId: string): Promise<SecuritySettings | undefined>;
   upsertSecuritySettings(hotelId: string, settings: Partial<InsertSecuritySettings>): Promise<SecuritySettings>;
+  
+  // Audit dashboard operations
+  getAuditOverview(hotelId: string): Promise<any>;
+  getFinancialActivity(hotelId: string, filters: { startDate?: Date; endDate?: Date; txnType?: string; paymentMethod?: string; staffId?: string }): Promise<any[]>;
+  getStaffActivity(hotelId: string, filters: { startDate?: Date; endDate?: Date; staffId?: string; actionType?: string }): Promise<any[]>;
+  getSecurityAlerts(hotelId: string, filters: { startDate?: Date; endDate?: Date; alertType?: string; status?: string }): Promise<any[]>;
+  getPhotoEvidence(hotelId: string, filters: { startDate?: Date; endDate?: Date; evidenceType?: string }): Promise<any[]>;
+  getDeviceHistory(hotelId: string, filters: { startDate?: Date; endDate?: Date; userId?: string }): Promise<any[]>;
+  resolveSecurityAlert(id: string, resolution: string, notes: string): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3760,6 +3769,329 @@ export class DatabaseStorage implements IStorage {
       
       return created;
     }
+  }
+  
+  // Audit dashboard operations
+  async getAuditOverview(hotelId: string): Promise<any> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Get today's transactions
+    const todayTransactions = await db
+      .select()
+      .from(transactions)
+      .where(and(
+        eq(transactions.hotelId, hotelId),
+        gte(transactions.createdAt, today),
+        eq(transactions.isVoided, false)
+      ));
+    
+    // Calculate revenue and expenses
+    const revenue = todayTransactions
+      .filter(t => t.txnType && (t.txnType.includes('_in') || t.txnType === 'revenue'))
+      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    
+    const expenses = todayTransactions
+      .filter(t => t.txnType && !t.txnType.includes('_in') && t.txnType !== 'revenue')
+      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    
+    // Get active staff count
+    const activeStaff = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(users)
+      .where(and(
+        eq(users.hotelId, hotelId),
+        eq(users.isActive, true),
+        isNull(users.deletedAt)
+      ));
+    
+    // Get alerts count
+    const alertsCount = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(securityAlerts)
+      .where(eq(securityAlerts.hotelId, hotelId));
+    
+    return {
+      transactionsToday: todayTransactions.length,
+      revenue,
+      expenses,
+      activeStaff: activeStaff[0]?.count || 0,
+      alertsCount: alertsCount[0]?.count || 0
+    };
+  }
+  
+  async getFinancialActivity(
+    hotelId: string, 
+    filters: { startDate?: Date; endDate?: Date; txnType?: string; paymentMethod?: string; staffId?: string }
+  ): Promise<any[]> {
+    let query = db
+      .select({
+        transaction: transactions,
+        staff: {
+          id: users.id,
+          username: users.username,
+          fullName: users.fullName
+        },
+        vendor: vendors
+      })
+      .from(transactions)
+      .leftJoin(users, eq(transactions.createdBy, users.id))
+      .leftJoin(vendors, eq(transactions.vendorId, vendors.id))
+      .where(and(
+        eq(transactions.hotelId, hotelId),
+        eq(transactions.isVoided, false)
+      ))
+      .$dynamic();
+    
+    const conditions = [eq(transactions.hotelId, hotelId), eq(transactions.isVoided, false)];
+    
+    if (filters.startDate) {
+      conditions.push(gte(transactions.createdAt, filters.startDate));
+    }
+    if (filters.endDate) {
+      conditions.push(lte(transactions.createdAt, filters.endDate));
+    }
+    if (filters.txnType) {
+      conditions.push(eq(transactions.txnType, filters.txnType));
+    }
+    if (filters.paymentMethod) {
+      conditions.push(eq(transactions.paymentMethod, filters.paymentMethod));
+    }
+    if (filters.staffId) {
+      conditions.push(eq(transactions.createdBy, filters.staffId));
+    }
+    
+    const results = await db
+      .select({
+        transaction: transactions,
+        staff: {
+          id: users.id,
+          username: users.username,
+          fullName: users.fullName
+        },
+        vendor: vendors
+      })
+      .from(transactions)
+      .leftJoin(users, eq(transactions.createdBy, users.id))
+      .leftJoin(vendors, eq(transactions.vendorId, vendors.id))
+      .where(and(...conditions))
+      .orderBy(desc(transactions.createdAt));
+    
+    return results;
+  }
+  
+  async getStaffActivity(
+    hotelId: string, 
+    filters: { startDate?: Date; endDate?: Date; staffId?: string; actionType?: string }
+  ): Promise<any[]> {
+    const conditions = [eq(auditLogs.hotelId, hotelId)];
+    
+    if (filters.startDate) {
+      conditions.push(gte(auditLogs.createdAt, filters.startDate));
+    }
+    if (filters.endDate) {
+      conditions.push(lte(auditLogs.createdAt, filters.endDate));
+    }
+    if (filters.staffId) {
+      conditions.push(eq(auditLogs.userId, filters.staffId));
+    }
+    if (filters.actionType) {
+      conditions.push(eq(auditLogs.action, filters.actionType));
+    }
+    
+    const results = await db
+      .select({
+        auditLog: auditLogs,
+        staff: {
+          id: users.id,
+          username: users.username,
+          fullName: users.fullName,
+          roleId: users.roleId,
+          roleName: roles.name
+        }
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(auditLogs.userId, users.id))
+      .leftJoin(roles, eq(users.roleId, roles.id))
+      .where(and(...conditions))
+      .orderBy(desc(auditLogs.createdAt));
+    
+    return results;
+  }
+  
+  async getSecurityAlerts(
+    hotelId: string, 
+    filters: { startDate?: Date; endDate?: Date; alertType?: string; status?: string }
+  ): Promise<any[]> {
+    const conditions = [eq(securityAlerts.hotelId, hotelId)];
+    
+    if (filters.startDate) {
+      conditions.push(gte(securityAlerts.createdAt, filters.startDate));
+    }
+    if (filters.endDate) {
+      conditions.push(lte(securityAlerts.createdAt, filters.endDate));
+    }
+    if (filters.alertType) {
+      conditions.push(eq(securityAlerts.type, filters.alertType));
+    }
+    
+    // Return full alert object with user details joined
+    const results = await db
+      .select({
+        alert: securityAlerts,
+        performedByUser: sql`json_build_object(
+          'id', performer.id,
+          'username', performer.username,
+          'fullName', performer.full_name
+        )`,
+        overriddenByUser: sql`json_build_object(
+          'id', overrider.id,
+          'username', overrider.username,
+          'fullName', overrider.full_name
+        )`
+      })
+      .from(securityAlerts)
+      .leftJoin(sql`users performer`, eq(securityAlerts.performedBy, sql`performer.id`))
+      .leftJoin(sql`users overrider`, eq(securityAlerts.overriddenBy, sql`overrider.id`))
+      .where(and(...conditions))
+      .orderBy(desc(securityAlerts.createdAt));
+    
+    return results;
+  }
+  
+  async getPhotoEvidence(
+    hotelId: string, 
+    filters: { startDate?: Date; endDate?: Date; evidenceType?: string }
+  ): Promise<any[]> {
+    const evidence: any[] = [];
+    
+    // Get wastage photos
+    if (!filters.evidenceType || filters.evidenceType === 'wastage') {
+      const conditions = [eq(wastages.hotelId, hotelId)];
+      
+      if (filters.startDate) {
+        conditions.push(gte(wastages.createdAt, filters.startDate));
+      }
+      if (filters.endDate) {
+        conditions.push(lte(wastages.createdAt, filters.endDate));
+      }
+      
+      const wastagePhotos = await db
+        .select({
+          wastage: wastages,
+          recordedBy: {
+            id: users.id,
+            username: users.username,
+            fullName: users.fullName
+          },
+          item: inventoryItems
+        })
+        .from(wastages)
+        .leftJoin(users, eq(wastages.recordedBy, users.id))
+        .leftJoin(inventoryItems, eq(wastages.itemId, inventoryItems.id))
+        .where(and(...conditions))
+        .orderBy(desc(wastages.createdAt));
+      
+      evidence.push(...wastagePhotos.map(w => ({ ...w, evidenceType: 'wastage' })));
+    }
+    
+    // Get bill documents
+    if (!filters.evidenceType || filters.evidenceType === 'bill') {
+      const conditions = [
+        eq(transactions.hotelId, hotelId),
+        or(
+          sql`${transactions.billPhotoUrl} IS NOT NULL`,
+          sql`${transactions.billPdfUrl} IS NOT NULL`
+        )
+      ];
+      
+      if (filters.startDate) {
+        conditions.push(gte(transactions.createdAt, filters.startDate));
+      }
+      if (filters.endDate) {
+        conditions.push(lte(transactions.createdAt, filters.endDate));
+      }
+      
+      const billDocs = await db
+        .select({
+          transaction: transactions,
+          createdBy: {
+            id: users.id,
+            username: users.username,
+            fullName: users.fullName
+          }
+        })
+        .from(transactions)
+        .leftJoin(users, eq(transactions.createdBy, users.id))
+        .where(and(...conditions))
+        .orderBy(desc(transactions.createdAt));
+      
+      evidence.push(...billDocs.map(b => ({ ...b, evidenceType: 'bill' })));
+    }
+    
+    return evidence;
+  }
+  
+  async getDeviceHistory(
+    hotelId: string, 
+    filters: { startDate?: Date; endDate?: Date; userId?: string }
+  ): Promise<any[]> {
+    const conditions = [eq(loginHistory.hotelId, hotelId)];
+    
+    if (filters.startDate) {
+      conditions.push(gte(loginHistory.loginAt, filters.startDate));
+    }
+    if (filters.endDate) {
+      conditions.push(lte(loginHistory.loginAt, filters.endDate));
+    }
+    if (filters.userId) {
+      conditions.push(eq(loginHistory.userId, filters.userId));
+    }
+    
+    const results = await db
+      .select({
+        loginHistory: loginHistory,
+        user: {
+          id: users.id,
+          username: users.username,
+          fullName: users.fullName
+        }
+      })
+      .from(loginHistory)
+      .leftJoin(users, eq(loginHistory.userId, users.id))
+      .where(and(...conditions))
+      .orderBy(desc(loginHistory.loginAt));
+    
+    return results;
+  }
+  
+  async resolveSecurityAlert(id: string, resolution: string, notes: string): Promise<any> {
+    // Security alerts don't have a resolution field in the current schema
+    // This would need to be added to the schema, but for now we'll log it in audit
+    const alert = await db
+      .select()
+      .from(securityAlerts)
+      .where(eq(securityAlerts.id, id))
+      .limit(1);
+    
+    if (!alert[0]) {
+      throw new Error('Alert not found');
+    }
+    
+    // Create an audit log for the resolution
+    await db
+      .insert(auditLogs)
+      .values({
+        hotelId: alert[0].hotelId,
+        userId: alert[0].overriddenBy,
+        action: 'resolve',
+        resourceType: 'security_alert',
+        resourceId: id,
+        details: { resolution, notes },
+        success: true
+      });
+    
+    return { ...alert[0], resolution, notes };
   }
 }
 
