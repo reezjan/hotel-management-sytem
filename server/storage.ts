@@ -1240,6 +1240,13 @@ export class DatabaseStorage implements IStorage {
         voidedBy: transactions.voidedBy,
         voidedAt: transactions.voidedAt,
         voidReason: transactions.voidReason,
+        billPhotoUrl: transactions.billPhotoUrl,
+        billPdfUrl: transactions.billPdfUrl,
+        billInvoiceNumber: transactions.billInvoiceNumber,
+        requiresApproval: transactions.requiresApproval,
+        approvedBy: transactions.approvedBy,
+        approvedAt: transactions.approvedAt,
+        rejectionReason: transactions.rejectionReason,
         creator: {
           id: users.id,
           username: users.username,
