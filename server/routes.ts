@@ -187,8 +187,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      const { startDate, endDate } = req.query;
+      const { startDate, endDate, pendingApproval } = req.query;
       let transactions = await storage.getTransactionsByHotel(user.hotelId);
+      
+      // Filter for pending approvals if requested
+      if (pendingApproval === 'true') {
+        transactions = transactions.filter((t: any) => t.requiresApproval === true && !t.approvedBy && !t.rejectionReason);
+      }
       
       // Apply date filtering if provided
       if (startDate && typeof startDate === 'string') {
@@ -3848,6 +3853,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { hotelId: _, createdBy: __, ...sanitizedBody } = req.body;
       
+      // Get security settings for approval threshold
+      const securitySettings = await storage.getSecuritySettings(currentUser.hotelId);
+      const largeTransactionThreshold = securitySettings?.largeTransactionThreshold 
+        ? Number(securitySettings.largeTransactionThreshold) 
+        : 10000;
+      
+      // Check if approval is required
+      let requiresApproval = false;
+      const transactionAmount = Number(sanitizedBody.amount) || 0;
+      
       // CRITICAL: Validate vendor payments - prevent unauthorized payments
       const isVendorPayment = sanitizedBody.vendorId || 
         (sanitizedBody.purpose && String(sanitizedBody.purpose).toLowerCase().includes('vendor'));
@@ -3878,18 +3893,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        // Require at least one bill document (photo or PDF)
+        // If no bill provided, require approval
         if (!sanitizedBody.billPhotoUrl && !sanitizedBody.billPdfUrl) {
-          return res.status(400).json({ 
-            message: "Bill photo or PDF is required for cash out transactions" 
-          });
+          requiresApproval = true;
         }
+      }
+      
+      // Check if transaction amount exceeds threshold (for expense transactions)
+      const isExpenseTransaction = ['cash_out', 'expense', 'vendor_payment', 'miscellaneous'].includes(sanitizedBody.txnType);
+      if (isExpenseTransaction && transactionAmount > largeTransactionThreshold) {
+        requiresApproval = true;
       }
       
       const transactionData = insertTransactionSchema.parse({
         ...sanitizedBody,
         hotelId: currentUser.hotelId,
-        createdBy: currentUser.id
+        createdBy: currentUser.id,
+        requiresApproval
       });
       const transaction = await storage.createTransaction(transactionData);
       
@@ -3964,6 +3984,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Transaction void error:", error);
       res.status(500).json({ message: "Failed to void transaction" });
+    }
+  });
+
+  app.post("/api/transactions/:id/approve", requireActiveUser, async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      const { id } = req.params;
+      
+      // Only owners and managers can approve transactions
+      const canApprove = ['owner', 'manager'].includes(currentUser.role?.name || '');
+      if (!canApprove) {
+        return res.status(403).json({ 
+          message: "Only owners and managers can approve transactions" 
+        });
+      }
+      
+      const transaction = await storage.getTransaction(id);
+      if (!transaction || transaction.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      if (!transaction.requiresApproval) {
+        return res.status(400).json({ message: "Transaction does not require approval" });
+      }
+      
+      if (transaction.approvedBy) {
+        return res.status(400).json({ message: "Transaction already approved" });
+      }
+      
+      // Approve the transaction
+      const approvedTransaction = await storage.updateTransaction(id, {
+        requiresApproval: false,
+        approvedBy: currentUser.id,
+        approvedAt: new Date()
+      } as any);
+      
+      // Broadcast approval to relevant users
+      wsEvents.transactionUpdated(currentUser.hotelId, approvedTransaction);
+      
+      // Log audit
+      await logAudit({
+        userId: currentUser.id,
+        hotelId: currentUser.hotelId,
+        action: 'approve',
+        resourceType: 'transaction',
+        resourceId: id,
+        details: { amount: transaction.amount, txnType: transaction.txnType },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      
+      res.json({ success: true, transaction: approvedTransaction });
+    } catch (error) {
+      console.error("Transaction approval error:", error);
+      res.status(500).json({ message: "Failed to approve transaction" });
+    }
+  });
+
+  app.post("/api/transactions/:id/reject", requireActiveUser, async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      const { id } = req.params;
+      const { reason } = req.body;
+      
+      // Only owners and managers can reject transactions
+      const canReject = ['owner', 'manager'].includes(currentUser.role?.name || '');
+      if (!canReject) {
+        return res.status(403).json({ 
+          message: "Only owners and managers can reject transactions" 
+        });
+      }
+      
+      // Require rejection reason
+      if (!reason || reason.trim().length < 10) {
+        return res.status(400).json({ 
+          message: "Rejection reason required (minimum 10 characters)" 
+        });
+      }
+      
+      const transaction = await storage.getTransaction(id);
+      if (!transaction || transaction.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      if (!transaction.requiresApproval) {
+        return res.status(400).json({ message: "Transaction does not require approval" });
+      }
+      
+      if (transaction.rejectionReason) {
+        return res.status(400).json({ message: "Transaction already rejected" });
+      }
+      
+      // Reject the transaction
+      const rejectedTransaction = await storage.updateTransaction(id, {
+        requiresApproval: false,
+        rejectionReason: reason
+      });
+      
+      // Broadcast rejection to relevant users
+      wsEvents.transactionUpdated(currentUser.hotelId, rejectedTransaction);
+      
+      // Log audit
+      await logAudit({
+        userId: currentUser.id,
+        hotelId: currentUser.hotelId,
+        action: 'reject',
+        resourceType: 'transaction',
+        resourceId: id,
+        details: { amount: transaction.amount, txnType: transaction.txnType, reason },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      
+      res.json({ success: true, transaction: rejectedTransaction });
+    } catch (error) {
+      console.error("Transaction rejection error:", error);
+      res.status(500).json({ message: "Failed to reject transaction" });
     }
   });
 
