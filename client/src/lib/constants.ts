@@ -241,6 +241,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'ClipboardCheck', label: 'Attendance Reports', id: 'attendance' },
     { icon: 'Settings', label: 'Leave Policies', id: 'leave-policies' },
     { icon: 'FileCheck', label: 'Leave Approvals', id: 'leave-approvals' },
+    { icon: 'Shield', label: 'Role Limits', id: 'role-limits' },
     { icon: 'FileText', label: 'Report', id: 'report' },
     { icon: 'BarChart', label: 'Financial Report', id: 'reports' }
   ],
