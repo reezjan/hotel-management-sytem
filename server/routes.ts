@@ -699,6 +699,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/hotels/current/audit/send-summary", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner can manually request daily summary
+      const currentRole = user.role?.name || '';
+      if (currentRole !== 'owner') {
+        // Log unauthorized attempt
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'send_daily_summary_unauthorized',
+          resourceType: 'email',
+          resourceId: user.hotelId,
+          details: { role: currentRole },
+          success: false,
+          errorMessage: 'Unauthorized: Only owner can request daily summary'
+        });
+        
+        return res.status(403).json({ 
+          message: "Only hotel owner can request daily summary email" 
+        });
+      }
+      
+      const { alertService } = await import("./alert-service");
+      const result = await alertService.sendDailySummaryEmail(user.hotelId);
+      
+      if (result.success) {
+        res.json({ 
+          success: true, 
+          message: "Daily summary email sent successfully" 
+        });
+      } else {
+        // Log failed attempt
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'send_daily_summary_manual',
+          resourceType: 'email',
+          resourceId: user.hotelId,
+          details: { error: result.error },
+          success: false,
+          errorMessage: result.error || 'Unknown error'
+        });
+        
+        res.status(500).json({ 
+          success: false, 
+          message: result.error || "Failed to send daily summary email" 
+        });
+      }
+    } catch (error) {
+      console.error("Send summary error:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Log exception
+      if (req.user) {
+        const user = req.user as any;
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'send_daily_summary_manual',
+          resourceType: 'email',
+          resourceId: user.hotelId,
+          details: { error: errorMessage },
+          success: false,
+          errorMessage
+        });
+      }
+      
+      res.status(500).json({ 
+        message: errorMessage 
+      });
+    }
+  });
+
   // Guest routes
   app.get("/api/hotels/current/guests", async (req, res) => {
     try {
