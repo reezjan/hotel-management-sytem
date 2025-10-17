@@ -192,9 +192,49 @@ export function setupAuth(app: Express) {
         const os = req.body.os || 'unknown';
         const ipAddress = req.ip || 'unknown';
         
+        // CRITICAL: Check if device is blocked before allowing login
+        const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
+        if (isBlocked) {
+          // Log blocked device login attempt
+          await logAudit({
+            userId: user.id,
+            hotelId: user.hotelId || undefined,
+            action: 'login_blocked_device',
+            resourceType: 'device',
+            resourceId: deviceFingerprint,
+            details: { 
+              username: user.username,
+              deviceFingerprint,
+              browser,
+              os,
+              reason: 'Device is blocked'
+            },
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            success: false,
+            errorMessage: 'Login denied: Device is blocked'
+          });
+          
+          // Log out the user immediately
+          req.logout((logoutErr) => {
+            if (logoutErr) console.error('Logout error:', logoutErr);
+          });
+          
+          return res.status(403).json({ 
+            message: "This device has been blocked. Please contact your administrator." 
+          });
+        }
+        
         // Get location from IP address
         const locationData = await getLocationFromIP(ipAddress);
         const location = `${locationData.city}, ${locationData.country}`;
+        
+        // Register or update device in knownDevices table
+        await storage.upsertKnownDevice(user.id, deviceFingerprint, {
+          browser,
+          os,
+          hotelId: user.hotelId || undefined
+        });
         
         // Check if device has been used before by this user
         const isNewDevice = !(await storage.checkDeviceExists(user.id, deviceFingerprint));
