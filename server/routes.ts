@@ -50,6 +50,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   setupAuth(app);
 
+  // CRITICAL: Global middleware to check device blocking on every authenticated request
+  app.use(async (req, res, next) => {
+    if (req.isAuthenticated()) {
+      const user = req.user as any;
+      const deviceFingerprint = (req.session as any).deviceFingerprint;
+      
+      // If authenticated but no device fingerprint in session, force re-login to capture device info
+      if (!deviceFingerprint && user?.id) {
+        return req.logout((err: any) => {
+          if (err) console.error('Logout error:', err);
+          return res.status(401).json({ 
+            message: "Session expired. Please log in again." 
+          });
+        });
+      }
+      
+      // Check if device is blocked
+      if (deviceFingerprint && user?.id) {
+        const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
+        if (isBlocked) {
+          // Log out the user
+          return req.logout((err: any) => {
+            if (err) console.error('Logout error:', err);
+            return res.status(403).json({ 
+              message: "This device has been blocked. Please contact your administrator." 
+            });
+          });
+        }
+      }
+    }
+    next();
+  });
+
   // Hotel routes
   app.get("/api/hotels", async (req, res) => {
     try {
