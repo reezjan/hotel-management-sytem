@@ -418,6 +418,7 @@ export interface IStorage {
   // Login history operations
   createLoginHistory(data: InsertLoginHistory): Promise<LoginHistory>;
   getLoginHistoryByUser(userId: string): Promise<LoginHistory[]>;
+  getLoginHistoryByDevice(userId: string, deviceFingerprint: string): Promise<LoginHistory | undefined>;
   checkDeviceExists(userId: string, deviceFingerprint: string): Promise<boolean>;
   checkLocationExists(userId: string, location: string): Promise<boolean>;
   
@@ -3710,6 +3711,20 @@ export class DatabaseStorage implements IStorage {
       .from(loginHistory)
       .where(eq(loginHistory.userId, userId))
       .orderBy(desc(loginHistory.loginAt));
+  }
+
+  async getLoginHistoryByDevice(userId: string, deviceFingerprint: string): Promise<LoginHistory | undefined> {
+    const [record] = await db
+      .select()
+      .from(loginHistory)
+      .where(and(
+        eq(loginHistory.userId, userId),
+        eq(loginHistory.deviceFingerprint, deviceFingerprint)
+      ))
+      .orderBy(desc(loginHistory.loginAt))
+      .limit(1);
+    
+    return record;
   }
 
   async checkDeviceExists(userId: string, deviceFingerprint: string): Promise<boolean> {
