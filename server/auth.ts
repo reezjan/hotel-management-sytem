@@ -34,13 +34,31 @@ function sanitizeInput(input: any): string {
   return sanitized.trim();
 }
 
-// Middleware to ensure user is active
-export function requireActiveUser(req: any, res: any, next: any) {
+// Middleware to ensure user is active and device is not blocked
+export async function requireActiveUser(req: any, res: any, next: any) {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Authentication required" });
   }
   
   const user = req.user as any;
+  
+  // CRITICAL: Check if device is blocked on every request
+  const deviceFingerprint = (req.session as any).deviceFingerprint;
+  if (deviceFingerprint && user?.id) {
+    const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
+    if (isBlocked) {
+      // Log out the user and destroy session
+      req.logout((err: any) => {
+        if (err) console.error('Logout error:', err);
+      });
+      req.session.destroy((err: any) => {
+        if (err) console.error('Session destroy error:', err);
+      });
+      return res.status(403).json({ 
+        message: "This device has been blocked. Please contact your administrator." 
+      });
+    }
+  }
   
   // CRITICAL: Block deactivated users
   if (!user.isActive) {
@@ -219,6 +237,9 @@ export function setupAuth(app: Express) {
         if (err) {
           return next(err);
         }
+        
+        // Store device fingerprint in session for blocking checks
+        (req.session as any).deviceFingerprint = deviceFingerprint;
         
         // Get location from IP address
         const locationData = await getLocationFromIP(ipAddress);
