@@ -863,8 +863,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if device exists, if not create it first
       const existingDevice = await storage.getKnownDevice(userId, deviceFingerprint);
       if (!existingDevice) {
+        // Get device info from login history to populate browser/OS
+        const loginRecord = await storage.getLoginHistoryByDevice(userId, deviceFingerprint);
+        
         // Create the device entry before updating trust status
-        await storage.upsertKnownDevice(userId, deviceFingerprint, { hotelId: user.hotelId });
+        await storage.upsertKnownDevice(userId, deviceFingerprint, { 
+          hotelId: user.hotelId,
+          browser: loginRecord?.browser || undefined,
+          os: loginRecord?.os || undefined
+        });
       }
       
       const updatedDevice = await storage.updateDeviceTrustStatus(userId, deviceFingerprint, trustStatus);
