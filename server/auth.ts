@@ -181,48 +181,43 @@ export function setupAuth(app: Express) {
         });
       }
       
+      // Extract device info from request body
+      const deviceFingerprint = req.body.deviceFingerprint || 'unknown';
+      const browser = req.body.browser || 'unknown';
+      const os = req.body.os || 'unknown';
+      const ipAddress = req.ip || 'unknown';
+      
+      // CRITICAL: Check if device is blocked BEFORE creating session
+      const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
+      if (isBlocked) {
+        // Log blocked device login attempt
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId || undefined,
+          action: 'login_blocked_device',
+          resourceType: 'device',
+          resourceId: deviceFingerprint,
+          details: { 
+            username: user.username,
+            deviceFingerprint,
+            browser,
+            os,
+            reason: 'Device is blocked'
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: false,
+          errorMessage: 'Login denied: Device is blocked'
+        });
+        
+        return res.status(403).json({ 
+          message: "This device has been blocked. Please contact your administrator." 
+        });
+      }
+      
       req.login(user, async (err) => {
         if (err) {
           return next(err);
-        }
-        
-        // Extract device info from request body
-        const deviceFingerprint = req.body.deviceFingerprint || 'unknown';
-        const browser = req.body.browser || 'unknown';
-        const os = req.body.os || 'unknown';
-        const ipAddress = req.ip || 'unknown';
-        
-        // CRITICAL: Check if device is blocked before allowing login
-        const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
-        if (isBlocked) {
-          // Log blocked device login attempt
-          await logAudit({
-            userId: user.id,
-            hotelId: user.hotelId || undefined,
-            action: 'login_blocked_device',
-            resourceType: 'device',
-            resourceId: deviceFingerprint,
-            details: { 
-              username: user.username,
-              deviceFingerprint,
-              browser,
-              os,
-              reason: 'Device is blocked'
-            },
-            ipAddress: req.ip,
-            userAgent: req.headers['user-agent'],
-            success: false,
-            errorMessage: 'Login denied: Device is blocked'
-          });
-          
-          // Log out the user immediately
-          req.logout((logoutErr) => {
-            if (logoutErr) console.error('Logout error:', logoutErr);
-          });
-          
-          return res.status(403).json({ 
-            message: "This device has been blocked. Please contact your administrator." 
-          });
         }
         
         // Get location from IP address
