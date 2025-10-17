@@ -84,21 +84,18 @@ export default function FinanceDashboard() {
   // Listen for real-time transaction updates
   useRealtimeQuery({
     queryKey: ["/api/hotels/current/transactions"],
-    refetchInterval: 3000,
     events: ['transaction:created', 'transaction:updated']
   });
 
   // Listen for real-time user updates
   useRealtimeQuery({
     queryKey: ["/api/hotels/current/users"],
-    refetchInterval: 3000,
     events: ['user:created', 'user:updated']
   });
 
   // Listen for real-time maintenance updates
   useRealtimeQuery({
     queryKey: ["/api/hotels/current/maintenance-requests"],
-    refetchInterval: 3000,
     events: ['maintenance:updated', 'maintenance:created']
   });
 
