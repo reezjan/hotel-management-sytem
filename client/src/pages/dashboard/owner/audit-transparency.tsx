@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -1950,6 +1952,7 @@ function PhotoEvidenceTab({
 
 // Device & Location History Tab Component
 function DeviceLocationTab({ dateRange }: { dateRange: { from: Date | undefined; to: Date | undefined } }) {
+  const { toast } = useToast();
   const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>("all");
   const [deviceTrustStatus, setDeviceTrustStatus] = useState<Record<string, 'trusted' | 'suspicious' | 'blocked'>>({});
   const [selectedDevice, setSelectedDevice] = useState<any>(null);
@@ -2198,8 +2201,68 @@ function DeviceLocationTab({ dateRange }: { dateRange: { from: Date | undefined;
     return timelineEvents.filter((e: any) => e.userId === selectedStaffFilter);
   }, [timelineEvents, selectedStaffFilter]);
 
-  const markDeviceAs = (fingerprint: string, status: 'trusted' | 'suspicious' | 'blocked') => {
-    setDeviceTrustStatus(prev => ({ ...prev, [fingerprint]: status }));
+  const markDeviceAs = async (fingerprint: string, status: 'trusted' | 'suspicious' | 'blocked') => {
+    try {
+      // Find the device to get all users who have used it
+      const device = knownDevices.find(d => d.fingerprint === fingerprint);
+      if (!device || !device.logins || device.logins.length === 0) {
+        toast({
+          title: "Error",
+          description: "Could not find device information",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Get unique user IDs from the device's login history
+      const userIds = Array.from(new Set(device.logins.map((login: any) => login.userId).filter(Boolean)));
+      
+      if (userIds.length === 0) {
+        toast({
+          title: "Error",
+          description: "No users associated with this device",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Update trust status for each user who has used this device
+      for (const userId of userIds) {
+        const response = await fetch('/api/devices/update-trust-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            userId,
+            deviceFingerprint: fingerprint,
+            trustStatus: status
+          })
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to update device trust status');
+        }
+      }
+      
+      // Update local state optimistically
+      setDeviceTrustStatus(prev => ({ ...prev, [fingerprint]: status }));
+      
+      // Invalidate the query to refresh device data
+      queryClient.invalidateQueries({ queryKey: ['/api/login-history'] });
+      
+      toast({
+        title: "Success",
+        description: `Device marked as ${status}`,
+      });
+    } catch (error) {
+      console.error('Error updating device trust status:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Failed to update device trust status',
+        variant: "destructive"
+      });
+    }
   };
 
   const viewDeviceDetails = (device: any) => {
