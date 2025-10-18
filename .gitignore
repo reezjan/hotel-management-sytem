@@ -6,6 +6,7 @@
 *.asar
 
 
+
 # Logs and system files
 .log
 .local
