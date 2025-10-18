@@ -7,17 +7,37 @@ const buildDir = path.join(__dirname, 'dist');
 const serverFile = path.join(buildDir, 'index.js');
 const outputDir = path.join(__dirname, 'app_dist');
 
-// Obfuscation options
+// Maximum obfuscation options for production
 const obfuscationOptions = {
     compact: true,
     controlFlowFlattening: true,
     controlFlowFlatteningThreshold: 1,
+    deadCodeInjection: true,
+    deadCodeInjectionThreshold: 0.5,
+    debugProtection: true,
+    debugProtectionInterval: 2000,
+    disableConsoleOutput: true,
+    identifierNamesGenerator: 'hexadecimal',
+    log: false,
     numbersToExpressions: true,
+    renameGlobals: false,
+    selfDefending: true,
     simplify: true,
-    stringArrayShuffle: true,
     splitStrings: true,
+    splitStringsChunkLength: 5,
+    stringArray: true,
+    stringArrayCallsTransform: true,
+    stringArrayEncoding: ['rc4'],
+    stringArrayIndexShift: true,
+    stringArrayRotate: true,
+    stringArrayShuffle: true,
+    stringArrayWrappersCount: 5,
+    stringArrayWrappersChainedCalls: true,
+    stringArrayWrappersParametersMaxCount: 5,
+    stringArrayWrappersType: 'function',
     stringArrayThreshold: 1,
-    stringArrayEncoding: ['base64']
+    transformObjectKeys: true,
+    unicodeEscapeSequence: false
 };
 
 async function obfuscateAndPackage() {
@@ -36,13 +56,9 @@ async function obfuscateAndPackage() {
     console.log('✅ Server code obfuscated.');
 
     // 3. Copy the frontend assets (Vite's output)
-    const frontendDir = path.join(buildDir, 'assets');
-    if (fs.existsSync(frontendDir)) {
-        fs.copySync(frontendDir, path.join(outputDir, 'assets'));
-    }
-    const indexHtml = path.join(buildDir, 'index.html');
-    if (fs.existsSync(indexHtml)) {
-        fs.copySync(indexHtml, path.join(outputDir, 'index.html'));
+    const publicDir = path.join(buildDir, 'public');
+    if (fs.existsSync(publicDir)) {
+        fs.copySync(publicDir, path.join(outputDir, 'public'));
     }
     console.log('✅ Frontend assets copied.');
     

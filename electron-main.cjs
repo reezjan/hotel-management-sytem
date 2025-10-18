@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
@@ -7,14 +7,30 @@ const fs = require('fs');
 let mainWindow;
 let serverProcess;
 
-// Disable all developer tools in production
+// Prevent debugging and inspection flags
+if (!isDev) {
+  const shouldQuit = process.argv.some(arg => 
+    arg.includes('--inspect') || 
+    arg.includes('--inspect-brk') ||
+    arg.includes('--remote-debugging-port') ||
+    arg.includes('--debug')
+  );
+  
+  if (shouldQuit) {
+    app.quit();
+    process.exit(0);
+  }
+}
+
+// Disable all developer tools and keyboard shortcuts in production
 if (!isDev) {
   app.on('browser-window-created', (_, window) => {
     window.webContents.on('before-input-event', (event, input) => {
-      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
+      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+Shift+C
       if (
         (input.control && input.shift && input.key.toLowerCase() === 'i') ||
         (input.control && input.shift && input.key.toLowerCase() === 'j') ||
+        (input.control && input.shift && input.key.toLowerCase() === 'c') ||
         (input.control && input.key.toLowerCase() === 'u') ||
         input.key === 'F12'
       ) {
@@ -31,14 +47,17 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      devTools: isDev, // Only enable in development
+      devTools: false, // Completely disabled even in development
       webSecurity: true,
       allowRunningInsecureContent: false,
+      enableRemoteModule: false,
+      sandbox: true,
       preload: path.join(__dirname, 'preload.cjs')
     },
     autoHideMenuBar: true,
     frame: true,
-    icon: path.join(__dirname, 'app-icon.ico')
+    icon: path.join(__dirname, 'app-icon.ico'),
+    title: 'Hotel Management System'
   });
 
   // Create custom menu with print functionality
@@ -157,12 +176,22 @@ function createWindow() {
     }
   });
 
-  // Prevent opening dev tools in production
-  if (!isDev) {
-    mainWindow.webContents.on('devtools-opened', () => {
-      mainWindow.webContents.closeDevTools();
-    });
-  }
+  // Completely prevent opening dev tools
+  mainWindow.webContents.on('devtools-opened', () => {
+    mainWindow.webContents.closeDevTools();
+  });
+
+  // Block any attempts to open new windows or navigation
+  mainWindow.webContents.setWindowOpenHandler(() => {
+    return { action: 'deny' };
+  });
+
+  // Prevent navigation away from the app
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('http://localhost:5000')) {
+      event.preventDefault();
+    }
+  });
 
   // Wait for server to start
   setTimeout(() => {
@@ -177,20 +206,21 @@ function createWindow() {
 function startServer() {
   const serverPath = isDev 
     ? path.join(__dirname, 'server/index.ts')
-    : path.join(process.resourcesPath, 'dist/index.js');
+    : path.join(__dirname, 'app_dist/index.js');
 
-  const nodeCommand = isDev ? 'npx' : 'process.execPath';
+  const nodeCommand = isDev ? 'npx' : 'node';
 
   const args = isDev ? ['tsx', serverPath] : [serverPath];
   
   serverProcess = spawn(nodeCommand, args, {
-  env: {
-    ...process.env,
-    NODE_ENV: isDev ? 'development' : 'production',
-    PORT: '5000'
-  },
-  cwd: isDev ? __dirname : process.resourcesPath
-});
+    env: {
+      ...process.env,
+      NODE_ENV: isDev ? 'development' : 'production',
+      PORT: '5000'
+    },
+    cwd: __dirname,
+    shell: true
+  });
 
   serverProcess.stdout.on('data', (data) => {
     if (isDev) console.log(`Server: ${data}`);
@@ -219,11 +249,26 @@ ipcMain.handle('print-preview', async () => {
 });
 
 app.on('ready', () => {
+  // Register global shortcuts to disable dev tools
+  if (!isDev) {
+    globalShortcut.register('CommandOrControl+Shift+I', () => { return false; });
+    globalShortcut.register('CommandOrControl+Shift+J', () => { return false; });
+    globalShortcut.register('CommandOrControl+Shift+C', () => { return false; });
+    globalShortcut.register('F12', () => { return false; });
+    globalShortcut.register('CommandOrControl+R', () => { return false; });
+    globalShortcut.register('F5', () => { return false; });
+  }
+  
   startServer();
   createWindow();
 });
 
 app.on('window-all-closed', () => {
+  // Unregister all shortcuts
+  if (!isDev) {
+    globalShortcut.unregisterAll();
+  }
+  
   if (serverProcess) {
     serverProcess.kill();
   }
