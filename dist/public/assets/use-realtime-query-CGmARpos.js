@@ -1,1 +1,0 @@
-import{b as c,r as i}from"./index-CuDmVYun.js";import{u as n}from"./use-websocket-CCUHb1Px.js";function m({queryKey:r,events:e}){const{on:t}=n(),o=c();i.useEffect(()=>{const u=[];return e.forEach(s=>{const a=t(s,()=>{o.invalidateQueries({queryKey:Array.isArray(r)?r:[r]})});u.push(a)}),()=>{u.forEach(s=>s())}},[t,o,r,e])}export{m as u};

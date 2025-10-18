@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { db } from './db';
 import { roles, roleCreationPermissions, users, hotels, roomTypes, rooms, mealPlans, vouchers, menuCategories, menuItems, restaurantTables, halls, guests, transactions, vendors, maintenanceRequests, leavePolicies, services } from '@shared/schema';
 import { hashPassword } from './auth';

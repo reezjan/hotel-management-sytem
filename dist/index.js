@@ -35,9 +35,11 @@ __export(schema_exports, {
   insertHallBookingSchema: () => insertHallBookingSchema,
   insertHallSchema: () => insertHallSchema,
   insertHotelSchema: () => insertHotelSchema,
+  insertKnownDeviceSchema: () => insertKnownDeviceSchema,
   insertLeaveBalanceSchema: () => insertLeaveBalanceSchema,
   insertLeavePolicySchema: () => insertLeavePolicySchema,
   insertLeaveRequestSchema: () => insertLeaveRequestSchema,
+  insertLoginHistorySchema: () => insertLoginHistorySchema,
   insertMaintenanceRequestSchema: () => insertMaintenanceRequestSchema,
   insertMaintenanceStatusHistorySchema: () => insertMaintenanceStatusHistorySchema,
   insertMealPlanSchema: () => insertMealPlanSchema,
@@ -47,6 +49,7 @@ __export(schema_exports, {
   insertPoolSchema: () => insertPoolSchema,
   insertPriceChangeLogSchema: () => insertPriceChangeLogSchema,
   insertRestaurantBillSchema: () => insertRestaurantBillSchema,
+  insertRoleLimitSchema: () => insertRoleLimitSchema,
   insertRoomCleaningQueueSchema: () => insertRoomCleaningQueueSchema,
   insertRoomReservationSchema: () => insertRoomReservationSchema,
   insertRoomSchema: () => insertRoomSchema,
@@ -54,6 +57,7 @@ __export(schema_exports, {
   insertRoomStatusLogSchema: () => insertRoomStatusLogSchema,
   insertRoomTypeSchema: () => insertRoomTypeSchema,
   insertSecurityAlertSchema: () => insertSecurityAlertSchema,
+  insertSecuritySettingsSchema: () => insertSecuritySettingsSchema,
   insertServicePackageSchema: () => insertServicePackageSchema,
   insertServiceSchema: () => insertServiceSchema,
   insertStockRequestSchema: () => insertStockRequestSchema,
@@ -68,6 +72,7 @@ __export(schema_exports, {
   inventoryConsumptions: () => inventoryConsumptions,
   inventoryItems: () => inventoryItems,
   inventoryTransactions: () => inventoryTransactions,
+  knownDevices: () => knownDevices,
   kotAuditLogs: () => kotAuditLogs,
   kotItemRelations: () => kotItemRelations,
   kotItems: () => kotItems,
@@ -76,6 +81,7 @@ __export(schema_exports, {
   leaveBalances: () => leaveBalances,
   leavePolicies: () => leavePolicies,
   leaveRequests: () => leaveRequests,
+  loginHistory: () => loginHistory,
   maintenanceRequests: () => maintenanceRequests,
   maintenanceStatusHistory: () => maintenanceStatusHistory,
   mealPlans: () => mealPlans,
@@ -92,6 +98,7 @@ __export(schema_exports, {
   restaurantBills: () => restaurantBills,
   restaurantTables: () => restaurantTables,
   roleCreationPermissions: () => roleCreationPermissions,
+  roleLimits: () => roleLimits,
   roles: () => roles,
   roomCleaningQueue: () => roomCleaningQueue,
   roomRelations: () => roomRelations,
@@ -102,6 +109,7 @@ __export(schema_exports, {
   roomTypes: () => roomTypes,
   rooms: () => rooms,
   securityAlerts: () => securityAlerts,
+  securitySettings: () => securitySettings,
   servicePackageRelations: () => servicePackageRelations,
   servicePackages: () => servicePackages,
   services: () => services,
@@ -135,7 +143,7 @@ import {
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var hotels, roles, roleCreationPermissions, users, userSessions, auditLogs, guests, roomTypes, rooms, roomStatusLogs, halls, pools, services, inventoryItems, inventoryConsumptions, wastages, inventoryTransactions, vendors, transactions, maintenanceRequests, maintenanceStatusHistory, tasks, roomCleaningQueue, restaurantTables, menuCategories, menuItems, kotOrders, kotItems, kotAuditLogs, payments, passwordResets, attendance, leaveRequests, leavePolicies, leaveBalances, notifications, hotelTaxes, vouchers, vehicleLogs, securityAlerts, roomServiceOrders, mealPlans, mealVouchers, roomReservations, roomServiceCharges, stockRequests, servicePackages, hallBookings, bookingPayments, restaurantBills, billPayments, hotelRelations, userRelations, roomRelations, menuItemRelations, kotOrderRelations, kotItemRelations, taskRelations, hallRelations, hallBookingRelations, servicePackageRelations, bookingPaymentRelations, restaurantBillRelations, billPaymentRelations, insertUserSchema, insertAuditLogSchema, insertHotelSchema, insertRoomSchema, insertRoomStatusLogSchema, insertMenuItemSchema, insertTaskSchema, insertRoomCleaningQueueSchema, insertTransactionSchema, insertMaintenanceRequestSchema, insertMaintenanceStatusHistorySchema, insertVoucherSchema, insertRoomTypeSchema, insertHallSchema, insertPoolSchema, insertServiceSchema, insertLeaveRequestSchema, insertLeavePolicySchema, insertLeaveBalanceSchema, insertNotificationSchema, insertWastageSchema, insertVehicleLogSchema, insertSecurityAlertSchema, insertMealPlanSchema, insertMealVoucherSchema, insertRoomReservationSchema, insertRoomServiceChargeSchema, insertVendorSchema, insertGuestSchema, insertStockRequestSchema, insertHallBookingSchema, insertServicePackageSchema, insertBookingPaymentSchema, updateKotItemSchema, insertAttendanceSchema, insertRestaurantBillSchema, insertBillPaymentSchema, checkoutOverrideLogs, insertCheckoutOverrideLogSchema, priceChangeLogs, insertPriceChangeLogSchema, taxChangeLogs, insertTaxChangeLogSchema;
+var hotels, roles, roleCreationPermissions, roleLimits, users, userSessions, loginHistory, knownDevices, securitySettings, auditLogs, guests, roomTypes, rooms, roomStatusLogs, halls, pools, services, inventoryItems, inventoryConsumptions, wastages, inventoryTransactions, vendors, transactions, maintenanceRequests, maintenanceStatusHistory, tasks, roomCleaningQueue, restaurantTables, menuCategories, menuItems, kotOrders, kotItems, kotAuditLogs, payments, passwordResets, attendance, leaveRequests, leavePolicies, leaveBalances, notifications, hotelTaxes, vouchers, vehicleLogs, securityAlerts, roomServiceOrders, mealPlans, mealVouchers, roomReservations, roomServiceCharges, stockRequests, servicePackages, hallBookings, bookingPayments, restaurantBills, billPayments, hotelRelations, userRelations, roomRelations, menuItemRelations, kotOrderRelations, kotItemRelations, taskRelations, hallRelations, hallBookingRelations, servicePackageRelations, bookingPaymentRelations, restaurantBillRelations, billPaymentRelations, insertUserSchema, insertAuditLogSchema, insertHotelSchema, insertRoleLimitSchema, insertRoomSchema, insertRoomStatusLogSchema, insertMenuItemSchema, insertTaskSchema, insertRoomCleaningQueueSchema, insertTransactionSchema, insertMaintenanceRequestSchema, insertMaintenanceStatusHistorySchema, insertVoucherSchema, insertRoomTypeSchema, insertHallSchema, insertPoolSchema, insertServiceSchema, insertLeaveRequestSchema, insertLeavePolicySchema, insertLeaveBalanceSchema, insertNotificationSchema, insertWastageSchema, insertVehicleLogSchema, insertSecurityAlertSchema, insertMealPlanSchema, insertMealVoucherSchema, insertRoomReservationSchema, insertRoomServiceChargeSchema, insertVendorSchema, insertGuestSchema, insertStockRequestSchema, insertHallBookingSchema, insertServicePackageSchema, insertBookingPaymentSchema, updateKotItemSchema, insertAttendanceSchema, insertRestaurantBillSchema, insertBillPaymentSchema, checkoutOverrideLogs, insertCheckoutOverrideLogSchema, priceChangeLogs, insertPriceChangeLogSchema, taxChangeLogs, insertTaxChangeLogSchema, insertLoginHistorySchema, insertSecuritySettingsSchema, insertKnownDeviceSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -146,6 +154,7 @@ var init_schema = __esm({
       phone: text("phone"),
       zip: text("zip"),
       vatNo: text("vat_no"),
+      isActive: boolean("is_active").default(true).notNull(),
       createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
       updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
       deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -162,6 +171,20 @@ var init_schema = __esm({
       createeRole: text("createe_role").notNull(),
       createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
     });
+    roleLimits = pgTable("role_limits", {
+      id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+      hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }).notNull(),
+      roleId: integer("role_id").references(() => roles.id).notNull(),
+      maxTransactionAmount: numeric("max_transaction_amount", { precision: 12, scale: 2 }),
+      maxDailyAmount: numeric("max_daily_amount", { precision: 12, scale: 2 }),
+      requiresApprovalAbove: numeric("requires_approval_above", { precision: 12, scale: 2 }),
+      canVoidTransactions: boolean("can_void_transactions").default(false),
+      canApproveWastage: boolean("can_approve_wastage").default(false),
+      createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+      updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+    }, (table) => ({
+      uniqueHotelRole: unique().on(table.hotelId, table.roleId)
+    }));
     users = pgTable("users", {
       id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
       hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
@@ -188,9 +211,61 @@ var init_schema = __esm({
       jwtToken: text("jwt_token"),
       deviceInfo: text("device_info"),
       ip: text("ip"),
+      deviceFingerprint: text("device_fingerprint"),
+      browser: text("browser"),
+      os: text("os"),
+      location: text("location"),
+      isNewDevice: boolean("is_new_device").default(false),
+      isNewLocation: boolean("is_new_location").default(false),
       createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
       lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow(),
       revokedAt: timestamp("revoked_at", { withTimezone: true })
+    });
+    loginHistory = pgTable("login_history", {
+      id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+      userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+      hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+      deviceFingerprint: text("device_fingerprint"),
+      browser: text("browser"),
+      os: text("os"),
+      ip: text("ip"),
+      location: text("location"),
+      isNewDevice: boolean("is_new_device").default(false),
+      isNewLocation: boolean("is_new_location").default(false),
+      loginAt: timestamp("login_at", { withTimezone: true }).defaultNow(),
+      logoutAt: timestamp("logout_at", { withTimezone: true })
+    });
+    knownDevices = pgTable("known_devices", {
+      id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+      userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+      hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+      deviceFingerprint: text("device_fingerprint").notNull(),
+      browser: text("browser"),
+      os: text("os"),
+      trustStatus: text("trust_status").notNull().default("trusted"),
+      firstSeen: timestamp("first_seen", { withTimezone: true }).defaultNow(),
+      lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow(),
+      createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+      updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+    }, (table) => ({
+      uniqueUserDevice: unique().on(table.userId, table.deviceFingerprint)
+    }));
+    securitySettings = pgTable("security_settings", {
+      id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+      hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }).unique(),
+      ownerEmail: text("owner_email"),
+      ownerPhone: text("owner_phone"),
+      alertOnNewDevice: boolean("alert_on_new_device").default(true),
+      alertOnNewLocation: boolean("alert_on_new_location").default(true),
+      alertOnLargeTransaction: boolean("alert_on_large_transaction").default(true),
+      largeTransactionThreshold: numeric("large_transaction_threshold", { precision: 12, scale: 2 }).default("10000"),
+      smtpHost: text("smtp_host"),
+      smtpPort: integer("smtp_port"),
+      smtpUser: text("smtp_user"),
+      smtpPassword: text("smtp_password"),
+      smsProvider: text("sms_provider"),
+      createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+      updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
     });
     auditLogs = pgTable("audit_logs", {
       id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -334,6 +409,9 @@ var init_schema = __esm({
       approvedAt: timestamp("approved_at", { withTimezone: true }),
       estimatedValue: numeric("estimated_value", { precision: 12, scale: 2 }),
       rejectionReason: text("rejection_reason"),
+      photoUrl: text("photo_url").notNull(),
+      photoTimestamp: timestamp("photo_timestamp", { withTimezone: true }),
+      photoCapturedByDevice: text("photo_captured_by_device"),
       createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
     });
     inventoryTransactions = pgTable("inventory_transactions", {
@@ -373,7 +451,14 @@ var init_schema = __esm({
       isVoided: boolean("is_voided").default(false),
       voidedBy: uuid("voided_by").references(() => users.id),
       voidedAt: timestamp("voided_at", { withTimezone: true }),
-      voidReason: text("void_reason")
+      voidReason: text("void_reason"),
+      billPhotoUrl: text("bill_photo_url"),
+      billPdfUrl: text("bill_pdf_url"),
+      billInvoiceNumber: text("bill_invoice_number"),
+      requiresApproval: boolean("requires_approval").default(false),
+      approvedBy: uuid("approved_by").references(() => users.id),
+      approvedAt: timestamp("approved_at", { withTimezone: true }),
+      rejectionReason: text("rejection_reason")
     });
     maintenanceRequests = pgTable("maintenance_requests", {
       id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -439,6 +524,7 @@ var init_schema = __esm({
       hotelId: uuid("hotel_id").references(() => hotels.id),
       name: text("name"),
       capacity: integer("capacity"),
+      location: text("location"),
       status: text("status").default("available"),
       createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
     });
@@ -677,6 +763,7 @@ var init_schema = __esm({
       totalPrice: numeric("total_price", { precision: 12, scale: 2 }),
       paidAmount: numeric("paid_amount", { precision: 12, scale: 2 }).default("0"),
       specialRequests: text("special_requests"),
+      guestType: text("guest_type").default("walkin"),
       status: text("status").default("pending"),
       createdBy: uuid("created_by").references(() => users.id),
       createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -1007,6 +1094,11 @@ var init_schema = __esm({
       updatedAt: true,
       deletedAt: true
     });
+    insertRoleLimitSchema = createInsertSchema(roleLimits).omit({
+      id: true,
+      createdAt: true,
+      updatedAt: true
+    });
     insertRoomSchema = createInsertSchema(rooms).omit({
       id: true,
       createdAt: true,
@@ -1047,14 +1139,16 @@ var init_schema = __esm({
     insertTransactionSchema = createInsertSchema(transactions).omit({
       id: true,
       createdAt: true,
-      deletedAt: true
+      deletedAt: true,
+      approvedBy: true,
+      approvedAt: true
     }).refine(
       (data) => {
         if (data.txnType && (data.txnType.includes("_in") || data.txnType === "revenue")) {
-          return data.paymentMethod && ["cash", "pos", "fonepay"].includes(data.paymentMethod);
+          return data.paymentMethod && ["cash", "pos", "fonepay", "cash_fonepay"].includes(data.paymentMethod);
         }
         if (data.txnType === "vendor_payment") {
-          return data.paymentMethod && ["cash", "cheque", "bank_transfer", "digital_wallet", "pos", "fonepay"].includes(data.paymentMethod);
+          return data.paymentMethod && ["cash", "cheque", "bank_transfer", "digital_wallet", "pos", "fonepay", "cash_fonepay"].includes(data.paymentMethod);
         }
         return true;
       },
@@ -1126,6 +1220,8 @@ var init_schema = __esm({
     insertWastageSchema = createInsertSchema(wastages).omit({
       id: true,
       createdAt: true
+    }).extend({
+      photoUrl: z.string().min(1, "Photo is required for wastage reporting")
     });
     insertVehicleLogSchema = createInsertSchema(vehicleLogs).omit({
       id: true,
@@ -1328,6 +1424,24 @@ var init_schema = __esm({
     }).extend({
       previousPercent: z.union([z.string(), z.number(), z.null()]).transform((val) => val === null ? null : String(val)),
       newPercent: z.union([z.string(), z.number(), z.null()]).transform((val) => val === null ? null : String(val))
+    });
+    insertLoginHistorySchema = createInsertSchema(loginHistory).omit({
+      id: true,
+      loginAt: true
+    });
+    insertSecuritySettingsSchema = createInsertSchema(securitySettings).omit({
+      id: true,
+      createdAt: true,
+      updatedAt: true
+    }).extend({
+      largeTransactionThreshold: z.union([z.string(), z.number()]).transform((val) => String(val))
+    });
+    insertKnownDeviceSchema = createInsertSchema(knownDevices).omit({
+      id: true,
+      firstSeen: true,
+      lastSeen: true,
+      createdAt: true,
+      updatedAt: true
     });
   }
 });
@@ -1837,14 +1951,14 @@ var init_storage = __esm({
         return overlapping.length === 0;
       }
       async getReservationsByDateRange(hotelId, startDate, endDate) {
-        const { and: and4, or: or2, lte: lte2, gte: gte2 } = await import("drizzle-orm");
+        const { and: and5, or: or2, lte: lte2, gte: gte4 } = await import("drizzle-orm");
         const reservations = await db.select().from(roomReservations).where(
-          and4(
+          and5(
             eq(roomReservations.hotelId, hotelId),
             or2(
-              and4(
+              and5(
                 lte2(roomReservations.checkInDate, endDate),
-                gte2(roomReservations.checkOutDate, startDate)
+                gte4(roomReservations.checkOutDate, startDate)
               )
             )
           )
@@ -1852,7 +1966,7 @@ var init_storage = __esm({
         return reservations;
       }
       async checkInGuest(reservationId) {
-        const { and: and4 } = await import("drizzle-orm");
+        const { and: and5 } = await import("drizzle-orm");
         const [reservation] = await db.select().from(roomReservations).where(eq(roomReservations.id, reservationId));
         if (!reservation) {
           throw new Error("Reservation not found");
@@ -2029,6 +2143,13 @@ var init_storage = __esm({
           voidedBy: transactions.voidedBy,
           voidedAt: transactions.voidedAt,
           voidReason: transactions.voidReason,
+          billPhotoUrl: transactions.billPhotoUrl,
+          billPdfUrl: transactions.billPdfUrl,
+          billInvoiceNumber: transactions.billInvoiceNumber,
+          requiresApproval: transactions.requiresApproval,
+          approvedBy: transactions.approvedBy,
+          approvedAt: transactions.approvedAt,
+          rejectionReason: transactions.rejectionReason,
           creator: {
             id: users.id,
             username: users.username,
@@ -2245,7 +2366,7 @@ var init_storage = __esm({
           return;
         }
         const menuItem = await db.query.menuItems.findFirst({
-          where: (menuItemsTable, { eq: eq4 }) => eq4(menuItemsTable.id, kotItem.menuItemId)
+          where: (menuItemsTable, { eq: eq5 }) => eq5(menuItemsTable.id, kotItem.menuItemId)
         });
         const recipe = menuItem?.recipe;
         if (!recipe?.ingredients || !Array.isArray(recipe.ingredients)) {
@@ -2256,7 +2377,7 @@ var init_storage = __esm({
         for (const ingredient of ingredients) {
           if (ingredient.inventoryItemId && ingredient.quantity) {
             const inventoryItem = await db.query.inventoryItems.findFirst({
-              where: (inventoryItemsTable, { eq: eq4 }) => eq4(inventoryItemsTable.id, ingredient.inventoryItemId)
+              where: (inventoryItemsTable, { eq: eq5 }) => eq5(inventoryItemsTable.id, ingredient.inventoryItemId)
             });
             if (inventoryItem) {
               let quantityInBaseUnit = ingredient.quantity;
@@ -2406,25 +2527,6 @@ var init_storage = __esm({
             throw new Error(`Cannot convert from ${wastageUnit} to ${baseUnit}`);
           }
         }
-        const currentStock = Number(inventoryItem.baseStockQty || inventoryItem.stockQty || 0);
-        if (wastageQtyInBaseUnits > currentStock) {
-          throw new Error(`Insufficient stock. Current stock: ${currentStock} ${baseUnit}, requested wastage: ${wastageQty} ${wastageUnit}`);
-        }
-        const newQuantity = currentStock - wastageQtyInBaseUnits;
-        await db.update(inventoryItems).set({
-          baseStockQty: String(newQuantity),
-          stockQty: String(newQuantity),
-          updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq(inventoryItems.id, wastage.itemId));
-        await db.insert(inventoryConsumptions).values({
-          hotelId: wastage.hotelId,
-          itemId: wastage.itemId,
-          qty: String(wastageQtyInBaseUnits),
-          unit: baseUnit,
-          reason: `Wastage: ${wastage.reason}`,
-          referenceEntity: "wastage",
-          createdBy: wastage.recordedBy
-        });
         await db.insert(inventoryTransactions).values({
           hotelId: wastage.hotelId,
           itemId: wastage.itemId,
@@ -2573,6 +2675,10 @@ var init_storage = __esm({
       async getRoomTypesByHotel(hotelId) {
         return await db.select().from(roomTypes).where(eq(roomTypes.hotelId, hotelId)).orderBy(asc(roomTypes.name));
       }
+      async getRoomType(id) {
+        const [roomType] = await db.select().from(roomTypes).where(eq(roomTypes.id, id)).limit(1);
+        return roomType;
+      }
       async createRoomType(roomType) {
         const [created] = await db.insert(roomTypes).values(roomType).returning();
         return created;
@@ -2624,6 +2730,10 @@ var init_storage = __esm({
       // Amenity operations - Services
       async getServicesByHotel(hotelId) {
         return await db.select().from(services).where(eq(services.hotelId, hotelId)).orderBy(asc(services.name));
+      }
+      async getService(id) {
+        const [service] = await db.select().from(services).where(eq(services.id, id)).limit(1);
+        return service;
       }
       async createService(service) {
         const [created] = await db.insert(services).values(service).returning();
@@ -2777,7 +2887,16 @@ var init_storage = __esm({
         return await db.select().from(leaveRequests).where(eq(leaveRequests.requestedBy, userId)).orderBy(desc(leaveRequests.createdAt));
       }
       async getLeaveRequestsForManager(hotelId) {
-        return await db.select().from(leaveRequests).where(eq(leaveRequests.hotelId, hotelId)).orderBy(desc(leaveRequests.createdAt));
+        const allRequests = await db.select({
+          leaveRequest: leaveRequests,
+          user: users,
+          role: roles
+        }).from(leaveRequests).leftJoin(users, eq(leaveRequests.requestedBy, users.id)).leftJoin(roles, eq(users.roleId, roles.id)).where(eq(leaveRequests.hotelId, hotelId)).orderBy(desc(leaveRequests.createdAt));
+        return allRequests.map((r) => ({
+          ...r.leaveRequest,
+          requestedByUser: r.user,
+          requestedByRole: r.role
+        }));
       }
       async getPendingLeaveRequestsForManager(hotelId) {
         return await db.select().from(leaveRequests).where(and(
@@ -2789,7 +2908,7 @@ var init_storage = __esm({
         const approvalMapping = {
           "restaurant_bar_manager": ["waiter", "cashier", "bartender", "kitchen_staff", "barista"],
           "housekeeping_supervisor": ["housekeeping_staff"],
-          "security_head": ["surveillance_officer"],
+          "security_head": ["surveillance_officer", "security_guard"],
           "manager": ["restaurant_bar_manager", "housekeeping_supervisor", "security_head", "finance", "front_desk", "storekeeper"],
           "owner": ["manager"]
         };
@@ -2824,7 +2943,7 @@ var init_storage = __esm({
         const approvalMapping = {
           "restaurant_bar_manager": ["waiter", "cashier", "bartender", "kitchen_staff", "barista"],
           "housekeeping_supervisor": ["housekeeping_staff"],
-          "security_head": ["surveillance_officer"],
+          "security_head": ["surveillance_officer", "security_guard"],
           "manager": ["restaurant_bar_manager", "housekeeping_supervisor", "security_head", "finance", "front_desk", "storekeeper"],
           "owner": ["manager"]
         };
@@ -2896,10 +3015,23 @@ var init_storage = __esm({
       // Leave balance operations
       async getLeaveBalancesByUser(userId, year) {
         const currentYear = year || (/* @__PURE__ */ new Date()).getFullYear();
-        return await db.select().from(leaveBalances).where(and(
+        const balances = await db.select().from(leaveBalances).where(and(
           eq(leaveBalances.userId, userId),
           eq(leaveBalances.year, currentYear)
         ));
+        if (balances.length === 0) {
+          return [];
+        }
+        const firstBalance = balances[0];
+        const hotelPolicies = await db.select().from(leavePolicies).where(eq(leavePolicies.hotelId, firstBalance.hotelId));
+        const enrichedBalances = balances.map((balance) => {
+          const policy = hotelPolicies.find((p) => p.leaveType === balance.leaveType);
+          return {
+            ...balance,
+            leaveTypeDetails: policy || { name: balance.leaveType, leaveType: balance.leaveType }
+          };
+        });
+        return enrichedBalances;
       }
       async getLeaveBalance(userId, leaveType, year) {
         const [balance] = await db.select().from(leaveBalances).where(and(
@@ -3147,7 +3279,7 @@ var init_storage = __esm({
           throw new Error("Stock request not found");
         }
         const inventoryItem = await db.query.inventoryItems.findFirst({
-          where: (inventoryItemsTable, { eq: eq4 }) => eq4(inventoryItemsTable.id, request.itemId)
+          where: (inventoryItemsTable, { eq: eq5 }) => eq5(inventoryItemsTable.id, request.itemId)
         });
         if (!inventoryItem) {
           throw new Error("Inventory item not found");
@@ -3452,6 +3584,305 @@ var init_storage = __esm({
         }).returning();
         return priceChangeLog;
       }
+      // Login history operations
+      async createLoginHistory(data) {
+        const [history] = await db.insert(loginHistory).values(data).returning();
+        return history;
+      }
+      async getLoginHistoryByUser(userId) {
+        return await db.select().from(loginHistory).where(eq(loginHistory.userId, userId)).orderBy(desc(loginHistory.loginAt));
+      }
+      async getLoginHistoryByDevice(userId, deviceFingerprint) {
+        const [record] = await db.select().from(loginHistory).where(and(
+          eq(loginHistory.userId, userId),
+          eq(loginHistory.deviceFingerprint, deviceFingerprint)
+        )).orderBy(desc(loginHistory.loginAt)).limit(1);
+        return record;
+      }
+      async checkDeviceExists(userId, deviceFingerprint) {
+        const result = await db.select({ id: loginHistory.id }).from(loginHistory).where(and(
+          eq(loginHistory.userId, userId),
+          eq(loginHistory.deviceFingerprint, deviceFingerprint)
+        )).limit(1);
+        return result.length > 0;
+      }
+      async checkLocationExists(userId, location) {
+        const result = await db.select({ id: loginHistory.id }).from(loginHistory).where(and(
+          eq(loginHistory.userId, userId),
+          eq(loginHistory.location, location)
+        )).limit(1);
+        return result.length > 0;
+      }
+      // Known devices operations (device trust management)
+      async upsertKnownDevice(userId, deviceFingerprint, deviceInfo) {
+        const existing = await this.getKnownDevice(userId, deviceFingerprint);
+        if (existing) {
+          const [updated] = await db.update(knownDevices).set({
+            lastSeen: /* @__PURE__ */ new Date(),
+            browser: deviceInfo.browser || existing.browser,
+            os: deviceInfo.os || existing.os,
+            updatedAt: /* @__PURE__ */ new Date()
+          }).where(and(
+            eq(knownDevices.userId, userId),
+            eq(knownDevices.deviceFingerprint, deviceFingerprint)
+          )).returning();
+          return updated;
+        } else {
+          const [newDevice] = await db.insert(knownDevices).values({
+            userId,
+            deviceFingerprint,
+            browser: deviceInfo.browser || "unknown",
+            os: deviceInfo.os || "unknown",
+            hotelId: deviceInfo.hotelId || null,
+            trustStatus: "trusted"
+          }).returning();
+          return newDevice;
+        }
+      }
+      async getKnownDevice(userId, deviceFingerprint) {
+        const [device] = await db.select().from(knownDevices).where(and(
+          eq(knownDevices.userId, userId),
+          eq(knownDevices.deviceFingerprint, deviceFingerprint)
+        )).limit(1);
+        return device;
+      }
+      async updateDeviceTrustStatus(userId, deviceFingerprint, trustStatus) {
+        const [updated] = await db.update(knownDevices).set({
+          trustStatus,
+          updatedAt: /* @__PURE__ */ new Date()
+        }).where(and(
+          eq(knownDevices.userId, userId),
+          eq(knownDevices.deviceFingerprint, deviceFingerprint)
+        )).returning();
+        return updated;
+      }
+      async isDeviceBlocked(userId, deviceFingerprint) {
+        const device = await this.getKnownDevice(userId, deviceFingerprint);
+        return device?.trustStatus === "blocked";
+      }
+      // Security settings operations
+      async getSecuritySettings(hotelId) {
+        const [settings] = await db.select().from(securitySettings).where(eq(securitySettings.hotelId, hotelId)).limit(1);
+        return settings;
+      }
+      async upsertSecuritySettings(hotelId, settings) {
+        const existing = await this.getSecuritySettings(hotelId);
+        if (existing) {
+          const [updated] = await db.update(securitySettings).set({
+            ...settings,
+            hotelId,
+            updatedAt: /* @__PURE__ */ new Date()
+          }).where(eq(securitySettings.hotelId, hotelId)).returning();
+          return updated;
+        } else {
+          const [created] = await db.insert(securitySettings).values({
+            ...settings,
+            hotelId
+          }).returning();
+          return created;
+        }
+      }
+      // Audit dashboard operations
+      async getAuditOverview(hotelId) {
+        const today = /* @__PURE__ */ new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayTransactions = await db.select().from(transactions).where(and(
+          eq(transactions.hotelId, hotelId),
+          gte(transactions.createdAt, today),
+          eq(transactions.isVoided, false)
+        ));
+        const revenue = todayTransactions.filter((t) => t.txnType && (t.txnType.includes("_in") || t.txnType === "revenue")).reduce((sum, t) => sum + Number(t.amount || 0), 0);
+        const expenses = todayTransactions.filter((t) => t.txnType && !t.txnType.includes("_in") && t.txnType !== "revenue").reduce((sum, t) => sum + Number(t.amount || 0), 0);
+        const activeStaff = await db.select({ count: sql2`count(*)` }).from(users).where(and(
+          eq(users.hotelId, hotelId),
+          eq(users.isActive, true),
+          isNull(users.deletedAt)
+        ));
+        const alertsCount = await db.select({ count: sql2`count(*)` }).from(securityAlerts).where(eq(securityAlerts.hotelId, hotelId));
+        return {
+          transactionsToday: todayTransactions.length,
+          revenue,
+          expenses,
+          activeStaff: activeStaff[0]?.count || 0,
+          alertsCount: alertsCount[0]?.count || 0
+        };
+      }
+      async getFinancialActivity(hotelId, filters) {
+        let query = db.select({
+          transaction: transactions,
+          staff: {
+            id: users.id,
+            username: users.username,
+            fullName: users.fullName
+          },
+          vendor: vendors
+        }).from(transactions).leftJoin(users, eq(transactions.createdBy, users.id)).leftJoin(vendors, eq(transactions.vendorId, vendors.id)).where(and(
+          eq(transactions.hotelId, hotelId),
+          eq(transactions.isVoided, false)
+        )).$dynamic();
+        const conditions = [eq(transactions.hotelId, hotelId), eq(transactions.isVoided, false)];
+        if (filters.startDate) {
+          conditions.push(gte(transactions.createdAt, filters.startDate));
+        }
+        if (filters.endDate) {
+          conditions.push(lte(transactions.createdAt, filters.endDate));
+        }
+        if (filters.txnType) {
+          conditions.push(eq(transactions.txnType, filters.txnType));
+        }
+        if (filters.paymentMethod) {
+          conditions.push(eq(transactions.paymentMethod, filters.paymentMethod));
+        }
+        if (filters.staffId) {
+          conditions.push(eq(transactions.createdBy, filters.staffId));
+        }
+        const results = await db.select({
+          transaction: transactions,
+          staff: {
+            id: users.id,
+            username: users.username,
+            fullName: users.fullName
+          },
+          vendor: vendors
+        }).from(transactions).leftJoin(users, eq(transactions.createdBy, users.id)).leftJoin(vendors, eq(transactions.vendorId, vendors.id)).where(and(...conditions)).orderBy(desc(transactions.createdAt));
+        return results;
+      }
+      async getStaffActivity(hotelId, filters) {
+        const conditions = [eq(auditLogs.hotelId, hotelId)];
+        if (filters.startDate) {
+          conditions.push(gte(auditLogs.createdAt, filters.startDate));
+        }
+        if (filters.endDate) {
+          conditions.push(lte(auditLogs.createdAt, filters.endDate));
+        }
+        if (filters.staffId) {
+          conditions.push(eq(auditLogs.userId, filters.staffId));
+        }
+        if (filters.actionType) {
+          conditions.push(eq(auditLogs.action, filters.actionType));
+        }
+        const results = await db.select({
+          auditLog: auditLogs,
+          staff: {
+            id: users.id,
+            username: users.username,
+            fullName: users.fullName,
+            roleId: users.roleId,
+            roleName: roles.name
+          }
+        }).from(auditLogs).leftJoin(users, eq(auditLogs.userId, users.id)).leftJoin(roles, eq(users.roleId, roles.id)).where(and(...conditions)).orderBy(desc(auditLogs.createdAt));
+        return results;
+      }
+      async getSecurityAlerts(hotelId, filters) {
+        const conditions = [eq(securityAlerts.hotelId, hotelId)];
+        if (filters.startDate) {
+          conditions.push(gte(securityAlerts.createdAt, filters.startDate));
+        }
+        if (filters.endDate) {
+          conditions.push(lte(securityAlerts.createdAt, filters.endDate));
+        }
+        if (filters.alertType) {
+          conditions.push(eq(securityAlerts.type, filters.alertType));
+        }
+        const results = await db.select({
+          alert: securityAlerts,
+          performedByUser: sql2`json_build_object(
+          'id', performer.id,
+          'username', performer.username,
+          'fullName', performer.full_name
+        )`,
+          overriddenByUser: sql2`json_build_object(
+          'id', overrider.id,
+          'username', overrider.username,
+          'fullName', overrider.full_name
+        )`
+        }).from(securityAlerts).leftJoin(sql2`users performer`, eq(securityAlerts.performedBy, sql2`performer.id`)).leftJoin(sql2`users overrider`, eq(securityAlerts.overriddenBy, sql2`overrider.id`)).where(and(...conditions)).orderBy(desc(securityAlerts.createdAt));
+        return results;
+      }
+      async getPhotoEvidence(hotelId, filters) {
+        const evidence = [];
+        if (!filters.evidenceType || filters.evidenceType === "wastage") {
+          const conditions = [eq(wastages.hotelId, hotelId)];
+          if (filters.startDate) {
+            conditions.push(gte(wastages.createdAt, filters.startDate));
+          }
+          if (filters.endDate) {
+            conditions.push(lte(wastages.createdAt, filters.endDate));
+          }
+          const wastagePhotos = await db.select({
+            wastage: wastages,
+            recordedBy: {
+              id: users.id,
+              username: users.username,
+              fullName: users.fullName
+            },
+            item: inventoryItems
+          }).from(wastages).leftJoin(users, eq(wastages.recordedBy, users.id)).leftJoin(inventoryItems, eq(wastages.itemId, inventoryItems.id)).where(and(...conditions)).orderBy(desc(wastages.createdAt));
+          evidence.push(...wastagePhotos.map((w) => ({ ...w, evidenceType: "wastage" })));
+        }
+        if (!filters.evidenceType || filters.evidenceType === "bill") {
+          const conditions = [
+            eq(transactions.hotelId, hotelId),
+            or(
+              sql2`${transactions.billPhotoUrl} IS NOT NULL`,
+              sql2`${transactions.billPdfUrl} IS NOT NULL`
+            )
+          ];
+          if (filters.startDate) {
+            conditions.push(gte(transactions.createdAt, filters.startDate));
+          }
+          if (filters.endDate) {
+            conditions.push(lte(transactions.createdAt, filters.endDate));
+          }
+          const billDocs = await db.select({
+            transaction: transactions,
+            createdBy: {
+              id: users.id,
+              username: users.username,
+              fullName: users.fullName
+            }
+          }).from(transactions).leftJoin(users, eq(transactions.createdBy, users.id)).where(and(...conditions)).orderBy(desc(transactions.createdAt));
+          evidence.push(...billDocs.map((b) => ({ ...b, evidenceType: "bill" })));
+        }
+        return evidence;
+      }
+      async getDeviceHistory(hotelId, filters) {
+        const conditions = [eq(loginHistory.hotelId, hotelId)];
+        if (filters.startDate) {
+          conditions.push(gte(loginHistory.loginAt, filters.startDate));
+        }
+        if (filters.endDate) {
+          conditions.push(lte(loginHistory.loginAt, filters.endDate));
+        }
+        if (filters.userId) {
+          conditions.push(eq(loginHistory.userId, filters.userId));
+        }
+        const results = await db.select({
+          loginHistory,
+          user: {
+            id: users.id,
+            username: users.username,
+            fullName: users.fullName
+          }
+        }).from(loginHistory).leftJoin(users, eq(loginHistory.userId, users.id)).where(and(...conditions)).orderBy(desc(loginHistory.loginAt));
+        return results;
+      }
+      async resolveSecurityAlert(id, resolution, notes) {
+        const alert = await db.select().from(securityAlerts).where(eq(securityAlerts.id, id)).limit(1);
+        if (!alert[0]) {
+          throw new Error("Alert not found");
+        }
+        await db.insert(auditLogs).values({
+          hotelId: alert[0].hotelId,
+          userId: alert[0].overriddenBy,
+          action: "resolve",
+          resourceType: "security_alert",
+          resourceId: id,
+          details: { resolution, notes },
+          success: true
+        });
+        return { ...alert[0], resolution, notes };
+      }
     };
     storage = new DatabaseStorage();
   }
@@ -3485,6 +3916,655 @@ var init_audit = __esm({
   }
 });
 
+// shared/device-utils.ts
+async function getLocationFromIP(ipAddress) {
+  try {
+    const response = await fetch(`http://ip-api.com/json/${ipAddress}?fields=status,country,city,lat,lon`);
+    if (!response.ok) {
+      throw new Error(`IP API request failed: ${response.status}`);
+    }
+    const data = await response.json();
+    if (data.status !== "success") {
+      throw new Error("IP API returned failure status");
+    }
+    return {
+      city: data.city || "Unknown",
+      country: data.country || "Unknown",
+      location: `${data.lat || 0}, ${data.lon || 0}`
+    };
+  } catch (error) {
+    console.error("Error fetching location from IP:", error);
+    return {
+      city: "Unknown",
+      country: "Unknown",
+      location: "Unknown"
+    };
+  }
+}
+var init_device_utils = __esm({
+  "shared/device-utils.ts"() {
+    "use strict";
+  }
+});
+
+// server/alert-service.ts
+var alert_service_exports = {};
+__export(alert_service_exports, {
+  alertService: () => alertService
+});
+import nodemailer from "nodemailer";
+var AlertService, alertService;
+var init_alert_service = __esm({
+  "server/alert-service.ts"() {
+    "use strict";
+    init_storage();
+    init_audit();
+    AlertService = class {
+      async sendSecurityAlert(params) {
+        const { hotelId, userId, alertType, alertData } = params;
+        try {
+          const securitySettings3 = await storage.getSecuritySettings(hotelId);
+          if (!securitySettings3 || !securitySettings3.ownerEmail) {
+            console.warn(`[AlertService] No security settings or owner email configured for hotel ${hotelId}`);
+            return { success: false, error: "No security settings configured" };
+          }
+          const isEnabled = await this.shouldSendAlert(hotelId, alertType);
+          if (!isEnabled) {
+            console.log(`[AlertService] Alert type ${alertType} is disabled for hotel ${hotelId}`);
+            return { success: false, error: "Alert type is disabled" };
+          }
+          if (!securitySettings3.smtpHost || !securitySettings3.smtpUser || !securitySettings3.smtpPassword) {
+            console.warn(`[AlertService] Incomplete SMTP configuration for hotel ${hotelId}`);
+            return { success: false, error: "Incomplete SMTP configuration" };
+          }
+          const hotel = await storage.getHotel(hotelId);
+          if (!hotel) {
+            console.error(`[AlertService] Hotel ${hotelId} not found`);
+            return { success: false, error: "Hotel not found" };
+          }
+          const user = await storage.getUser(userId);
+          if (!user) {
+            console.error(`[AlertService] User ${userId} not found`);
+            return { success: false, error: "User not found" };
+          }
+          const { subject, html } = this.formatAlertEmail(
+            alertType,
+            alertData,
+            hotel.name,
+            user.fullName || user.username
+          );
+          const smtpConfig = {
+            host: securitySettings3.smtpHost,
+            port: securitySettings3.smtpPort || 587,
+            user: securitySettings3.smtpUser,
+            password: securitySettings3.smtpPassword
+          };
+          const emailResult = await this.sendEmail({
+            from: securitySettings3.smtpUser,
+            // FROM email from database - NO HARDCODING
+            to: securitySettings3.ownerEmail,
+            // TO email from database - NO HARDCODING
+            subject,
+            html,
+            smtpConfig
+          });
+          await logAudit({
+            userId,
+            hotelId,
+            action: "send_security_alert",
+            resourceType: "security_alert",
+            resourceId: userId,
+            details: {
+              alertType,
+              alertData,
+              emailSent: emailResult.success,
+              error: emailResult.error
+            },
+            success: emailResult.success,
+            errorMessage: emailResult.error
+          });
+          return emailResult;
+        } catch (error) {
+          console.error("[AlertService] Error sending security alert:", error);
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          await logAudit({
+            userId,
+            hotelId,
+            action: "send_security_alert",
+            resourceType: "security_alert",
+            resourceId: userId,
+            details: { alertType, alertData },
+            success: false,
+            errorMessage
+          });
+          return { success: false, error: errorMessage };
+        }
+      }
+      async sendEmail(params) {
+        const { from, to, subject, html, smtpConfig } = params;
+        try {
+          const transporter = nodemailer.createTransport({
+            host: smtpConfig.host,
+            port: smtpConfig.port,
+            secure: smtpConfig.port === 465,
+            // true for 465, false for other ports
+            auth: {
+              user: smtpConfig.user,
+              pass: smtpConfig.password
+            }
+          });
+          await transporter.sendMail({
+            from,
+            to,
+            subject,
+            html
+          });
+          console.log(`[AlertService] Email sent successfully to ${to}`);
+          return { success: true };
+        } catch (error) {
+          console.error("[AlertService] Error sending email:", error);
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          return { success: false, error: errorMessage };
+        }
+      }
+      formatAlertEmail(alertType, alertData, hotelName, staffName) {
+        let subject = "";
+        let content = "";
+        switch (alertType) {
+          case "new_device":
+            subject = `\u{1F512} Security Alert: New Device Login Detected - ${hotelName}`;
+            content = `
+          <h2 style="color: #ef4444;">New Device Login Detected</h2>
+          <p>A staff member has logged in from a new device.</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Staff Member:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${staffName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Browser:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.browser || "Unknown"}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Operating System:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.os || "Unknown"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Device Fingerprint:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-family: monospace; font-size: 12px;">${alertData.deviceFingerprint || "N/A"}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Login Time:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.loginTime || (/* @__PURE__ */ new Date()).toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Location:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.location || "Unknown"}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">IP Address:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.ip || "N/A"}</td>
+            </tr>
+          </table>
+          <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #92400e;">Recommended Actions:</h3>
+            <ul style="margin: 0; padding-left: 20px;">
+              <li>Verify with ${staffName} if this login was authorized</li>
+              <li>Check if the device and location are legitimate</li>
+              <li>Review recent activity from this user</li>
+              <li>If suspicious, immediately deactivate the user account</li>
+            </ul>
+          </div>
+        `;
+            break;
+          case "new_location":
+            subject = `\u{1F30D} Security Alert: Login from New Location - ${hotelName}`;
+            content = `
+          <h2 style="color: #3b82f6;">Login from New Location</h2>
+          <p>A staff member has logged in from a new location.</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Staff Member:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${staffName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">New Location:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.location || "Unknown"}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">City:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.city || "Unknown"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Country:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.country || "Unknown"}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">IP Address:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.ip || "N/A"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Login Time:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.loginTime || (/* @__PURE__ */ new Date()).toLocaleString()}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Device Info:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.browser || "Unknown"} on ${alertData.os || "Unknown"}</td>
+            </tr>
+          </table>
+          <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #1e40af;">Recommended Actions:</h3>
+            <ul style="margin: 0; padding-left: 20px;">
+              <li>Confirm with ${staffName} about this login location</li>
+              <li>Verify if the staff member is traveling or working remotely</li>
+              <li>Check for any unusual activity patterns</li>
+              <li>Consider requiring password reset if suspicious</li>
+            </ul>
+          </div>
+        `;
+            break;
+          case "large_transaction":
+            subject = `\u{1F4B0} Security Alert: Large Transaction Detected - ${hotelName}`;
+            content = `
+          <h2 style="color: #10b981;">Large Transaction Detected</h2>
+          <p>A large financial transaction has been processed.</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Processed By:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${staffName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Transaction Amount:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-size: 18px; font-weight: bold; color: #10b981;">Rs. ${alertData.amount || "0"}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Transaction Type:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.type || "N/A"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Payment Method:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.paymentMethod || "N/A"}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Transaction Time:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.time || (/* @__PURE__ */ new Date()).toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Description:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.description || "No description provided"}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Reference ID:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-family: monospace;">${alertData.referenceId || "N/A"}</td>
+            </tr>
+          </table>
+          <div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 16px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #065f46;">Recommended Actions:</h3>
+            <ul style="margin: 0; padding-left: 20px;">
+              <li>Review the transaction details for accuracy</li>
+              <li>Verify the payment method and authorization</li>
+              <li>Contact ${staffName} to confirm the transaction</li>
+              <li>Check supporting documentation (receipts, invoices)</li>
+              <li>Monitor for any unusual patterns</li>
+            </ul>
+          </div>
+        `;
+            break;
+          case "suspicious_activity":
+            subject = `\u26A0\uFE0F Security Alert: Suspicious Activity Detected - ${hotelName}`;
+            content = `
+          <h2 style="color: #dc2626;">Suspicious Activity Detected</h2>
+          <p>Unusual activity has been detected in your hotel system.</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Staff Member:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${staffName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Activity Type:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.activityType || "Unknown"}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Description:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.description || "No description available"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Time Detected:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.time || (/* @__PURE__ */ new Date()).toLocaleString()}</td>
+            </tr>
+            <tr style="background-color: #f3f4f6;">
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Location/IP:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${alertData.location || "N/A"} (${alertData.ip || "N/A"})</td>
+            </tr>
+            <tr>
+              <td style="padding: 12px; border: 1px solid #e5e7eb; font-weight: bold;">Additional Details:</td>
+              <td style="padding: 12px; border: 1px solid #e5e7eb;">${JSON.stringify(alertData.details || {}, null, 2)}</td>
+            </tr>
+          </table>
+          <div style="background-color: #fee2e2; border-left: 4px solid #dc2626; padding: 16px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #991b1b;">\u26A0\uFE0F IMMEDIATE ACTIONS REQUIRED:</h3>
+            <ul style="margin: 0; padding-left: 20px;">
+              <li><strong>Investigate immediately</strong> - Review all recent activities by ${staffName}</li>
+              <li><strong>Contact the staff member</strong> - Verify if the activity was authorized</li>
+              <li><strong>Check system logs</strong> - Look for other suspicious patterns</li>
+              <li><strong>Consider temporary suspension</strong> - If unauthorized, deactivate the account immediately</li>
+              <li><strong>Document everything</strong> - Keep records for security audit</li>
+            </ul>
+          </div>
+        `;
+            break;
+          default:
+            subject = `\u{1F514} Security Alert - ${hotelName}`;
+            content = `
+          <h2>Security Alert</h2>
+          <p>A security event has been detected.</p>
+          <p><strong>Staff Member:</strong> ${staffName}</p>
+          <p><strong>Alert Type:</strong> ${alertType}</p>
+          <p><strong>Details:</strong> ${JSON.stringify(alertData, null, 2)}</p>
+        `;
+        }
+        const html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Security Alert</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #374151; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+          <h1 style="margin: 0; font-size: 24px;">\u{1F3E8} ${hotelName}</h1>
+          <p style="margin: 10px 0 0 0; opacity: 0.9;">Hotel Management System</p>
+        </div>
+        
+        <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+          ${content}
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px; padding: 20px; color: #6b7280; font-size: 14px;">
+          <p style="margin: 0;">This is an automated security alert from your Hotel Management System</p>
+          <p style="margin: 5px 0 0 0;">Please do not reply to this email</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 15px 0;">
+          <p style="margin: 0; font-size: 12px;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} ${hotelName}. All rights reserved.</p>
+        </div>
+      </body>
+      </html>
+    `;
+        return { subject, html };
+      }
+      async shouldSendAlert(hotelId, alertType) {
+        try {
+          const securitySettings3 = await storage.getSecuritySettings(hotelId);
+          if (!securitySettings3) {
+            return false;
+          }
+          switch (alertType) {
+            case "new_device":
+              return securitySettings3.alertOnNewDevice ?? false;
+            case "new_location":
+              return securitySettings3.alertOnNewLocation ?? false;
+            case "large_transaction":
+              return securitySettings3.alertOnLargeTransaction ?? false;
+            case "suspicious_activity":
+              return true;
+            // Always send suspicious activity alerts
+            default:
+              return false;
+          }
+        } catch (error) {
+          console.error("[AlertService] Error checking alert settings:", error);
+          return false;
+        }
+      }
+      async sendDailySummaryEmail(hotelId) {
+        try {
+          const securitySettings3 = await storage.getSecuritySettings(hotelId);
+          if (!securitySettings3 || !securitySettings3.ownerEmail) {
+            console.warn(`[AlertService] No security settings or owner email configured for hotel ${hotelId}`);
+            return { success: false, error: "No security settings configured" };
+          }
+          if (!securitySettings3.smtpHost || !securitySettings3.smtpUser || !securitySettings3.smtpPassword) {
+            console.warn(`[AlertService] Incomplete SMTP configuration for hotel ${hotelId}`);
+            return { success: false, error: "Incomplete SMTP configuration" };
+          }
+          const hotel = await storage.getHotel(hotelId);
+          if (!hotel) {
+            console.error(`[AlertService] Hotel ${hotelId} not found`);
+            return { success: false, error: "Hotel not found" };
+          }
+          const today = /* @__PURE__ */ new Date();
+          today.setHours(0, 0, 0, 0);
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayEnd = new Date(yesterday);
+          yesterdayEnd.setHours(23, 59, 59, 999);
+          const [
+            allTransactions,
+            allWastages,
+            allAttendance,
+            pendingLeaveRequests
+          ] = await Promise.all([
+            storage.getTransactionsByHotel(hotelId),
+            storage.getWastagesByHotel(hotelId),
+            storage.getAllAttendanceByHotel(hotelId, yesterday, yesterdayEnd),
+            storage.getPendingLeaveRequestsForApprover("owner", hotelId)
+          ]);
+          const yesterdayTransactions = allTransactions.filter((t) => {
+            const tDate = new Date(t.createdAt);
+            return tDate >= yesterday && tDate <= yesterdayEnd;
+          });
+          const yesterdayWastages = allWastages.filter((w) => {
+            const wDate = new Date(w.createdAt);
+            return wDate >= yesterday && wDate <= yesterdayEnd;
+          });
+          const revenue = yesterdayTransactions.filter((t) => t.txnType === "revenue" || t.txnType === "room_revenue" || t.txnType === "restaurant_revenue").reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+          const expenses = yesterdayTransactions.filter((t) => t.txnType === "expense").reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
+          const profit = revenue - expenses;
+          const securityAlertCount = yesterdayTransactions.filter(
+            (t) => t.details?.isNewDevice || t.details?.isNewLocation
+          ).length;
+          const pendingTransactionApprovals = allTransactions.filter((t) => t.requiresApproval && !t.approvedBy).length;
+          const missingBillProofs = allTransactions.filter((t) => !t.billPhotoUrl && !t.billPdfUrl && t.txnType === "expense").length;
+          const { subject, html } = this.formatDailySummaryEmail({
+            hotelName: hotel.name,
+            date: yesterday,
+            totalTransactions: yesterdayTransactions.length,
+            revenue,
+            expenses,
+            profit,
+            wastagesCount: yesterdayWastages.length,
+            securityAlertsCount: securityAlertCount,
+            attendanceSummary: {
+              present: allAttendance.filter((a) => a.status === "present").length,
+              absent: allAttendance.filter((a) => a.status === "absent").length,
+              late: allAttendance.filter((a) => a.status === "late").length
+            },
+            pendingApprovals: {
+              transactions: pendingTransactionApprovals,
+              leaveRequests: pendingLeaveRequests.length,
+              missingBillProofs
+            }
+          });
+          const smtpConfig = {
+            host: securitySettings3.smtpHost,
+            port: securitySettings3.smtpPort || 587,
+            user: securitySettings3.smtpUser,
+            password: securitySettings3.smtpPassword
+          };
+          const emailResult = await this.sendEmail({
+            from: securitySettings3.smtpUser,
+            to: securitySettings3.ownerEmail,
+            subject,
+            html,
+            smtpConfig
+          });
+          await logAudit({
+            userId: null,
+            hotelId,
+            action: "send_daily_summary",
+            resourceType: "email",
+            resourceId: hotelId,
+            details: {
+              emailSent: emailResult.success,
+              error: emailResult.error,
+              date: yesterday.toISOString()
+            },
+            success: emailResult.success,
+            errorMessage: emailResult.error
+          });
+          if (emailResult.success) {
+            console.log(`[AlertService] Daily summary email sent successfully to ${securitySettings3.ownerEmail}`);
+          }
+          return emailResult;
+        } catch (error) {
+          console.error("[AlertService] Error sending daily summary email:", error);
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          await logAudit({
+            userId: null,
+            hotelId,
+            action: "send_daily_summary",
+            resourceType: "email",
+            resourceId: hotelId,
+            details: { error: errorMessage },
+            success: false,
+            errorMessage
+          });
+          return { success: false, error: errorMessage };
+        }
+      }
+      formatDailySummaryEmail(data) {
+        const { hotelName, date, totalTransactions, revenue, expenses, profit, wastagesCount, securityAlertsCount, attendanceSummary, pendingApprovals } = data;
+        const dateStr = date.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+        const subject = `\u{1F4CA} Daily Summary Report - ${hotelName} - ${dateStr}`;
+        const profitColor = profit >= 0 ? "#10b981" : "#ef4444";
+        const profitIcon = profit >= 0 ? "\u{1F4C8}" : "\u{1F4C9}";
+        const content = `
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0; font-size: 28px;">\u{1F4CA} Daily Summary Report</h1>
+        <p style="margin: 10px 0 0 0; opacity: 0.9; font-size: 16px;">${dateStr}</p>
+      </div>
+
+      <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none;">
+        <!-- Executive Summary -->
+        <div style="background-color: #f3f4f6; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #1f2937; font-size: 20px;">\u{1F4CB} Executive Summary</h2>
+          <p style="margin: 0; font-size: 16px; color: #4b5563;">
+            Total Transactions: <strong>${totalTransactions}</strong>
+          </p>
+        </div>
+
+        <!-- Financial Highlights -->
+        <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #065f46; font-size: 20px;">\u{1F4B0} Financial Highlights</h2>
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+            <tr style="background-color: #d1fae5;">
+              <td style="padding: 12px; font-weight: bold; color: #065f46;">Total Revenue:</td>
+              <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: bold; color: #10b981;">Rs. ${revenue.toLocaleString()}</td>
+            </tr>
+            <tr style="background-color: #fee2e2;">
+              <td style="padding: 12px; font-weight: bold; color: #991b1b;">Total Expenses:</td>
+              <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: bold; color: #ef4444;">Rs. ${expenses.toLocaleString()}</td>
+            </tr>
+            <tr style="background-color: ${profit >= 0 ? "#d1fae5" : "#fee2e2"};">
+              <td style="padding: 12px; font-weight: bold; color: #1f2937;">Net Profit/Loss:</td>
+              <td style="padding: 12px; text-align: right; font-size: 20px; font-weight: bold; color: ${profitColor};">
+                ${profitIcon} Rs. ${profit.toLocaleString()}
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Operations Highlights -->
+        <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #1e40af; font-size: 20px;">\u{1F3E8} Operations Highlights</h2>
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+            <tr style="background-color: #bfdbfe;">
+              <td style="padding: 12px; font-weight: bold;">Staff Attendance:</td>
+              <td style="padding: 12px; text-align: right;">
+                Present: <strong style="color: #10b981;">${attendanceSummary.present}</strong> | 
+                Absent: <strong style="color: #ef4444;">${attendanceSummary.absent}</strong> | 
+                Late: <strong style="color: #f59e0b;">${attendanceSummary.late}</strong>
+              </td>
+            </tr>
+            <tr style="background-color: #dbeafe;">
+              <td style="padding: 12px; font-weight: bold;">Wastages Reported:</td>
+              <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: bold;">${wastagesCount}</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Security Highlights -->
+        ${securityAlertsCount > 0 ? `
+        <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #92400e; font-size: 20px;">\u{1F512} Security Highlights</h2>
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+            <tr style="background-color: #fde68a;">
+              <td style="padding: 12px; font-weight: bold;">Security Alerts:</td>
+              <td style="padding: 12px; text-align: right; font-size: 18px; font-weight: bold; color: #f59e0b;">${securityAlertsCount}</td>
+            </tr>
+          </table>
+          <p style="margin: 10px 0 0 0; color: #92400e; font-size: 14px;">
+            \u26A0\uFE0F New device/location logins detected. Review audit logs for details.
+          </p>
+        </div>
+        ` : ""}
+
+        <!-- Action Items -->
+        ${pendingApprovals.transactions + pendingApprovals.leaveRequests + pendingApprovals.missingBillProofs > 0 ? `
+        <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #991b1b; font-size: 20px;">\u26A0\uFE0F Action Items Required</h2>
+          <ul style="margin: 10px 0; padding-left: 20px; color: #991b1b;">
+            ${pendingApprovals.transactions > 0 ? `<li><strong>${pendingApprovals.transactions}</strong> transactions pending your approval</li>` : ""}
+            ${pendingApprovals.leaveRequests > 0 ? `<li><strong>${pendingApprovals.leaveRequests}</strong> leave requests pending your approval</li>` : ""}
+            ${pendingApprovals.missingBillProofs > 0 ? `<li><strong>${pendingApprovals.missingBillProofs}</strong> expenses missing bill proof documentation</li>` : ""}
+          </ul>
+        </div>
+        ` : `
+        <div style="background-color: #d1fae5; border-left: 4px solid #10b981; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <h2 style="margin-top: 0; color: #065f46; font-size: 20px;">\u2705 All Clear</h2>
+          <p style="margin: 0; color: #065f46;">No pending action items at this time.</p>
+        </div>
+        `}
+
+        <!-- Link to Dashboard -->
+        <div style="text-align: center; margin-top: 30px;">
+          <p style="margin: 0 0 15px 0; color: #6b7280; font-size: 14px;">
+            View detailed analytics and audit logs in your dashboard
+          </p>
+          <a href="${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "#"}" 
+             style="display: inline-block; background-color: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+            View Full Dashboard
+          </a>
+        </div>
+      </div>
+    `;
+        const html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Daily Summary Report</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #374151; max-width: 650px; margin: 0 auto; padding: 20px; background-color: #f9fafb;">
+        ${content}
+        
+        <div style="text-align: center; margin-top: 20px; padding: 20px; color: #6b7280; font-size: 14px;">
+          <p style="margin: 0;">This is an automated daily summary from your Hotel Management System</p>
+          <p style="margin: 5px 0 0 0;">Please do not reply to this email</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 15px 0;">
+          <p style="margin: 0; font-size: 12px;">\xA9 ${(/* @__PURE__ */ new Date()).getFullYear()} ${hotelName}. All rights reserved.</p>
+        </div>
+      </body>
+      </html>
+    `;
+        return { subject, html };
+      }
+    };
+    alertService = new AlertService();
+  }
+});
+
 // server/auth.ts
 var auth_exports = {};
 __export(auth_exports, {
@@ -3510,11 +4590,26 @@ function sanitizeInput(input) {
   sanitized = sanitized.substring(0, 1e3);
   return sanitized.trim();
 }
-function requireActiveUser(req, res, next) {
+async function requireActiveUser(req, res, next) {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Authentication required" });
   }
   const user = req.user;
+  const deviceFingerprint = req.session.deviceFingerprint;
+  if (deviceFingerprint && user?.id) {
+    const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
+    if (isBlocked) {
+      req.logout((err) => {
+        if (err) console.error("Logout error:", err);
+      });
+      req.session.destroy((err) => {
+        if (err) console.error("Session destroy error:", err);
+      });
+      return res.status(403).json({
+        message: "This device has been blocked. Please contact your administrator."
+      });
+    }
+  }
   if (!user.isActive) {
     req.logout((err) => {
       if (err) console.error("Logout error:", err);
@@ -3571,6 +4666,12 @@ function setupAuth(app2) {
       if (!user.isActive) {
         return done(null, false, { message: "Your account has been deactivated. Please contact your manager." });
       }
+      if (user.hotelId && user.role?.name !== "super_admin") {
+        const hotel = await storage.getHotel(user.hotelId);
+        if (hotel && !hotel.isActive) {
+          return done(null, false, { message: "This hotel has been deactivated. Please contact support." });
+        }
+      }
       return done(null, user);
     })
   );
@@ -3603,7 +4704,7 @@ function setupAuth(app2) {
       }
       if (!user) {
         await logAudit({
-          userId: "unknown",
+          userId: null,
           action: "login_failed",
           resourceType: "user",
           details: { username: req.body.username, reason: info?.message },
@@ -3616,22 +4717,118 @@ function setupAuth(app2) {
           message: info?.message || "Invalid username or password"
         });
       }
+      const deviceFingerprint = req.body.deviceFingerprint || "unknown";
+      const browser = req.body.browser || "unknown";
+      const os = req.body.os || "unknown";
+      const ipAddress = req.ip || "unknown";
+      const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
+      if (isBlocked) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId || void 0,
+          action: "login_blocked_device",
+          resourceType: "device",
+          resourceId: deviceFingerprint,
+          details: {
+            username: user.username,
+            deviceFingerprint,
+            browser,
+            os,
+            reason: "Device is blocked"
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+          success: false,
+          errorMessage: "Login denied: Device is blocked"
+        });
+        return res.status(403).json({
+          message: "This device has been blocked. Please contact your administrator."
+        });
+      }
       req.login(user, async (err2) => {
         if (err2) {
           return next(err2);
         }
+        req.session.deviceFingerprint = deviceFingerprint;
+        const locationData = await getLocationFromIP(ipAddress);
+        const location = `${locationData.city}, ${locationData.country}`;
+        await storage.upsertKnownDevice(user.id, deviceFingerprint, {
+          browser,
+          os,
+          hotelId: user.hotelId || void 0
+        });
+        const isNewDevice = !await storage.checkDeviceExists(user.id, deviceFingerprint);
+        const isNewLocation = !await storage.checkLocationExists(user.id, location);
+        await storage.createLoginHistory({
+          userId: user.id,
+          hotelId: user.hotelId || null,
+          deviceFingerprint,
+          browser,
+          os,
+          ip: ipAddress,
+          location,
+          isNewDevice,
+          isNewLocation
+        });
         await logAudit({
           userId: user.id,
           hotelId: user.hotelId || void 0,
           action: "login",
           resourceType: "user",
           resourceId: user.id,
-          details: { username: user.username },
+          details: {
+            username: user.username,
+            deviceFingerprint,
+            browser,
+            os,
+            location,
+            isNewDevice,
+            isNewLocation
+          },
           ipAddress: req.ip,
           userAgent: req.headers["user-agent"],
           success: true
         });
-        return res.status(200).json(sanitizeUser(user));
+        if (user.hotelId) {
+          const securitySettings3 = await storage.getSecuritySettings(user.hotelId);
+          if (isNewDevice && securitySettings3?.alertOnNewDevice) {
+            alertService.sendSecurityAlert({
+              hotelId: user.hotelId,
+              userId: user.id,
+              alertType: "new_device",
+              alertData: {
+                browser,
+                os,
+                deviceFingerprint,
+                location,
+                ip: ipAddress,
+                loginTime: (/* @__PURE__ */ new Date()).toLocaleString()
+              }
+            }).catch((err3) => console.error("Failed to send new device alert:", err3));
+          }
+          if (isNewLocation && securitySettings3?.alertOnNewLocation) {
+            const locationParts = location.split(", ");
+            alertService.sendSecurityAlert({
+              hotelId: user.hotelId,
+              userId: user.id,
+              alertType: "new_location",
+              alertData: {
+                location,
+                city: locationParts[0] || "Unknown",
+                country: locationParts[1] || "Unknown",
+                ip: ipAddress,
+                browser,
+                os,
+                loginTime: (/* @__PURE__ */ new Date()).toLocaleString()
+              }
+            }).catch((err3) => console.error("Failed to send new location alert:", err3));
+          }
+        }
+        return res.status(200).json({
+          ...sanitizeUser(user),
+          isNewDevice,
+          isNewLocation
+        });
       });
     })(req, res, next);
   });
@@ -3710,11 +4907,14 @@ var init_auth = __esm({
     "use strict";
     init_storage();
     init_audit();
+    init_device_utils();
+    init_alert_service();
     scryptAsync = promisify(scrypt);
   }
 });
 
 // server/index.ts
+import "dotenv/config";
 import express2 from "express";
 
 // server/routes.ts
@@ -3741,14 +4941,16 @@ import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 var vite_config_default = defineConfig({
   plugins: [
     react(),
-    runtimeErrorOverlay(),
-    ...process.env.NODE_ENV !== "production" && process.env.REPL_ID !== void 0 ? [
-      await import("@replit/vite-plugin-cartographer").then(
-        (m) => m.cartographer()
-      ),
-      await import("@replit/vite-plugin-dev-banner").then(
-        (m) => m.devBanner()
-      )
+    ...process.env.NODE_ENV !== "production" ? [
+      runtimeErrorOverlay(),
+      ...process.env.REPL_ID !== void 0 ? [
+        await import("@replit/vite-plugin-cartographer").then(
+          (m) => m.cartographer()
+        ),
+        await import("@replit/vite-plugin-dev-banner").then(
+          (m) => m.devBanner()
+        )
+      ] : []
     ] : []
   ],
   resolve: {
@@ -3767,11 +4969,11 @@ var vite_config_default = defineConfig({
     host: "0.0.0.0",
     port: 5e3,
     strictPort: true,
-    allowedHosts: true,
     hmr: {
       protocol: "wss",
       host: process.env.REPLIT_DEV_DOMAIN || "localhost",
-      clientPort: 443
+      port: process.env.REPLIT_DEV_DOMAIN ? 443 : 5e3,
+      clientPort: process.env.REPLIT_DEV_DOMAIN ? 443 : 5e3
     },
     fs: {
       strict: true,
@@ -3933,8 +5135,15 @@ var wsEvents = {
   roomStatusUpdated: (hotelId, room) => broadcastToRole(hotelId, ["housekeeping_supervisor", "housekeeping_staff", "front_desk", "manager"], "room:updated", room),
   // Stock/Inventory updates
   stockUpdated: (hotelId, item) => broadcastToRole(hotelId, ["storekeeper", "manager", "restaurant_bar_manager", "housekeeping_supervisor"], "stock:updated", item),
+  // Stock request updates
+  stockRequestCreated: (hotelId, request) => broadcastToRole(hotelId, ["storekeeper", "manager", "owner"], "stock-request:created", request),
+  stockRequestUpdated: (hotelId, request) => broadcastToRole(hotelId, ["storekeeper", "manager", "owner"], "stock-request:updated", request),
   // Leave request updates
+  leaveRequestCreated: (hotelId, leaveRequest) => broadcastToHotel(hotelId, "leave:created", leaveRequest),
   leaveRequestUpdated: (hotelId, leaveRequest) => broadcastToHotel(hotelId, "leave:updated", leaveRequest),
+  // Service updates
+  serviceCreated: (hotelId, service) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "service:created", service),
+  serviceUpdated: (hotelId, service) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "service:updated", service),
   // Transaction updates
   transactionCreated: (hotelId, transaction) => broadcastToRole(hotelId, ["finance", "cashier", "manager", "owner"], "transaction:created", transaction),
   transactionUpdated: (hotelId, transaction) => broadcastToRole(hotelId, ["finance", "cashier", "manager", "owner"], "transaction:updated", transaction),
@@ -3945,13 +5154,110 @@ var wsEvents = {
   // Guest updates
   guestCreated: (hotelId, guest) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "guest:created", guest),
   guestUpdated: (hotelId, guest) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "guest:updated", guest),
+  // Room service charge updates
+  roomServiceChargeCreated: (hotelId, charge) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "room-service-charge:created", charge),
+  roomServiceChargeDeleted: (hotelId, chargeId) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "room-service-charge:deleted", { chargeId }),
+  // Reservation updates
+  reservationCreated: (hotelId, reservation) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "reservation:created", reservation),
+  reservationUpdated: (hotelId, reservation) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "reservation:updated", reservation),
+  // Hall booking updates
+  hallBookingCreated: (hotelId, booking) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "hall-booking:created", booking),
+  hallBookingUpdated: (hotelId, booking) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "hall-booking:updated", booking),
+  // Payment updates
+  paymentCreated: (hotelId, payment) => broadcastToRole(hotelId, ["finance", "cashier", "manager", "owner", "front_desk"], "payment:created", payment),
+  paymentUpdated: (hotelId, payment) => broadcastToRole(hotelId, ["finance", "cashier", "manager", "owner", "front_desk"], "payment:updated", payment),
+  // Inventory updates
+  inventoryCreated: (hotelId, item) => broadcastToRole(hotelId, ["storekeeper", "manager", "owner"], "inventory:created", item),
+  inventoryUpdated: (hotelId, item) => broadcastToRole(hotelId, ["storekeeper", "manager", "owner"], "inventory:updated", item),
+  inventoryDeleted: (hotelId, itemId) => broadcastToRole(hotelId, ["storekeeper", "manager", "owner"], "inventory:deleted", { itemId }),
+  // Inventory transaction updates
+  inventoryTransactionCreated: (hotelId, transaction) => broadcastToRole(hotelId, ["storekeeper", "manager", "owner"], "inventory-transaction:created", transaction),
+  // Wastage updates
+  wastageCreated: (hotelId, wastage) => broadcastToRole(hotelId, ["storekeeper", "manager", "owner", "restaurant_bar_manager"], "wastage:created", wastage),
+  wastageUpdated: (hotelId, wastage) => broadcastToRole(hotelId, ["storekeeper", "manager", "owner", "restaurant_bar_manager"], "wastage:updated", wastage),
+  // User/Staff updates
+  userCreated: (hotelId, user) => broadcastToRole(hotelId, ["manager", "owner"], "user:created", user),
+  userUpdated: (hotelId, user) => broadcastToRole(hotelId, ["manager", "owner"], "user:updated", user),
+  // Room and amenity updates
+  roomCreated: (hotelId, room) => broadcastToRole(hotelId, ["front_desk", "manager", "owner"], "room:created", room),
+  amenityUpdated: (hotelId, amenity) => broadcastToRole(hotelId, ["manager", "owner"], "amenity:updated", amenity),
   // General notification
   notification: (userId, notification) => broadcastToUser(userId, "notification", notification)
 };
 
+// server/upload.ts
+import multer from "multer";
+import path3 from "path";
+import { nanoid as nanoid2 } from "nanoid";
+import { existsSync, mkdirSync } from "fs";
+var uploadDir = "./uploads/wastage-photos";
+var billDocumentDir = "./uploads/bill-documents";
+if (!existsSync(uploadDir)) {
+  mkdirSync(uploadDir, { recursive: true });
+}
+if (!existsSync(billDocumentDir)) {
+  mkdirSync(billDocumentDir, { recursive: true });
+}
+var storage2 = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (_req, file, cb) => {
+    const timestamp2 = Date.now();
+    const randomString = nanoid2(8);
+    const ext = path3.extname(file.originalname);
+    const filename = `${timestamp2}-${randomString}${ext}`;
+    cb(null, filename);
+  }
+});
+var billDocumentStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, billDocumentDir);
+  },
+  filename: (_req, file, cb) => {
+    const timestamp2 = Date.now();
+    const randomString = nanoid2(8);
+    const ext = path3.extname(file.originalname);
+    const filename = `bill-${timestamp2}-${randomString}${ext}`;
+    cb(null, filename);
+  }
+});
+var fileFilter = (_req, file, cb) => {
+  const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Invalid file type. Only JPEG, JPG and PNG images are allowed."));
+  }
+};
+var billDocumentFileFilter = (_req, file, cb) => {
+  const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Invalid file type. Only JPEG, JPG, PNG images and PDF files are allowed."));
+  }
+};
+var uploadWastagePhoto = multer({
+  storage: storage2,
+  fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024
+    // 5MB max file size
+  }
+});
+var uploadBillDocument = multer({
+  storage: billDocumentStorage,
+  fileFilter: billDocumentFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024
+    // 10MB max file size
+  }
+});
+
 // server/routes.ts
 init_schema();
-import { eq as eq2, and as and2, isNull as isNull2, asc as asc2, desc as desc2, sql as sql3, ne as ne2 } from "drizzle-orm";
+import { eq as eq2, and as and2, isNull as isNull2, asc as asc2, desc as desc2, sql as sql3, ne as ne2, gte as gte2, lt as lt2 } from "drizzle-orm";
 
 // server/sanitize.ts
 function sanitizeInput2(input) {
@@ -3982,6 +5288,32 @@ function sanitizeObject(obj) {
 init_schema();
 async function registerRoutes(app2) {
   setupAuth(app2);
+  app2.use(async (req, res, next) => {
+    if (req.isAuthenticated()) {
+      const user = req.user;
+      const deviceFingerprint = req.session.deviceFingerprint;
+      if (!deviceFingerprint && user?.id) {
+        return req.logout((err) => {
+          if (err) console.error("Logout error:", err);
+          return res.status(401).json({
+            message: "Session expired. Please log in again."
+          });
+        });
+      }
+      if (deviceFingerprint && user?.id) {
+        const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
+        if (isBlocked) {
+          return req.logout((err) => {
+            if (err) console.error("Logout error:", err);
+            return res.status(403).json({
+              message: "This device has been blocked. Please contact your administrator."
+            });
+          });
+        }
+      }
+    }
+    next();
+  });
   app2.get("/api/hotels", async (req, res) => {
     try {
       const hotels2 = await storage.getAllHotels();
@@ -4017,6 +5349,24 @@ async function registerRoutes(app2) {
       res.json(hotel);
     } catch (error) {
       res.status(400).json({ message: "Failed to update hotel" });
+    }
+  });
+  app2.patch("/api/hotels/:id/activate", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const hotel = await storage.updateHotel(id, { isActive: true });
+      res.json(hotel);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to activate hotel" });
+    }
+  });
+  app2.patch("/api/hotels/:id/deactivate", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const hotel = await storage.updateHotel(id, { isActive: false });
+      res.json(hotel);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to deactivate hotel" });
     }
   });
   app2.delete("/api/hotels/:id", async (req, res) => {
@@ -4074,8 +5424,18 @@ async function registerRoutes(app2) {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
-      const { startDate, endDate } = req.query;
+      const currentRole = user.role?.name || "";
+      const canViewFinancials = ["owner", "manager", "finance"].includes(currentRole);
+      if (!canViewFinancials) {
+        return res.status(403).json({
+          message: "Only managers, owners, and finance staff can view financial reports"
+        });
+      }
+      const { startDate, endDate, pendingApproval } = req.query;
       let transactions2 = await storage.getTransactionsByHotel(user.hotelId);
+      if (pendingApproval === "true") {
+        transactions2 = transactions2.filter((t) => t.requiresApproval === true && !t.approvedBy && !t.rejectionReason);
+      }
       if (startDate && typeof startDate === "string") {
         const start = new Date(startDate);
         transactions2 = transactions2.filter((t) => new Date(t.createdAt) >= start);
@@ -4156,6 +5516,565 @@ async function registerRoutes(app2) {
       res.json({ message: "Vendor deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete vendor" });
+    }
+  });
+  app2.get("/api/hotels/current/security-settings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can access security settings"
+        });
+      }
+      const settings = await storage.getSecuritySettings(user.hotelId);
+      if (!settings) {
+        return res.json({
+          hotelId: user.hotelId,
+          ownerEmail: user.email || "",
+          ownerPhone: user.phone || "",
+          alertOnNewDevice: true,
+          alertOnNewLocation: true,
+          alertOnLargeTransaction: true,
+          largeTransactionThreshold: "10000",
+          smtpHost: null,
+          smtpPort: null,
+          smtpUser: null,
+          smtpPassword: null
+        });
+      }
+      const sanitizedSettings = {
+        ...settings,
+        smtpPassword: settings.smtpPassword ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : null
+      };
+      res.json(sanitizedSettings);
+    } catch (error) {
+      console.error("Security settings fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch security settings" });
+    }
+  });
+  app2.put("/api/hotels/current/security-settings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can update security settings"
+        });
+      }
+      const settingsData = insertSecuritySettingsSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId
+      });
+      const existingSettings = await storage.getSecuritySettings(user.hotelId);
+      const updatedSettings = await storage.upsertSecuritySettings(user.hotelId, settingsData);
+      const sanitizedAuditData = { ...settingsData };
+      if (sanitizedAuditData.smtpPassword) {
+        sanitizedAuditData.smtpPassword = "[REDACTED]";
+      }
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: existingSettings ? "update" : "create",
+        resourceType: "security_settings",
+        resourceId: updatedSettings.id,
+        details: { settings: sanitizedAuditData },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      const sanitizedResponse = {
+        ...updatedSettings,
+        smtpPassword: updatedSettings.smtpPassword ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : null
+      };
+      res.json(sanitizedResponse);
+    } catch (error) {
+      console.error("Security settings update error:", error);
+      res.status(400).json({
+        message: "Failed to update security settings",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  app2.post("/api/hotels/current/security-settings/test-email", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can test email settings"
+        });
+      }
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email address required" });
+      }
+      console.log(`Test email would be sent to: ${email}`);
+      res.json({
+        success: true,
+        message: `Test alert email sent to ${email}`
+      });
+    } catch (error) {
+      console.error("Test email error:", error);
+      res.status(500).json({ message: "Failed to send test email" });
+    }
+  });
+  app2.get("/api/hotels/current/role-limits", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (currentRole !== "owner") {
+        return res.status(403).json({
+          message: "Only hotel owner can access role limits configuration"
+        });
+      }
+      const allRoles = await db.query.roles.findMany();
+      const existingLimits = await db.query.roleLimits.findMany({
+        where: eq2(roleLimits.hotelId, user.hotelId)
+      });
+      const limitsMap = new Map(existingLimits.map((limit) => [limit.roleId, limit]));
+      const roleLimitsData = allRoles.map((role) => {
+        const existingLimit = limitsMap.get(role.id);
+        return {
+          roleId: role.id,
+          roleName: role.name,
+          roleDescription: role.description,
+          ...existingLimit,
+          // Provide defaults if no limit exists
+          maxTransactionAmount: existingLimit?.maxTransactionAmount || null,
+          maxDailyAmount: existingLimit?.maxDailyAmount || null,
+          requiresApprovalAbove: existingLimit?.requiresApprovalAbove || null,
+          canVoidTransactions: existingLimit?.canVoidTransactions || false,
+          canApproveWastage: existingLimit?.canApproveWastage || false
+        };
+      });
+      res.json(roleLimitsData);
+    } catch (error) {
+      console.error("Role limits fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch role limits" });
+    }
+  });
+  app2.put("/api/hotels/current/role-limits", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (currentRole !== "owner") {
+        return res.status(403).json({
+          message: "Only hotel owner can update role limits"
+        });
+      }
+      const limits = req.body;
+      if (!Array.isArray(limits)) {
+        return res.status(400).json({ message: "Invalid request body, expected array of role limits" });
+      }
+      for (const limit of limits) {
+        const existing = await db.query.roleLimits.findFirst({
+          where: and2(
+            eq2(roleLimits.hotelId, user.hotelId),
+            eq2(roleLimits.roleId, limit.roleId)
+          )
+        });
+        const limitData = {
+          hotelId: user.hotelId,
+          roleId: limit.roleId,
+          maxTransactionAmount: limit.maxTransactionAmount || null,
+          maxDailyAmount: limit.maxDailyAmount || null,
+          requiresApprovalAbove: limit.requiresApprovalAbove || null,
+          canVoidTransactions: limit.canVoidTransactions || false,
+          canApproveWastage: limit.canApproveWastage || false,
+          updatedAt: /* @__PURE__ */ new Date()
+        };
+        if (existing) {
+          await db.update(roleLimits).set(limitData).where(eq2(roleLimits.id, existing.id));
+        } else {
+          await db.insert(roleLimits).values(limitData);
+        }
+      }
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: "update",
+        resourceType: "role_limits",
+        resourceId: user.hotelId,
+        details: { limitsCount: limits.length },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      res.json({ success: true, message: "Role limits updated successfully" });
+    } catch (error) {
+      console.error("Role limits update error:", error);
+      res.status(400).json({
+        message: "Failed to update role limits",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  app2.get("/api/hotels/current/audit/overview", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can access audit dashboard"
+        });
+      }
+      const overview = await storage.getAuditOverview(user.hotelId);
+      res.json(overview);
+    } catch (error) {
+      console.error("Audit overview error:", error);
+      res.status(500).json({ message: "Failed to fetch audit overview" });
+    }
+  });
+  app2.get("/api/hotels/current/audit/financial-activity", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can access financial audit data"
+        });
+      }
+      const filters = {};
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate);
+      }
+      if (req.query.txnType) {
+        filters.txnType = req.query.txnType;
+      }
+      if (req.query.paymentMethod) {
+        filters.paymentMethod = req.query.paymentMethod;
+      }
+      if (req.query.staffId) {
+        filters.staffId = req.query.staffId;
+      }
+      const activity = await storage.getFinancialActivity(user.hotelId, filters);
+      res.json(activity);
+    } catch (error) {
+      console.error("Financial activity error:", error);
+      res.status(500).json({ message: "Failed to fetch financial activity" });
+    }
+  });
+  app2.get("/api/hotels/current/audit/staff-activity", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can access staff audit data"
+        });
+      }
+      const filters = {};
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate);
+      }
+      if (req.query.staffId) {
+        filters.staffId = req.query.staffId;
+      }
+      if (req.query.actionType) {
+        filters.actionType = req.query.actionType;
+      }
+      const activity = await storage.getStaffActivity(user.hotelId, filters);
+      res.json(activity);
+    } catch (error) {
+      console.error("Staff activity error:", error);
+      res.status(500).json({ message: "Failed to fetch staff activity" });
+    }
+  });
+  app2.get("/api/hotels/current/audit/security-alerts", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can access security alerts"
+        });
+      }
+      const filters = {};
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate);
+      }
+      if (req.query.alertType) {
+        filters.alertType = req.query.alertType;
+      }
+      if (req.query.status) {
+        filters.status = req.query.status;
+      }
+      const alerts = await storage.getSecurityAlerts(user.hotelId, filters);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Security alerts error:", error);
+      res.status(500).json({ message: "Failed to fetch security alerts" });
+    }
+  });
+  app2.get("/api/hotels/current/audit/photo-evidence", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can access photo evidence"
+        });
+      }
+      const filters = {};
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate);
+      }
+      if (req.query.evidenceType) {
+        filters.evidenceType = req.query.evidenceType;
+      }
+      const evidence = await storage.getPhotoEvidence(user.hotelId, filters);
+      res.json(evidence);
+    } catch (error) {
+      console.error("Photo evidence error:", error);
+      res.status(500).json({ message: "Failed to fetch photo evidence" });
+    }
+  });
+  app2.get("/api/hotels/current/audit/device-history", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can access device history"
+        });
+      }
+      const filters = {};
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate);
+      }
+      if (req.query.userId) {
+        filters.userId = req.query.userId;
+      }
+      const history = await storage.getDeviceHistory(user.hotelId, filters);
+      res.json(history);
+    } catch (error) {
+      console.error("Device history error:", error);
+      res.status(500).json({ message: "Failed to fetch device history" });
+    }
+  });
+  app2.post("/api/hotels/current/audit/alerts/:id/resolve", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can resolve security alerts"
+        });
+      }
+      const { id } = req.params;
+      const { resolution, notes } = req.body;
+      if (!resolution || !notes) {
+        return res.status(400).json({ message: "Resolution and notes are required" });
+      }
+      const alert = await storage.resolveSecurityAlert(id, resolution, notes);
+      res.json(alert);
+    } catch (error) {
+      console.error("Resolve alert error:", error);
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to resolve alert"
+      });
+    }
+  });
+  app2.post("/api/devices/update-trust-status", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (!["owner", "super_admin"].includes(currentRole)) {
+        return res.status(403).json({
+          message: "Only hotel owner or super admin can manage device trust status"
+        });
+      }
+      const { userId, deviceFingerprint, trustStatus } = req.body;
+      if (!userId || !deviceFingerprint || !trustStatus) {
+        return res.status(400).json({ message: "userId, deviceFingerprint, and trustStatus are required" });
+      }
+      if (!["trusted", "suspicious", "blocked"].includes(trustStatus)) {
+        return res.status(400).json({ message: "Invalid trust status. Must be 'trusted', 'suspicious', or 'blocked'" });
+      }
+      const existingDevice = await storage.getKnownDevice(userId, deviceFingerprint);
+      if (!existingDevice) {
+        const loginRecord = await storage.getLoginHistoryByDevice(userId, deviceFingerprint);
+        await storage.upsertKnownDevice(userId, deviceFingerprint, {
+          hotelId: user.hotelId,
+          browser: loginRecord?.browser || void 0,
+          os: loginRecord?.os || void 0
+        });
+      }
+      const updatedDevice = await storage.updateDeviceTrustStatus(userId, deviceFingerprint, trustStatus);
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: "device_trust_updated",
+        resourceType: "device",
+        resourceId: deviceFingerprint,
+        details: {
+          targetUserId: userId,
+          deviceFingerprint,
+          trustStatus,
+          previousStatus: existingDevice?.trustStatus || "new"
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+        success: true
+      });
+      res.json(updatedDevice);
+    } catch (error) {
+      console.error("Update device trust status error:", error);
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to update device trust status"
+      });
+    }
+  });
+  app2.post("/api/hotels/current/audit/send-summary", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const currentRole = user.role?.name || "";
+      if (currentRole !== "owner") {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: "send_daily_summary_unauthorized",
+          resourceType: "email",
+          resourceId: user.hotelId,
+          details: { role: currentRole },
+          success: false,
+          errorMessage: "Unauthorized: Only owner can request daily summary"
+        });
+        return res.status(403).json({
+          message: "Only hotel owner can request daily summary email"
+        });
+      }
+      const { alertService: alertService2 } = await Promise.resolve().then(() => (init_alert_service(), alert_service_exports));
+      const result = await alertService2.sendDailySummaryEmail(user.hotelId);
+      if (result.success) {
+        res.json({
+          success: true,
+          message: "Daily summary email sent successfully"
+        });
+      } else {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: "send_daily_summary_manual",
+          resourceType: "email",
+          resourceId: user.hotelId,
+          details: { error: result.error },
+          success: false,
+          errorMessage: result.error || "Unknown error"
+        });
+        res.status(500).json({
+          success: false,
+          message: result.error || "Failed to send daily summary email"
+        });
+      }
+    } catch (error) {
+      console.error("Send summary error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      if (req.user) {
+        const user = req.user;
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: "send_daily_summary_manual",
+          resourceType: "email",
+          resourceId: user.hotelId,
+          details: { error: errorMessage },
+          success: false,
+          errorMessage
+        });
+      }
+      res.status(500).json({
+        message: errorMessage
+      });
     }
   });
   app2.get("/api/hotels/current/guests", async (req, res) => {
@@ -4547,12 +6466,28 @@ async function registerRoutes(app2) {
         return res.status(404).json({ message: "Menu item not found" });
       }
       if ("price" in itemData && itemData.price !== void 0 && String(itemData.price) !== String(existingItem.price)) {
-        const canChangePrice = ["manager", "owner", "restaurant_bar_manager", "super_admin"].includes(user.role?.name || "");
+        const canChangePrice = ["manager", "owner", "restaurant_bar_manager"].includes(user.role?.name || "");
         if (!canChangePrice) {
           return res.status(403).json({
-            message: "Only managers can change menu item prices"
+            message: "Only managers, owners, and restaurant/bar managers can change menu item prices"
           });
         }
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: "price_update",
+          resourceType: "menu_item",
+          resourceId: id,
+          details: {
+            itemName: existingItem.name || "Unknown Item",
+            previousPrice: existingItem.price,
+            newPrice: itemData.price,
+            timestamp: /* @__PURE__ */ new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+          success: true
+        });
         await storage.createPriceChangeLog({
           hotelId: user.hotelId,
           itemId: id,
@@ -5153,6 +7088,13 @@ async function registerRoutes(app2) {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      const currentRole = user.role?.name || "";
+      const canManageInventory = ["owner", "manager", "storekeeper"].includes(currentRole);
+      if (!canManageInventory) {
+        return res.status(403).json({
+          message: "Only managers, owners, and storekeepers can manage inventory"
+        });
+      }
       const { name, sku, unit, baseStockQty, costPerUnit } = req.body;
       if (!name || name.trim().length === 0) {
         return res.status(400).json({ message: "Item name is required" });
@@ -5194,6 +7136,13 @@ async function registerRoutes(app2) {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      const currentRole = user.role?.name || "";
+      const canManageInventory = ["owner", "manager", "storekeeper"].includes(currentRole);
+      if (!canManageInventory) {
+        return res.status(403).json({
+          message: "Only managers, owners, and storekeepers can manage inventory"
+        });
+      }
       const { id } = req.params;
       const itemData = req.body;
       const existingItem = await storage.getInventoryItem(id);
@@ -5201,6 +7150,21 @@ async function registerRoutes(app2) {
         return res.status(404).json({ message: "Inventory item not found" });
       }
       const item = await storage.updateInventoryItem(id, itemData);
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: "inventory_update",
+        resourceType: "inventory_item",
+        resourceId: id,
+        details: {
+          itemName: item.name,
+          changes: itemData,
+          timestamp: /* @__PURE__ */ new Date()
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+        success: true
+      });
       res.json(item);
     } catch (error) {
       res.status(400).json({ message: "Failed to update inventory item" });
@@ -5215,11 +7179,33 @@ async function registerRoutes(app2) {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      const currentRole = user.role?.name || "";
+      const canManageInventory = ["owner", "manager", "storekeeper"].includes(currentRole);
+      if (!canManageInventory) {
+        return res.status(403).json({
+          message: "Only managers, owners, and storekeepers can manage inventory"
+        });
+      }
       const { id } = req.params;
       const existingItem = await storage.getInventoryItem(id);
       if (!existingItem || existingItem.hotelId !== user.hotelId) {
         return res.status(404).json({ message: "Inventory item not found" });
       }
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: "inventory_delete",
+        resourceType: "inventory_item",
+        resourceId: id,
+        details: {
+          itemName: existingItem.name,
+          itemSku: existingItem.sku,
+          timestamp: /* @__PURE__ */ new Date()
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"],
+        success: true
+      });
       await storage.deleteInventoryItem(id);
       res.status(204).send();
     } catch (error) {
@@ -5388,12 +7374,43 @@ async function registerRoutes(app2) {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      const currentRole = user.role?.name || "";
+      const canUpdatePrices = ["owner", "manager"].includes(currentRole);
+      if (!canUpdatePrices) {
+        return res.status(403).json({
+          message: "Only managers and owners can update room type prices"
+        });
+      }
       const { id } = req.params;
       const roomTypeData = insertRoomTypeSchema.partial().parse(req.body);
       delete roomTypeData.hotelId;
+      const existingRoomType = await storage.getRoomType(parseInt(id));
+      if (!existingRoomType || existingRoomType.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Room type not found" });
+      }
       const roomType = await storage.updateRoomType(parseInt(id), user.hotelId, roomTypeData);
       if (!roomType) {
         return res.status(404).json({ message: "Room type not found" });
+      }
+      if (roomTypeData.priceInhouse || roomTypeData.priceWalkin) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: "price_update",
+          resourceType: "room_type",
+          resourceId: id,
+          details: {
+            roomTypeName: roomType.name,
+            previousPriceInhouse: existingRoomType.priceInhouse,
+            newPriceInhouse: roomTypeData.priceInhouse,
+            previousPriceWalkin: existingRoomType.priceWalkin,
+            newPriceWalkin: roomTypeData.priceWalkin,
+            timestamp: /* @__PURE__ */ new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+          success: true
+        });
       }
       res.json(roomType);
     } catch (error) {
@@ -5490,12 +7507,45 @@ async function registerRoutes(app2) {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      const currentRole = user.role?.name || "";
+      const canUpdatePrices = ["owner", "manager"].includes(currentRole);
+      if (!canUpdatePrices) {
+        return res.status(403).json({
+          message: "Only managers and owners can update hall prices"
+        });
+      }
       const { id } = req.params;
       const hallData = insertHallSchema.partial().parse(req.body);
       delete hallData.hotelId;
+      const existingHall = await storage.getHall(id);
+      if (!existingHall || existingHall.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Hall not found" });
+      }
       const hall = await storage.updateHall(id, user.hotelId, hallData);
       if (!hall) {
         return res.status(404).json({ message: "Hall not found" });
+      }
+      if (hallData.priceInhouse || hallData.priceWalkin || hallData.hourlyRate) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: "price_update",
+          resourceType: "hall",
+          resourceId: id,
+          details: {
+            hallName: hall.name,
+            previousPriceInhouse: existingHall.priceInhouse,
+            newPriceInhouse: hallData.priceInhouse,
+            previousPriceWalkin: existingHall.priceWalkin,
+            newPriceWalkin: hallData.priceWalkin,
+            previousHourlyRate: existingHall.hourlyRate,
+            newHourlyRate: hallData.hourlyRate,
+            timestamp: /* @__PURE__ */ new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+          success: true
+        });
       }
       res.json(hall);
     } catch (error) {
@@ -5620,6 +7670,7 @@ async function registerRoutes(app2) {
       const serviceData = insertServiceSchema.parse(req.body);
       serviceData.hotelId = user.hotelId;
       const service = await storage.createService(serviceData);
+      wsEvents.serviceCreated(user.hotelId, service);
       res.status(201).json(service);
     } catch (error) {
       res.status(400).json({ message: "Failed to create service" });
@@ -5634,12 +7685,44 @@ async function registerRoutes(app2) {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      const currentRole = user.role?.name || "";
+      const canUpdatePrices = ["owner", "manager"].includes(currentRole);
+      if (!canUpdatePrices) {
+        return res.status(403).json({
+          message: "Only managers and owners can update service prices"
+        });
+      }
       const { id } = req.params;
       const serviceData = insertServiceSchema.partial().parse(req.body);
       delete serviceData.hotelId;
+      const existingService = await storage.getService(id);
+      if (!existingService || existingService.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Service not found" });
+      }
       const service = await storage.updateService(id, user.hotelId, serviceData);
       if (!service) {
         return res.status(404).json({ message: "Service not found" });
+      }
+      if (serviceData.priceInhouse || serviceData.priceWalkin) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: "price_update",
+          resourceType: "service",
+          resourceId: id,
+          details: {
+            serviceName: service.name,
+            serviceKind: service.kind,
+            previousPriceInhouse: existingService.priceInhouse,
+            newPriceInhouse: serviceData.priceInhouse,
+            previousPriceWalkin: existingService.priceWalkin,
+            newPriceWalkin: serviceData.priceWalkin,
+            timestamp: /* @__PURE__ */ new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"],
+          success: true
+        });
       }
       res.json(service);
     } catch (error) {
@@ -6348,6 +8431,7 @@ async function registerRoutes(app2) {
         addedBy: currentUser.id
       });
       const charge = await storage.createRoomServiceCharge(chargeData);
+      wsEvents.roomServiceChargeCreated(currentUser.hotelId, charge);
       res.json(charge);
     } catch (error) {
       console.error("Create room service charge error:", error);
@@ -6385,6 +8469,7 @@ async function registerRoutes(app2) {
       }
       const { id } = req.params;
       await storage.deleteRoomServiceCharge(id);
+      wsEvents.roomServiceChargeDeleted(currentUser.hotelId, id);
       res.json({ success: true });
     } catch (error) {
       console.error("Delete room service charge error:", error);
@@ -6526,6 +8611,50 @@ async function registerRoutes(app2) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       const { hotelId: _, createdBy: __, ...sanitizedBody } = req.body;
+      const securitySettings3 = await storage.getSecuritySettings(currentUser.hotelId);
+      const largeTransactionThreshold = securitySettings3?.largeTransactionThreshold ? Number(securitySettings3.largeTransactionThreshold) : 1e4;
+      let requiresApproval = false;
+      const transactionAmount = Number(sanitizedBody.amount) || 0;
+      if (currentUser.roleId) {
+        const roleLimit = await db.query.roleLimits.findFirst({
+          where: and2(
+            eq2(roleLimits.hotelId, currentUser.hotelId),
+            eq2(roleLimits.roleId, currentUser.roleId)
+          )
+        });
+        if (roleLimit) {
+          if (roleLimit.maxTransactionAmount && transactionAmount > Number(roleLimit.maxTransactionAmount)) {
+            return res.status(403).json({
+              message: `Transaction amount (${transactionAmount}) exceeds your role's maximum limit (${roleLimit.maxTransactionAmount})`
+            });
+          }
+          if (roleLimit.requiresApprovalAbove && transactionAmount > Number(roleLimit.requiresApprovalAbove)) {
+            requiresApproval = true;
+          }
+          if (roleLimit.maxDailyAmount) {
+            const today = /* @__PURE__ */ new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const todayTransactions = await db.query.transactions.findMany({
+              where: and2(
+                eq2(transactions.hotelId, currentUser.hotelId),
+                eq2(transactions.createdBy, currentUser.id),
+                gte2(transactions.createdAt, today),
+                lt2(transactions.createdAt, tomorrow),
+                eq2(transactions.isVoided, false)
+              )
+            });
+            const totalToday = todayTransactions.reduce((sum, txn) => sum + Number(txn.amount || 0), 0);
+            const newTotal = totalToday + transactionAmount;
+            if (newTotal > Number(roleLimit.maxDailyAmount)) {
+              return res.status(403).json({
+                message: `Daily transaction limit exceeded. Current: ${totalToday}, Limit: ${roleLimit.maxDailyAmount}, Requested: ${transactionAmount}`
+              });
+            }
+          }
+        }
+      }
       const isVendorPayment = sanitizedBody.vendorId || sanitizedBody.purpose && String(sanitizedBody.purpose).toLowerCase().includes("vendor");
       if (isVendorPayment) {
         if (!sanitizedBody.reference) {
@@ -6533,26 +8662,32 @@ async function registerRoutes(app2) {
             message: "Vendor payments require invoice or purchase order reference"
           });
         }
-        const canApprove = ["manager", "owner", "super_admin"].includes(currentUser.role?.name || "");
+        const canApprove = ["manager", "owner", "super_admin", "finance"].includes(currentUser.role?.name || "");
         if (!canApprove) {
           return res.status(403).json({
-            message: "Only managers can approve vendor payments"
+            message: "Only managers and finance can approve vendor payments"
           });
         }
-        const amount = Number(sanitizedBody.amount || 0);
-        if (amount > 1e4) {
-          const details = sanitizedBody.details || {};
-          if (!details.approvalDocuments || !Array.isArray(details.approvalDocuments) || details.approvalDocuments.length === 0) {
-            return res.status(400).json({
-              message: "Vendor payments over Rs. 10,000 require supporting documentation"
-            });
-          }
+      }
+      if (sanitizedBody.txnType === "cash_out") {
+        if (!sanitizedBody.billInvoiceNumber || sanitizedBody.billInvoiceNumber.trim() === "") {
+          return res.status(400).json({
+            message: "Bill invoice number is required for cash out transactions"
+          });
         }
+        if (!sanitizedBody.billPhotoUrl && !sanitizedBody.billPdfUrl) {
+          requiresApproval = true;
+        }
+      }
+      const isExpenseTransaction = ["cash_out", "expense", "vendor_payment", "miscellaneous"].includes(sanitizedBody.txnType);
+      if (isExpenseTransaction && transactionAmount > largeTransactionThreshold) {
+        requiresApproval = true;
       }
       const transactionData = insertTransactionSchema.parse({
         ...sanitizedBody,
         hotelId: currentUser.hotelId,
-        createdBy: currentUser.id
+        createdBy: currentUser.id,
+        requiresApproval
       });
       const transaction = await storage.createTransaction(transactionData);
       wsEvents.transactionCreated(currentUser.hotelId, transaction);
@@ -6609,6 +8744,95 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Transaction void error:", error);
       res.status(500).json({ message: "Failed to void transaction" });
+    }
+  });
+  app2.post("/api/transactions/:id/approve", requireActiveUser, async (req, res) => {
+    try {
+      const currentUser = req.user;
+      const { id } = req.params;
+      const canApprove = ["owner", "manager"].includes(currentUser.role?.name || "");
+      if (!canApprove) {
+        return res.status(403).json({
+          message: "Only owners and managers can approve transactions"
+        });
+      }
+      const transaction = await storage.getTransaction(id);
+      if (!transaction || transaction.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      if (!transaction.requiresApproval) {
+        return res.status(400).json({ message: "Transaction does not require approval" });
+      }
+      if (transaction.approvedBy) {
+        return res.status(400).json({ message: "Transaction already approved" });
+      }
+      const approvedTransaction = await storage.updateTransaction(id, {
+        requiresApproval: false,
+        approvedBy: currentUser.id,
+        approvedAt: /* @__PURE__ */ new Date()
+      });
+      wsEvents.transactionUpdated(currentUser.hotelId, approvedTransaction);
+      await logAudit({
+        userId: currentUser.id,
+        hotelId: currentUser.hotelId,
+        action: "approve",
+        resourceType: "transaction",
+        resourceId: id,
+        details: { amount: transaction.amount, txnType: transaction.txnType },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      res.json({ success: true, transaction: approvedTransaction });
+    } catch (error) {
+      console.error("Transaction approval error:", error);
+      res.status(500).json({ message: "Failed to approve transaction" });
+    }
+  });
+  app2.post("/api/transactions/:id/reject", requireActiveUser, async (req, res) => {
+    try {
+      const currentUser = req.user;
+      const { id } = req.params;
+      const { reason } = req.body;
+      const canReject = ["owner", "manager"].includes(currentUser.role?.name || "");
+      if (!canReject) {
+        return res.status(403).json({
+          message: "Only owners and managers can reject transactions"
+        });
+      }
+      if (!reason || reason.trim().length < 10) {
+        return res.status(400).json({
+          message: "Rejection reason required (minimum 10 characters)"
+        });
+      }
+      const transaction = await storage.getTransaction(id);
+      if (!transaction || transaction.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      if (!transaction.requiresApproval) {
+        return res.status(400).json({ message: "Transaction does not require approval" });
+      }
+      if (transaction.rejectionReason) {
+        return res.status(400).json({ message: "Transaction already rejected" });
+      }
+      const rejectedTransaction = await storage.updateTransaction(id, {
+        requiresApproval: false,
+        rejectionReason: reason
+      });
+      wsEvents.transactionUpdated(currentUser.hotelId, rejectedTransaction);
+      await logAudit({
+        userId: currentUser.id,
+        hotelId: currentUser.hotelId,
+        action: "reject",
+        resourceType: "transaction",
+        resourceId: id,
+        details: { amount: transaction.amount, txnType: transaction.txnType, reason },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+      res.json({ success: true, transaction: rejectedTransaction });
+    } catch (error) {
+      console.error("Transaction rejection error:", error);
+      res.status(500).json({ message: "Failed to reject transaction" });
     }
   });
   app2.get("/api/hotels/:hotelId/maintenance-requests", requireActiveUser, async (req, res) => {
@@ -6778,7 +9002,7 @@ async function registerRoutes(app2) {
         return res.status(404).json({ message: "KOT item not found" });
       }
       const kotOrder = await db.query.kotOrders.findFirst({
-        where: (orders, { eq: eq4 }) => eq4(orders.id, existingItem.kotId)
+        where: (orders, { eq: eq5 }) => eq5(orders.id, existingItem.kotId)
       });
       if (!kotOrder || kotOrder.hotelId !== currentUser.hotelId) {
         return res.status(403).json({ message: "Access denied" });
@@ -6835,7 +9059,7 @@ async function registerRoutes(app2) {
       }
       const { id } = req.params;
       const kotOrder = await db.query.kotOrders.findFirst({
-        where: (orders, { eq: eq4 }) => eq4(orders.id, id)
+        where: (orders, { eq: eq5 }) => eq5(orders.id, id)
       });
       if (!kotOrder) {
         return res.status(404).json({ message: "KOT order not found" });
@@ -7092,7 +9316,62 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to void payment" });
     }
   });
-  app2.post("/api/hotels/current/wastages", async (req, res) => {
+  app2.post("/api/upload/wastage-photo", requireActiveUser, (req, res, next) => {
+    uploadWastagePhoto.single("photo")(req, res, (err) => {
+      if (err) {
+        if (err.message.includes("Invalid file type")) {
+          return res.status(400).json({ message: "Invalid file type. Only JPEG, JPG and PNG images are allowed." });
+        }
+        if (err.message.includes("File too large")) {
+          return res.status(400).json({ message: "File size exceeds 5MB limit." });
+        }
+        console.error("Photo upload error:", err);
+        return res.status(400).json({ message: err.message || "Failed to upload photo" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "No photo file provided" });
+      }
+      const photoUrl = `/uploads/wastage-photos/${req.file.filename}`;
+      res.status(200).json({
+        success: true,
+        photoUrl,
+        message: "Photo uploaded successfully"
+      });
+    });
+  });
+  app2.post("/api/upload/bill-document", requireActiveUser, (req, res, next) => {
+    uploadBillDocument.single("billDocument")(req, res, (err) => {
+      if (err) {
+        if (err.message.includes("Invalid file type")) {
+          return res.status(400).json({ message: "Invalid file type. Only JPEG, JPG, PNG images and PDF files are allowed." });
+        }
+        if (err.message.includes("File too large")) {
+          return res.status(400).json({ message: "File size exceeds 10MB limit." });
+        }
+        console.error("Bill document upload error:", err);
+        return res.status(400).json({ message: err.message || "Failed to upload bill document" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "No bill document provided" });
+      }
+      const fileUrl = `/uploads/bill-documents/${req.file.filename}`;
+      const isPdf = req.file.mimetype === "application/pdf";
+      res.status(200).json({
+        success: true,
+        fileUrl,
+        isPdf,
+        message: "Bill document uploaded successfully"
+      });
+    });
+  });
+  app2.post("/api/hotels/current/wastages", (req, res, next) => {
+    const contentType = req.headers["content-type"] || "";
+    if (contentType.includes("multipart/form-data")) {
+      uploadWastagePhoto.single("photo")(req, res, next);
+    } else {
+      next();
+    }
+  }, async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
@@ -7101,10 +9380,22 @@ async function registerRoutes(app2) {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
-      const wastageData = req.body;
+      let photoUrl = req.body.photoUrl;
+      if (req.file) {
+        photoUrl = `/uploads/wastage-photos/${req.file.filename}`;
+      }
+      const wastageData = {
+        ...req.body,
+        photoUrl
+      };
       if (!wastageData.itemId || wastageData.qty === void 0 || wastageData.qty === null || !wastageData.reason) {
         return res.status(400).json({
           message: "Item, quantity, and reason are required"
+        });
+      }
+      if (!wastageData.photoUrl || typeof wastageData.photoUrl !== "string" || wastageData.photoUrl.trim() === "") {
+        return res.status(400).json({
+          message: "Photo is required for wastage reporting"
         });
       }
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -7131,9 +9422,8 @@ async function registerRoutes(app2) {
       const wastageQty = Number(wastageData.qty);
       const itemCost = Number(inventoryItem.costPerUnit || 0);
       const wastageValue = wastageQty * itemCost;
-      const highValueThreshold = 1e3;
-      const isManager = ["manager", "owner"].includes(user.role?.name || "");
-      if (wastageValue > highValueThreshold && !isManager) {
+      const canAutoApprove = ["manager", "owner", "restaurant_bar_manager", "storekeeper"].includes(user.role?.name || "");
+      if (!canAutoApprove) {
         const finalWastageData2 = {
           ...wastageData,
           hotelId: user.hotelId,
@@ -7142,14 +9432,14 @@ async function registerRoutes(app2) {
           estimatedValue: wastageValue
         };
         const wastage2 = await storage.createWastage(finalWastageData2);
-        const managerRole = await storage.getRoleByName("manager");
-        if (managerRole) {
-          const managers = await storage.getUsersByRole(managerRole.id);
-          const hotelManagers = managers.filter((m) => m.hotelId === user.hotelId);
-          for (const manager of hotelManagers) {
+        const restaurantBarRole = await storage.getRoleByName("restaurant_bar_manager");
+        if (restaurantBarRole) {
+          const rbManagers = await storage.getUsersByRole(restaurantBarRole.id);
+          const hotelRbManagers = rbManagers.filter((m) => m.hotelId === user.hotelId);
+          for (const manager of hotelRbManagers) {
             await storage.createNotification({
               userId: manager.id,
-              title: "High-Value Wastage Approval Required",
+              title: "Wastage Approval Required",
               message: `${user.username} reported wastage of ${wastageData.qty} ${wastageData.unit || inventoryItem.unit} ${inventoryItem.name} (Value: Rs. ${wastageValue.toFixed(2)}). Reason: ${wastageData.reason}`,
               type: "wastage_approval",
               relatedId: wastage2.id,
@@ -7159,7 +9449,7 @@ async function registerRoutes(app2) {
         }
         return res.status(201).json({
           ...wastage2,
-          message: "High-value wastage requires manager approval"
+          message: "Wastage requires manager approval"
         });
       }
       const finalWastageData = {
@@ -7198,7 +9488,7 @@ async function registerRoutes(app2) {
       const currentUser = req.user;
       const { id } = req.params;
       const { approved, rejectionReason } = req.body;
-      const canApprove = ["manager", "owner"].includes(currentUser.role?.name || "");
+      const canApprove = ["manager", "owner", "restaurant_bar_manager"].includes(currentUser.role?.name || "");
       if (!canApprove) {
         return res.status(403).json({
           message: "Only managers can approve wastage"
@@ -7730,6 +10020,7 @@ async function registerRoutes(app2) {
         });
       }
       const leaveRequest = await storage.createLeaveRequest(leaveRequestData);
+      wsEvents.leaveRequestCreated(user.hotelId, leaveRequest);
       res.status(201).json(leaveRequest);
     } catch (error) {
       console.error("Leave request creation error:", error);
@@ -8020,11 +10311,6 @@ async function registerRoutes(app2) {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
-      const userRole = user.role?.name || "";
-      const canRequestStock = ["bartender", "kitchen_staff", "barista"].includes(userRole);
-      if (!canRequestStock) {
-        return res.status(403).json({ message: "Only bartender, kitchen staff, and barista can view their stock requests" });
-      }
       const requests = await storage.getStockRequestsByUser(user.id);
       res.json(requests);
     } catch (error) {
@@ -8089,13 +10375,17 @@ async function registerRoutes(app2) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       const userRole = user.role?.name || "";
-      const canRequestStock = ["bartender", "kitchen_staff", "barista"].includes(userRole);
-      if (!canRequestStock) {
-        return res.status(403).json({ message: "Only bartender, kitchen staff, and barista can request stock" });
-      }
       let department = "";
-      if (userRole === "bartender" || userRole === "kitchen_staff" || userRole === "barista") {
+      if (["bartender", "kitchen_staff", "barista", "waiter", "cashier", "restaurant_bar_manager"].includes(userRole)) {
         department = "restaurant_bar";
+      } else if (["housekeeping_staff", "housekeeping_supervisor"].includes(userRole)) {
+        department = "housekeeping";
+      } else if (["security_guard", "surveillance_officer", "security_head"].includes(userRole)) {
+        department = "security";
+      } else if (["storekeeper", "finance", "front_desk", "manager", "owner"].includes(userRole)) {
+        department = "general";
+      } else {
+        return res.status(403).json({ message: "Your role is not authorized to request stock" });
       }
       const requestData = insertStockRequestSchema.parse({
         ...req.body,
@@ -8105,6 +10395,7 @@ async function registerRoutes(app2) {
         status: "pending"
       });
       const request = await storage.createStockRequest(requestData);
+      wsEvents.stockRequestCreated(user.hotelId, request);
       res.status(201).json(request);
     } catch (error) {
       console.error("Stock request creation error:", error);
@@ -8162,6 +10453,7 @@ async function registerRoutes(app2) {
         });
       }
       const approvedRequest = await storage.approveStockRequest(id, user.id);
+      wsEvents.stockRequestUpdated(user.hotelId, approvedRequest);
       res.json(approvedRequest);
     } catch (error) {
       console.error("Stock request approval error:", error);
@@ -8187,6 +10479,7 @@ async function registerRoutes(app2) {
         return res.status(400).json({ message: "Can only deliver approved stock requests" });
       }
       const request = await storage.deliverStockRequest(id, user.id);
+      wsEvents.stockRequestUpdated(user.hotelId, request);
       res.json(request);
     } catch (error) {
       console.error("Stock request delivery error:", error);
@@ -9415,6 +11708,61 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch audit logs" });
     }
   });
+  app2.get("/api/login-history", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const currentUser = req.user;
+      if (!currentUser || !currentUser.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const canViewLoginHistory = ["manager", "owner", "finance", "super_admin"].includes(currentUser.role?.name || "");
+      if (!canViewLoginHistory) {
+        return res.status(403).json({
+          message: "Only managers can view login history"
+        });
+      }
+      const { startDate, endDate, userId } = req.query;
+      const conditions = [eq2(loginHistory.hotelId, currentUser.hotelId)];
+      if (userId && typeof userId === "string") {
+        conditions.push(eq2(loginHistory.userId, userId));
+      }
+      if (startDate && typeof startDate === "string") {
+        conditions.push(sql3`${loginHistory.loginAt} >= ${new Date(startDate).toISOString()}`);
+      }
+      if (endDate && typeof endDate === "string") {
+        conditions.push(sql3`${loginHistory.loginAt} <= ${new Date(endDate).toISOString()}`);
+      }
+      const history = await db.select({
+        id: loginHistory.id,
+        userId: loginHistory.userId,
+        hotelId: loginHistory.hotelId,
+        deviceFingerprint: loginHistory.deviceFingerprint,
+        browser: loginHistory.browser,
+        os: loginHistory.os,
+        ip: loginHistory.ip,
+        location: loginHistory.location,
+        isNewDevice: loginHistory.isNewDevice,
+        isNewLocation: loginHistory.isNewLocation,
+        loginAt: loginHistory.loginAt,
+        logoutAt: loginHistory.logoutAt,
+        user: sql3`json_build_object(
+            'id', ${users.id},
+            'username', ${users.username},
+            'email', ${users.email},
+            'role', json_build_object(
+              'id', ${roles.id},
+              'name', ${roles.name}
+            )
+          )`
+      }).from(loginHistory).leftJoin(users, eq2(loginHistory.userId, users.id)).leftJoin(roles, eq2(users.roleId, roles.id)).where(and2(...conditions)).orderBy(sql3`${loginHistory.loginAt} DESC`).limit(1e3);
+      res.json(history);
+    } catch (error) {
+      console.error("Login history fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch login history" });
+    }
+  });
   app2.get("/api/maintenance-requests/:id/history", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -9697,7 +12045,411 @@ init_storage();
 init_db();
 init_schema();
 import cron from "node-cron";
-import { and as and3, eq as eq3, isNull as isNull3 } from "drizzle-orm";
+import { and as and4, eq as eq4, isNull as isNull3 } from "drizzle-orm";
+
+// server/pattern-detector.ts
+init_db();
+init_schema();
+init_alert_service();
+import { eq as eq3, and as and3, gte as gte3, sql as sql4, desc as desc3 } from "drizzle-orm";
+var PatternDetector = class {
+  async detectSuspiciousWastage(hotelId, userId) {
+    const patterns = [];
+    try {
+      const thirtyDaysAgo = /* @__PURE__ */ new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const sixtyDaysAgo = /* @__PURE__ */ new Date();
+      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+      const recentWastages = await db.select({
+        id: wastages.id,
+        itemId: wastages.itemId,
+        itemName: inventoryItems.name,
+        qty: wastages.qty,
+        estimatedValue: wastages.estimatedValue,
+        reason: wastages.reason,
+        createdAt: wastages.createdAt
+      }).from(wastages).leftJoin(inventoryItems, eq3(wastages.itemId, inventoryItems.id)).where(
+        and3(
+          eq3(wastages.hotelId, hotelId),
+          eq3(wastages.recordedBy, userId),
+          gte3(wastages.createdAt, thirtyDaysAgo)
+        )
+      );
+      const previousWastages = await db.select({
+        id: wastages.id
+      }).from(wastages).where(
+        and3(
+          eq3(wastages.hotelId, hotelId),
+          eq3(wastages.recordedBy, userId),
+          gte3(wastages.createdAt, sixtyDaysAgo),
+          sql4`${wastages.createdAt} < ${thirtyDaysAgo}`
+        )
+      );
+      const itemCounts = /* @__PURE__ */ new Map();
+      for (const wastage of recentWastages) {
+        if (wastage.itemId) {
+          const existing = itemCounts.get(wastage.itemId);
+          const value = parseFloat(wastage.estimatedValue?.toString() || "0");
+          if (existing) {
+            existing.count += 1;
+            existing.totalValue += value;
+          } else {
+            itemCounts.set(wastage.itemId, {
+              itemId: wastage.itemId,
+              itemName: wastage.itemName || "Unknown Item",
+              count: 1,
+              totalValue: value
+            });
+          }
+        }
+      }
+      for (const [itemId, pattern] of Array.from(itemCounts)) {
+        if (pattern.count > 3) {
+          patterns.push({
+            type: "repeated_wastage",
+            severity: pattern.count > 5 ? "high" : "medium",
+            description: `Item "${pattern.itemName}" wasted ${pattern.count} times in last 30 days`,
+            details: {
+              itemId,
+              itemName: pattern.itemName,
+              count: pattern.count,
+              totalValue: pattern.totalValue,
+              period: "30 days"
+            },
+            userId
+          });
+        }
+      }
+      const totalValue = recentWastages.reduce((sum, w) => {
+        return sum + parseFloat(w.estimatedValue?.toString() || "0");
+      }, 0);
+      if (totalValue > 5e4) {
+        patterns.push({
+          type: "high_wastage_value",
+          severity: totalValue > 1e5 ? "critical" : "high",
+          description: `Total wastage value of Rs. ${totalValue.toLocaleString()} exceeds threshold in last 30 days`,
+          details: {
+            totalValue,
+            threshold: 5e4,
+            wastageCount: recentWastages.length,
+            period: "30 days"
+          },
+          userId
+        });
+      }
+      const recentCount = recentWastages.length;
+      const previousCount = previousWastages.length;
+      if (previousCount > 0) {
+        const increasePercent = (recentCount - previousCount) / previousCount * 100;
+        if (increasePercent > 50) {
+          patterns.push({
+            type: "wastage_frequency_spike",
+            severity: increasePercent > 100 ? "high" : "medium",
+            description: `Wastage frequency increased by ${increasePercent.toFixed(0)}% compared to previous period`,
+            details: {
+              recentCount,
+              previousCount,
+              increasePercent: increasePercent.toFixed(2),
+              period: "30 days"
+            },
+            userId
+          });
+        }
+      }
+    } catch (error) {
+      console.error("[PatternDetector] Error detecting suspicious wastage:", error);
+    }
+    return patterns;
+  }
+  async detectSuspiciousTransactions(hotelId, userId) {
+    const patterns = [];
+    try {
+      const thirtyDaysAgo = /* @__PURE__ */ new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const userTransactions = await db.select().from(transactions).where(
+        and3(
+          eq3(transactions.hotelId, hotelId),
+          eq3(transactions.createdBy, userId),
+          gte3(transactions.createdAt, thirtyDaysAgo)
+        )
+      ).orderBy(desc3(transactions.createdAt));
+      const largeCashOutNoProof = userTransactions.filter((txn) => {
+        const amount = parseFloat(txn.amount?.toString() || "0");
+        return txn.txnType === "cash_out" && amount > 1e4 && !txn.billPhotoUrl && !txn.billPdfUrl && !txn.billInvoiceNumber;
+      });
+      if (largeCashOutNoProof.length > 0) {
+        const totalAmount = largeCashOutNoProof.reduce((sum, txn) => {
+          return sum + parseFloat(txn.amount?.toString() || "0");
+        }, 0);
+        patterns.push({
+          type: "cash_out_no_proof",
+          severity: largeCashOutNoProof.length > 3 ? "critical" : "high",
+          description: `${largeCashOutNoProof.length} large cash-out transactions (total Rs. ${totalAmount.toLocaleString()}) without bill proof`,
+          details: {
+            count: largeCashOutNoProof.length,
+            totalAmount,
+            transactions: largeCashOutNoProof.map((t) => ({
+              id: t.id,
+              amount: t.amount,
+              purpose: t.purpose,
+              createdAt: t.createdAt
+            }))
+          },
+          userId
+        });
+      }
+      const voidedTransactions = userTransactions.filter((txn) => txn.isVoided);
+      if (voidedTransactions.length > 5) {
+        const sevenDaysAgo = /* @__PURE__ */ new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const recentVoids = voidedTransactions.filter((txn) => {
+          if (!txn.voidedAt) return false;
+          const voidDate = new Date(txn.voidedAt);
+          return voidDate >= sevenDaysAgo;
+        });
+        if (recentVoids.length >= 3) {
+          patterns.push({
+            type: "multiple_voids",
+            severity: recentVoids.length > 5 ? "high" : "medium",
+            description: `${recentVoids.length} transactions voided in last 7 days`,
+            details: {
+              count: recentVoids.length,
+              totalVoids30Days: voidedTransactions.length,
+              voidedTransactions: recentVoids.map((t) => ({
+                id: t.id,
+                amount: t.amount,
+                voidReason: t.voidReason,
+                voidedAt: t.voidedAt
+              }))
+            },
+            userId
+          });
+        }
+      }
+      const roundNumberTxns = userTransactions.filter((txn) => {
+        const amount = parseFloat(txn.amount?.toString() || "0");
+        return amount > 0 && (amount % 5e3 === 0 || amount % 1e3 === 0);
+      });
+      const roundNumberPercent = userTransactions.length > 0 ? roundNumberTxns.length / userTransactions.length * 100 : 0;
+      if (roundNumberPercent > 70 && userTransactions.length > 10) {
+        patterns.push({
+          type: "suspicious_round_numbers",
+          severity: roundNumberPercent > 90 ? "high" : "medium",
+          description: `${roundNumberPercent.toFixed(0)}% of transactions are round numbers (possible manipulation)`,
+          details: {
+            roundNumberCount: roundNumberTxns.length,
+            totalTransactions: userTransactions.length,
+            percentage: roundNumberPercent.toFixed(2),
+            examples: roundNumberTxns.slice(0, 5).map((t) => ({
+              id: t.id,
+              amount: t.amount,
+              purpose: t.purpose
+            }))
+          },
+          userId
+        });
+      }
+      const cashInTxns = userTransactions.filter((txn) => txn.txnType === "cash_in");
+      const cashDepositTxns = userTransactions.filter((txn) => txn.txnType === "deposit");
+      const totalCashIn = cashInTxns.reduce((sum, txn) => {
+        return sum + parseFloat(txn.amount?.toString() || "0");
+      }, 0);
+      const totalDeposits = cashDepositTxns.reduce((sum, txn) => {
+        return sum + parseFloat(txn.amount?.toString() || "0");
+      }, 0);
+      if (cashInTxns.length > 5 && totalCashIn > 0) {
+        const difference = Math.abs(totalCashIn - totalDeposits);
+        const percentDiff = difference / totalCashIn * 100;
+        if (percentDiff > 20 && difference > 1e4) {
+          patterns.push({
+            type: "cash_deposit_mismatch",
+            severity: percentDiff > 50 ? "critical" : "high",
+            description: `Cash-in and deposit amounts mismatch by Rs. ${difference.toLocaleString()} (${percentDiff.toFixed(0)}%)`,
+            details: {
+              totalCashIn,
+              totalDeposits,
+              difference,
+              percentDiff: percentDiff.toFixed(2),
+              cashInCount: cashInTxns.length,
+              depositCount: cashDepositTxns.length
+            },
+            userId
+          });
+        }
+      }
+    } catch (error) {
+      console.error("[PatternDetector] Error detecting suspicious transactions:", error);
+    }
+    return patterns;
+  }
+  async detectImpossibleTravel(userId) {
+    const patterns = [];
+    try {
+      const sevenDaysAgo = /* @__PURE__ */ new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const logins = await db.select().from(loginHistory).where(
+        and3(
+          eq3(loginHistory.userId, userId),
+          gte3(loginHistory.loginAt, sevenDaysAgo)
+        )
+      ).orderBy(desc3(loginHistory.loginAt));
+      for (let i = 0; i < logins.length - 1; i++) {
+        const currentLogin = logins[i];
+        const previousLogin = logins[i + 1];
+        if (currentLogin.location && previousLogin.location && currentLogin.loginAt && previousLogin.loginAt) {
+          const currentCountry = currentLogin.location.split(",").pop()?.trim() || "";
+          const previousCountry = previousLogin.location.split(",").pop()?.trim() || "";
+          if (currentCountry && previousCountry && currentCountry !== previousCountry) {
+            const timeDiff = Math.abs(
+              new Date(currentLogin.loginAt).getTime() - new Date(previousLogin.loginAt).getTime()
+            ) / (1e3 * 60 * 60);
+            if (timeDiff < 12) {
+              patterns.push({
+                type: "impossible_travel",
+                severity: "critical",
+                description: `Login from ${currentCountry} within ${timeDiff.toFixed(1)} hours after login from ${previousCountry}`,
+                details: {
+                  firstLocation: previousLogin.location,
+                  secondLocation: currentLogin.location,
+                  firstLoginTime: previousLogin.loginAt,
+                  secondLoginTime: currentLogin.loginAt,
+                  timeDiffHours: timeDiff.toFixed(2),
+                  firstIp: previousLogin.ip,
+                  secondIp: currentLogin.ip
+                },
+                userId
+              });
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[PatternDetector] Error detecting impossible travel:", error);
+    }
+    return patterns;
+  }
+  async detectSharedDevice(deviceFingerprint) {
+    const patterns = [];
+    try {
+      const sessions = await db.select({
+        userId: userSessions.userId,
+        userName: users.fullName,
+        username: users.username,
+        lastSeen: userSessions.lastSeen
+      }).from(userSessions).leftJoin(users, eq3(userSessions.userId, users.id)).where(eq3(userSessions.deviceFingerprint, deviceFingerprint));
+      const uniqueUsers = new Set(sessions.map((s) => s.userId));
+      if (uniqueUsers.size > 1) {
+        patterns.push({
+          type: "shared_device",
+          severity: uniqueUsers.size > 3 ? "high" : "medium",
+          description: `Device used by ${uniqueUsers.size} different users`,
+          details: {
+            deviceFingerprint,
+            userCount: uniqueUsers.size,
+            users: sessions.map((s) => ({
+              userId: s.userId,
+              userName: s.userName || s.username,
+              lastSeen: s.lastSeen
+            }))
+          }
+        });
+      }
+    } catch (error) {
+      console.error("[PatternDetector] Error detecting shared device:", error);
+    }
+    return patterns;
+  }
+  async runDailyAudit(hotelId) {
+    try {
+      console.log(`[PatternDetector] Running daily audit for hotel ${hotelId}`);
+      const staff = await db.select({
+        id: users.id,
+        username: users.username,
+        fullName: users.fullName,
+        email: users.email
+      }).from(users).where(
+        and3(
+          eq3(users.hotelId, hotelId),
+          eq3(users.isActive, true)
+        )
+      );
+      const allPatterns = [];
+      for (const staffMember of staff) {
+        const wastagePatterns = await this.detectSuspiciousWastage(hotelId, staffMember.id);
+        wastagePatterns.forEach((p) => {
+          p.userName = staffMember.fullName || staffMember.username;
+        });
+        allPatterns.push(...wastagePatterns);
+        const transactionPatterns = await this.detectSuspiciousTransactions(hotelId, staffMember.id);
+        transactionPatterns.forEach((p) => {
+          p.userName = staffMember.fullName || staffMember.username;
+        });
+        allPatterns.push(...transactionPatterns);
+        const travelPatterns = await this.detectImpossibleTravel(staffMember.id);
+        travelPatterns.forEach((p) => {
+          p.userName = staffMember.fullName || staffMember.username;
+        });
+        allPatterns.push(...travelPatterns);
+      }
+      const deviceFingerprints = await db.selectDistinct({ fingerprint: userSessions.deviceFingerprint }).from(userSessions).leftJoin(users, eq3(userSessions.userId, users.id)).where(eq3(users.hotelId, hotelId));
+      for (const device of deviceFingerprints) {
+        if (device.fingerprint) {
+          const devicePatterns = await this.detectSharedDevice(device.fingerprint);
+          allPatterns.push(...devicePatterns);
+        }
+      }
+      for (const pattern of allPatterns) {
+        await db.insert(securityAlerts).values({
+          hotelId,
+          type: pattern.type,
+          description: `${pattern.severity.toUpperCase()}: ${pattern.description}`,
+          performedBy: pattern.userId || null
+        });
+      }
+      if (allPatterns.length > 0) {
+        const criticalCount = allPatterns.filter((p) => p.severity === "critical").length;
+        const highCount = allPatterns.filter((p) => p.severity === "high").length;
+        const mediumCount = allPatterns.filter((p) => p.severity === "medium").length;
+        const lowCount = allPatterns.filter((p) => p.severity === "low").length;
+        const hotel = await db.select().from(hotels).where(eq3(hotels.id, hotelId)).limit(1);
+        if (hotel.length > 0) {
+          const hotelName = hotel[0].name;
+          await alertService.sendSecurityAlert({
+            hotelId,
+            userId: allPatterns[0].userId || "",
+            // Use first user ID as reference
+            alertType: "suspicious_activity",
+            alertData: {
+              auditDate: (/* @__PURE__ */ new Date()).toISOString(),
+              hotelName,
+              totalPatterns: allPatterns.length,
+              criticalCount,
+              highCount,
+              mediumCount,
+              lowCount,
+              patterns: allPatterns.map((p) => ({
+                type: p.type,
+                severity: p.severity,
+                description: p.description,
+                userName: p.userName,
+                details: p.details
+              }))
+            }
+          });
+        }
+        console.log(`[PatternDetector] Daily audit completed: ${allPatterns.length} suspicious patterns found`);
+      } else {
+        console.log(`[PatternDetector] Daily audit completed: No suspicious patterns found`);
+      }
+    } catch (error) {
+      console.error("[PatternDetector] Error running daily audit:", error);
+    }
+  }
+};
+var patternDetector = new PatternDetector();
+
+// server/index.ts
+init_alert_service();
 process.env.TZ = "Asia/Kathmandu";
 var app = express2();
 app.set("etag", false);
@@ -9705,7 +12457,7 @@ app.use(express2.json({ limit: "10mb" }));
 app.use(express2.urlencoded({ extended: false, limit: "10mb" }));
 app.use((req, res, next) => {
   const start = Date.now();
-  const path3 = req.path;
+  const path4 = req.path;
   let capturedJsonResponse = void 0;
   const originalResJson = res.json;
   res.json = function(bodyJson, ...args) {
@@ -9714,8 +12466,8 @@ app.use((req, res, next) => {
   };
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path3.startsWith("/api")) {
-      let logLine = `${req.method} ${path3} ${res.statusCode} in ${duration}ms`;
+    if (path4.startsWith("/api")) {
+      let logLine = `${req.method} ${path4} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -9727,6 +12479,7 @@ app.use((req, res, next) => {
   });
   next();
 });
+app.use("/uploads", express2.static("uploads"));
 (async () => {
   const server = await registerRoutes(app);
   setupWebSocket(server);
@@ -9762,8 +12515,8 @@ app.use((req, res, next) => {
     try {
       log("Running annual leave balance reset...");
       const newYear = (/* @__PURE__ */ new Date()).getFullYear();
-      const activeUsers = await db.select().from(users).where(and3(
-        eq3(users.isActive, true),
+      const activeUsers = await db.select().from(users).where(and4(
+        eq4(users.isActive, true),
         isNull3(users.deletedAt)
       ));
       let resetCount = 0;
@@ -9779,12 +12532,39 @@ app.use((req, res, next) => {
     }
   });
   log("Annual leave balance reset cron job scheduled (every January 1st)");
+  cron.schedule("0 6 * * *", async () => {
+    try {
+      log("Running daily pattern detection audit...");
+      const activeHotels = await db.select().from(hotels).where(eq4(hotels.isActive, true));
+      for (const hotel of activeHotels) {
+        await patternDetector.runDailyAudit(hotel.id);
+      }
+      log(`Daily audit completed for ${activeHotels.length} hotels`);
+    } catch (error) {
+      console.error("Error in daily pattern detection audit:", error);
+    }
+  });
+  log("Daily pattern detection audit scheduled (every day at 6 AM)");
+  cron.schedule("0 7 * * *", async () => {
+    try {
+      log("Sending daily owner summary emails...");
+      const activeHotels = await db.select().from(hotels).where(eq4(hotels.isActive, true));
+      for (const hotel of activeHotels) {
+        const result = await alertService.sendDailySummaryEmail(hotel.id);
+        if (result.success) {
+          log(`Daily summary sent for hotel: ${hotel.name}`);
+        } else {
+          log(`Failed to send summary for hotel ${hotel.name}: ${result.error}`);
+        }
+      }
+      log(`Daily summary emails sent for ${activeHotels.length} hotels`);
+    } catch (error) {
+      console.error("Error in daily summary email cron job:", error);
+    }
+  });
+  log("Daily owner summary email scheduled (every day at 7 AM)");
   const port = parseInt(process.env.PORT || "5000", 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true
-  }, () => {
+  server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });
 })();

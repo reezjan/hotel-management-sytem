@@ -41,6 +41,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'attendance': '/owner/attendance',
         'leave-policies': '/owner/leave-policies',
         'leave-approvals': '/owner/leave-approvals',
+        'role-limits': '/owner/role-limits',
         'report': '/owner/report',
         'reports': '/owner/reports'
       },

@@ -48,6 +48,22 @@ export const roleCreationPermissions = pgTable("role_creation_permissions", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
+// Role Limits Table
+export const roleLimits = pgTable("role_limits", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }).notNull(),
+  roleId: integer("role_id").references(() => roles.id).notNull(),
+  maxTransactionAmount: numeric("max_transaction_amount", { precision: 12, scale: 2 }),
+  maxDailyAmount: numeric("max_daily_amount", { precision: 12, scale: 2 }),
+  requiresApprovalAbove: numeric("requires_approval_above", { precision: 12, scale: 2 }),
+  canVoidTransactions: boolean("can_void_transactions").default(false),
+  canApproveWastage: boolean("can_approve_wastage").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+}, (table) => ({
+  uniqueHotelRole: unique().on(table.hotelId, table.roleId)
+}));
+
 // Users Table
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -77,9 +93,67 @@ export const userSessions = pgTable("user_sessions", {
   jwtToken: text("jwt_token"),
   deviceInfo: text("device_info"),
   ip: text("ip"),
+  deviceFingerprint: text("device_fingerprint"),
+  browser: text("browser"),
+  os: text("os"),
+  location: text("location"),
+  isNewDevice: boolean("is_new_device").default(false),
+  isNewLocation: boolean("is_new_location").default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow(),
   revokedAt: timestamp("revoked_at", { withTimezone: true })
+});
+
+// Login History Table
+export const loginHistory = pgTable("login_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  deviceFingerprint: text("device_fingerprint"),
+  browser: text("browser"),
+  os: text("os"),
+  ip: text("ip"),
+  location: text("location"),
+  isNewDevice: boolean("is_new_device").default(false),
+  isNewLocation: boolean("is_new_location").default(false),
+  loginAt: timestamp("login_at", { withTimezone: true }).defaultNow(),
+  logoutAt: timestamp("logout_at", { withTimezone: true })
+});
+
+// Known Devices Table (for device trust management)
+export const knownDevices = pgTable("known_devices", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  deviceFingerprint: text("device_fingerprint").notNull(),
+  browser: text("browser"),
+  os: text("os"),
+  trustStatus: text("trust_status").notNull().default('trusted'),
+  firstSeen: timestamp("first_seen", { withTimezone: true }).defaultNow(),
+  lastSeen: timestamp("last_seen", { withTimezone: true }).defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+}, (table) => ({
+  uniqueUserDevice: unique().on(table.userId, table.deviceFingerprint)
+}));
+
+// Security Settings Table
+export const securitySettings = pgTable("security_settings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }).unique(),
+  ownerEmail: text("owner_email"),
+  ownerPhone: text("owner_phone"),
+  alertOnNewDevice: boolean("alert_on_new_device").default(true),
+  alertOnNewLocation: boolean("alert_on_new_location").default(true),
+  alertOnLargeTransaction: boolean("alert_on_large_transaction").default(true),
+  largeTransactionThreshold: numeric("large_transaction_threshold", { precision: 12, scale: 2 }).default('10000'),
+  smtpHost: text("smtp_host"),
+  smtpPort: integer("smtp_port"),
+  smtpUser: text("smtp_user"),
+  smtpPassword: text("smtp_password"),
+  smsProvider: text("sms_provider"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
 
 // Audit Logs Table
@@ -242,6 +316,9 @@ export const wastages = pgTable("wastages", {
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   estimatedValue: numeric("estimated_value", { precision: 12, scale: 2 }),
   rejectionReason: text("rejection_reason"),
+  photoUrl: text("photo_url").notNull(),
+  photoTimestamp: timestamp("photo_timestamp", { withTimezone: true }),
+  photoCapturedByDevice: text("photo_captured_by_device"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
@@ -287,7 +364,14 @@ export const transactions = pgTable("transactions", {
   isVoided: boolean("is_voided").default(false),
   voidedBy: uuid("voided_by").references(() => users.id),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
-  voidReason: text("void_reason")
+  voidReason: text("void_reason"),
+  billPhotoUrl: text("bill_photo_url"),
+  billPdfUrl: text("bill_pdf_url"),
+  billInvoiceNumber: text("bill_invoice_number"),
+  requiresApproval: boolean("requires_approval").default(false),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason")
 });
 
 // Maintenance Requests Table
@@ -1001,6 +1085,12 @@ export const insertHotelSchema = createInsertSchema(hotels).omit({
   deletedAt: true
 });
 
+export const insertRoleLimitSchema = createInsertSchema(roleLimits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
 export const insertRoomSchema = createInsertSchema(rooms).omit({
   id: true,
   createdAt: true,
@@ -1053,16 +1143,18 @@ export type SelectRoomCleaningQueue = typeof roomCleaningQueue.$inferSelect;
 export const insertTransactionSchema = createInsertSchema(transactions).omit({
   id: true,
   createdAt: true,
-  deletedAt: true
+  deletedAt: true,
+  approvedBy: true,
+  approvedAt: true
 }).refine(
   (data) => {
     // For revenue transactions (those with _in in txnType), require a valid paymentMethod
     if (data.txnType && (data.txnType.includes('_in') || data.txnType === 'revenue')) {
-      return data.paymentMethod && ['cash', 'pos', 'fonepay'].includes(data.paymentMethod);
+      return data.paymentMethod && ['cash', 'pos', 'fonepay', 'cash_fonepay'].includes(data.paymentMethod);
     }
     // For vendor payments, allow additional payment methods
     if (data.txnType === 'vendor_payment') {
-      return data.paymentMethod && ['cash', 'cheque', 'bank_transfer', 'digital_wallet', 'pos', 'fonepay'].includes(data.paymentMethod);
+      return data.paymentMethod && ['cash', 'cheque', 'bank_transfer', 'digital_wallet', 'pos', 'fonepay', 'cash_fonepay'].includes(data.paymentMethod);
     }
     return true;
   },
@@ -1146,6 +1238,8 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 export const insertWastageSchema = createInsertSchema(wastages).omit({
   id: true,
   createdAt: true
+}).extend({
+  photoUrl: z.string().min(1, "Photo is required for wastage reporting")
 });
 
 export const insertVehicleLogSchema = createInsertSchema(vehicleLogs).omit({
@@ -1316,6 +1410,8 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type Hotel = typeof hotels.$inferSelect;
 export type InsertHotel = z.infer<typeof insertHotelSchema>;
+export type RoleLimit = typeof roleLimits.$inferSelect;
+export type InsertRoleLimit = z.infer<typeof insertRoleLimitSchema>;
 export type Room = typeof rooms.$inferSelect;
 export type InsertRoom = z.infer<typeof insertRoomSchema>;
 export type RoomStatusLog = typeof roomStatusLogs.$inferSelect;
@@ -1483,3 +1579,36 @@ export const insertTaxChangeLogSchema = createInsertSchema(taxChangeLogs).omit({
 
 export type InsertTaxChangeLog = z.infer<typeof insertTaxChangeLogSchema>;
 export type TaxChangeLog = typeof taxChangeLogs.$inferSelect;
+
+// Login History
+export const insertLoginHistorySchema = createInsertSchema(loginHistory).omit({
+  id: true,
+  loginAt: true
+});
+
+export type InsertLoginHistory = z.infer<typeof insertLoginHistorySchema>;
+export type LoginHistory = typeof loginHistory.$inferSelect;
+
+// Security Settings
+export const insertSecuritySettingsSchema = createInsertSchema(securitySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+}).extend({
+  largeTransactionThreshold: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
+export type InsertSecuritySettings = z.infer<typeof insertSecuritySettingsSchema>;
+export type SecuritySettings = typeof securitySettings.$inferSelect;
+
+// Known Devices
+export const insertKnownDeviceSchema = createInsertSchema(knownDevices).omit({
+  id: true,
+  firstSeen: true,
+  lastSeen: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type InsertKnownDevice = z.infer<typeof insertKnownDeviceSchema>;
+export type KnownDevice = typeof knownDevices.$inferSelect;

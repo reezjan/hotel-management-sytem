@@ -218,7 +218,18 @@ export default function WaiterBilling() {
         });
       }
 
+      // Mark table as available for new guests
+      await apiRequest("PUT", `/api/hotels/current/restaurant-tables/${selectedTable}`, {
+        status: 'available'
+      });
+
+      // Refresh order data to ensure served orders don't appear
+      await queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/restaurant-tables"] });
+
       handlePrintBill();
+      
+      toast({ title: "Payment processed successfully" });
       
       // Reset selection
       setSelectedTable("");

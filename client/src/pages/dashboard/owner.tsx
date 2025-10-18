@@ -1,11 +1,11 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, Bed, Users, TrendingUp, Package, AlertTriangle, Building2, Settings, Receipt, Shield } from "lucide-react";
+import { DollarSign, Bed, Users, TrendingUp, Package, AlertTriangle, Building2, Settings, Receipt, Shield, CheckCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useWebSocket } from "@/hooks/use-websocket";
 import DateConverter from "@remotemerge/nepali-date-converter";
@@ -42,6 +42,11 @@ export default function OwnerDashboard() {
 
   const { data: dailyAttendance = [] } = useQuery<any[]>({
     queryKey: ["/api/attendance/daily"],
+    refetchInterval: 3000
+  });
+
+  const { data: pendingApprovals = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/transactions", { pendingApproval: "true" }],
     refetchInterval: 3000
   });
 
@@ -137,12 +142,18 @@ export default function OwnerDashboard() {
             icon={<Users />}
             iconColor="text-purple-500"
           />
-          <StatsCard
-            title="Low Stock Items"
-            value={lowStockItems}
-            icon={<AlertTriangle />}
-            iconColor="text-orange-500"
-          />
+          <div 
+            onClick={() => setLocation("/owner/approvals")}
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            data-testid="card-pending-approvals"
+          >
+            <StatsCard
+              title="Pending Approvals"
+              value={pendingApprovals.length}
+              icon={<CheckCircle />}
+              iconColor="text-amber-500"
+            />
+          </div>
         </div>
 
         {/* Quick Actions */}

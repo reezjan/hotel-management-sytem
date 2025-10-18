@@ -10,6 +10,8 @@ import { z } from "zod";
 import { Hotel, LogIn } from "lucide-react";
 import { ROLE_DASHBOARDS } from "@/lib/constants";
 import { useEffect } from "react";
+import { getDeviceInfo } from "@/lib/device-tracker";
+import { useToast } from "@/hooks/use-toast";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -21,6 +23,7 @@ type LoginData = z.infer<typeof loginSchema>;
 export default function AuthPage() {
   const { user, loginMutation } = useAuth();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   const loginForm = useForm<LoginData>({
     resolver: zodResolver(loginSchema),
@@ -42,10 +45,30 @@ export default function AuthPage() {
 
   const onLogin = async (data: LoginData) => {
     try {
+      // Get device information before login
+      const deviceInfo = await getDeviceInfo();
+      
+      // Send login request with device information
       const result = await loginMutation.mutateAsync({
         username: data.username,
-        password: data.password
+        password: data.password,
+        deviceFingerprint: deviceInfo.deviceFingerprint,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os
       });
+      
+      // Check if login is from a new device or location
+      if (result.isNewDevice || result.isNewLocation) {
+        const alerts = [];
+        if (result.isNewDevice) alerts.push("new device");
+        if (result.isNewLocation) alerts.push("new location");
+        
+        toast({
+          title: "Security Alert",
+          description: `Login from ${alerts.join(" and ")} detected. Owner has been notified for security.`,
+          variant: "default",
+        });
+      }
       
       // Redirect to appropriate dashboard based on user's role
       if (result && result.role?.name) {

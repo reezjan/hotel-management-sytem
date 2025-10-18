@@ -3,230 +3,132 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Receipt, Printer, CreditCard, Banknote, Smartphone, Plus, Minus, Trash2, History, Edit, Users, Split } from "lucide-react";
+import { Receipt, Printer, CreditCard, Banknote, Smartphone, CheckCircle2, Utensils } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
-
-interface PaymentEntry {
-  id: string;
-  paymentMethod: string;
-  amount: number;
-  reference?: string;
-}
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function CashierTableBilling() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
-  // Table selection - support multiple tables
-  const [selectedTables, setSelectedTables] = useState<string[]>([]);
-  
-  // Voucher
-  const [voucherCode, setVoucherCode] = useState("");
+  const [selectedTable, setSelectedTable] = useState<string>("");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("");
+  const [voucherCode, setVoucherCode] = useState<string>("");
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
-  
-  // Tip/Gratuity
-  const [tipType, setTipType] = useState<"percentage" | "flat">("percentage");
-  const [tipValue, setTipValue] = useState<number>(0);
-  
-  // Split bill
-  const [splitMode, setSplitMode] = useState<"none" | "equal" | "custom">("none");
-  const [splitCount, setSplitCount] = useState<number>(2);
-  const [customSplits, setCustomSplits] = useState<{ name: string; amount: number }[]>([]);
-  
-  // Payment - support multiple partial payments
-  const [payments, setPayments] = useState<PaymentEntry[]>([]);
-  const [currentPaymentMethod, setCurrentPaymentMethod] = useState("");
-  const [currentPaymentAmount, setCurrentPaymentAmount] = useState("");
-  const [currentPaymentReference, setCurrentPaymentReference] = useState("");
-  
-  // Amendment modal
-  const [amendmentDialogOpen, setAmendmentDialogOpen] = useState(false);
-  const [amendmentNote, setAmendmentNote] = useState("");
-  const [selectedBillForAmendment, setSelectedBillForAmendment] = useState<any>(null);
-  
-  // History filters
-  const [historyStartDate, setHistoryStartDate] = useState("");
-  const [historyEndDate, setHistoryEndDate] = useState("");
-  const [historyStatus, setHistoryStatus] = useState("");
+  const [cashReceived, setCashReceived] = useState<string>("");
+  const [fonepayAmount, setFonepayAmount] = useState<string>("");
+  const [orderItemQuantities, setOrderItemQuantities] = useState<Record<string, number>>({});
 
   const { data: hotel } = useQuery<any>({
-    queryKey: ["/api/hotels/current"],
-    refetchInterval: 3000
+    queryKey: ["/api/hotels/current"]
   });
 
   const { data: tables = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/restaurant-tables"],
-    refetchInterval: 3000,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true
   });
 
   const { data: kotOrders = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/kot-orders"],
     refetchInterval: 3000,
+    refetchIntervalInBackground: true
   });
 
   const { data: menuItems = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/menu-items"],
-    refetchInterval: 3000
+    queryKey: ["/api/hotels/current/menu-items"]
   });
 
   const { data: hotelTaxes = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/taxes"],
-    refetchInterval: 3000
+    queryKey: ["/api/hotels/current/taxes"]
   });
 
-  // Fetch bill history
-  const { data: billHistory = [] } = useQuery<any[]>({
-    queryKey: ["/api/hotels/current/bills", historyStartDate, historyEndDate, historyStatus],
-    refetchInterval: 3000,
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (historyStartDate) params.append("startDate", historyStartDate);
-      if (historyEndDate) params.append("endDate", historyEndDate);
-      if (historyStatus) params.append("status", historyStatus);
-      
-      const response = await fetch(`/api/hotels/current/bills?${params.toString()}`, {
-        credentials: "include"
-      });
-      if (!response.ok) throw new Error("Failed to fetch bills");
-      return response.json();
+  const createTransactionMutation = useMutation({
+    mutationFn: async (transactionData: any) => {
+      await apiRequest("POST", "/api/transactions", transactionData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      toast({ title: "Payment processed successfully" });
     }
   });
 
-  const validateVoucherMutation = useMutation({
-    mutationFn: async (code: string) => {
-      if (!code || code.trim().length === 0) {
-        throw new Error("Please enter a voucher code");
-      }
-      const response = await apiRequest("POST", "/api/vouchers/validate", { code: code.trim() });
-      return response;
-    },
-    onSuccess: (data: any) => {
-      if (data.valid && data.voucher) {
-        setAppliedVoucher(data.voucher);
-        const discountText = data.voucher.discountType === 'percentage' 
-          ? `${data.voucher.discountAmount}% off`
-          : `${formatCurrency(data.voucher.discountAmount)} off`;
-        toast({ 
-          title: "✓ Voucher Applied!", 
-          description: `Code: ${data.voucher.code} - ${discountText}`,
-        });
-      } else {
-        setAppliedVoucher(null);
-        toast({ 
-          title: "Invalid Voucher", 
-          description: "Voucher code not found or expired", 
-          variant: "destructive" 
-        });
-      }
-    },
-    onError: (error: any) => {
-      setAppliedVoucher(null);
-      toast({ 
-        title: "Validation Error", 
-        description: error?.message || "Unable to validate voucher", 
-        variant: "destructive" 
-      });
-    }
-  });
-
-  const createBillMutation = useMutation({
-    mutationFn: async (billData: any) => {
-      return await apiRequest("POST", "/api/hotels/current/bills", billData);
+  const updateOrderStatusMutation = useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
+      await apiRequest("PUT", `/api/kot-orders/${orderId}`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/bills"] });
-      toast({ title: "Bill created and payment processed successfully" });
+    }
+  });
+
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
+
+  const handleValidateVoucher = async () => {
+    if (!voucherCode.trim()) {
+      toast({ title: "Please enter a voucher code", variant: "destructive" });
+      return;
+    }
+
+    setIsValidatingVoucher(true);
+    try {
+      const response = await fetch('/api/vouchers/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: voucherCode.trim() }),
+        credentials: 'include'
+      });
+      const data = await response.json();
       
-      // Reset form
-      setSelectedTables([]);
+      if (data.valid && data.voucher) {
+        setAppliedVoucher(data.voucher);
+        toast({ title: "Voucher applied successfully!" });
+      } else {
+        setAppliedVoucher(null);
+        toast({ title: "Invalid voucher", description: data.message || "Voucher code is invalid", variant: "destructive" });
+      }
+    } catch (error) {
       setAppliedVoucher(null);
-      setVoucherCode("");
-      setTipType("percentage");
-      setTipValue(0);
-      setSplitMode("none");
-      setPayments([]);
-      setCurrentPaymentMethod("");
-      setCurrentPaymentAmount("");
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast({ title: "Error validating voucher", variant: "destructive" });
+    } finally {
+      setIsValidatingVoucher(false);
     }
-  });
-
-  const amendBillMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      return await apiRequest("PUT", `/api/hotels/current/bills/${id}`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/bills"] });
-      toast({ title: "Bill amended successfully" });
-      setAmendmentDialogOpen(false);
-      setAmendmentNote("");
-      setSelectedBillForAmendment(null);
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  });
-
-  // Toggle table selection
-  const handleTableToggle = (tableId: string) => {
-    setSelectedTables(prev => 
-      prev.includes(tableId) 
-        ? prev.filter(id => id !== tableId)
-        : [...prev, tableId]
-    );
   };
 
-  // Filter orders from selected tables with approved/ready items
+  const redeemVoucherMutation = useMutation({
+    mutationFn: async (voucherId: string) => {
+      await apiRequest("POST", "/api/vouchers/redeem", { voucherId });
+    }
+  });
+
   const selectedTableOrders = kotOrders.filter(
     (order: any) => {
-      if (!selectedTables.includes(order.tableId)) return false;
+      if (order.tableId !== selectedTable) return false;
       if (order.status === 'cancelled' || order.status === 'served') return false;
       return order.items?.some((item: any) => item.status === 'approved' || item.status === 'ready');
     }
   );
 
-  // Calculate bill with cascading taxes
   const calculateBill = () => {
     let subtotal = 0;
-    const items: any[] = [];
     
-    // Calculate subtotal from approved/ready items only
     selectedTableOrders.forEach((order: any) => {
       order.items?.forEach((item: any) => {
         if (item.status === 'approved' || item.status === 'ready') {
           const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
           if (menuItem) {
-            subtotal += menuItem.price * item.qty;
-            items.push({
-              orderId: order.id,
-              itemId: item.id,
-              menuItemId: item.menuItemId,
-              name: menuItem.name,
-              qty: item.qty,
-              price: menuItem.price,
-              total: menuItem.price * item.qty
-            });
+            const quantity = orderItemQuantities[item.id] ?? item.qty;
+            subtotal += menuItem.price * quantity;
           }
         }
       });
     });
 
-    // Get active taxes and sort them
     const activeTaxes = hotelTaxes.filter((tax: any) => tax.isActive);
     const taxOrder = ['vat', 'service_tax', 'luxury_tax'];
     const sortedTaxes = activeTaxes.sort((a: any, b: any) => {
@@ -235,7 +137,6 @@ export default function CashierTableBilling() {
       return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
     });
 
-    // Apply cascading taxes
     let runningTotal = subtotal;
     const taxBreakdown: any = {};
     
@@ -255,7 +156,6 @@ export default function CashierTableBilling() {
     const totalTax = Object.values(taxBreakdown).reduce((sum: number, t: any) => sum + t.amount, 0);
     let grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
     
-    // Apply voucher discount after taxes
     let discountAmount = 0;
     if (appliedVoucher) {
       if (appliedVoucher.discountType === 'percentage') {
@@ -266,77 +166,25 @@ export default function CashierTableBilling() {
       grandTotal = Math.round((grandTotal - discountAmount) * 100) / 100;
     }
 
-    // Calculate tip
-    let tipAmount = 0;
-    if (tipValue > 0) {
-      if (tipType === "percentage") {
-        tipAmount = Math.round((grandTotal * (tipValue / 100)) * 100) / 100;
-      } else {
-        tipAmount = Math.round(tipValue * 100) / 100;
-      }
-      grandTotal = Math.round((grandTotal + tipAmount) * 100) / 100;
-    }
-
     return {
       subtotal,
       taxBreakdown,
       totalTax,
       discountAmount,
-      tipAmount,
-      grandTotal,
-      items
+      grandTotal
     };
   };
 
   const billCalc = calculateBill();
 
-  // Calculate total of payments entered
-  const totalPaymentAmount = payments.reduce((sum, p) => sum + p.amount, 0);
-  const remainingAmount = Math.max(0, billCalc.grandTotal - totalPaymentAmount);
+  const cashReceivedAmount = parseFloat(cashReceived) || 0;
+  const fonepayReceivedAmount = parseFloat(fonepayAmount) || 0;
+  const totalReceived = cashReceivedAmount + fonepayReceivedAmount;
+  const changeAmount = Math.max(0, totalReceived - billCalc.grandTotal);
 
-  const handleAddPayment = () => {
-    if (!currentPaymentMethod) {
+  const handleProcessPayment = async () => {
+    if (!selectedPaymentMethod) {
       toast({ title: "Error", description: "Please select a payment method", variant: "destructive" });
-      return;
-    }
-    
-    const amount = parseFloat(currentPaymentAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast({ title: "Error", description: "Please enter a valid payment amount", variant: "destructive" });
-      return;
-    }
-
-    if (amount > remainingAmount) {
-      toast({ title: "Error", description: "Payment amount exceeds remaining balance", variant: "destructive" });
-      return;
-    }
-
-    const newPayment: PaymentEntry = {
-      id: Date.now().toString(),
-      paymentMethod: currentPaymentMethod,
-      amount,
-      reference: currentPaymentReference || undefined
-    };
-
-    setPayments([...payments, newPayment]);
-    setCurrentPaymentMethod("");
-    setCurrentPaymentAmount("");
-    setCurrentPaymentReference("");
-  };
-
-  const handleRemovePayment = (id: string) => {
-    setPayments(payments.filter(p => p.id !== id));
-  };
-
-  const handleApplyVoucher = () => {
-    if (voucherCode.trim()) {
-      validateVoucherMutation.mutate(voucherCode.trim());
-    }
-  };
-
-  const handleProcessBill = async () => {
-    if (selectedTables.length === 0) {
-      toast({ title: "Error", description: "Please select at least one table", variant: "destructive" });
       return;
     }
 
@@ -345,72 +193,111 @@ export default function CashierTableBilling() {
       return;
     }
 
-    if (payments.length === 0) {
-      toast({ title: "Error", description: "Please add at least one payment", variant: "destructive" });
+    if (selectedPaymentMethod === 'cash' && cashReceivedAmount < billCalc.grandTotal) {
+      toast({ title: "Error", description: "Cash received must be at least the bill amount", variant: "destructive" });
       return;
     }
 
-    if (Math.abs(remainingAmount) > 0.01) {
-      toast({ title: "Error", description: "Total payments must equal the bill amount", variant: "destructive" });
-      return;
+    if (selectedPaymentMethod === 'cash_fonepay') {
+      const tolerance = 0.01;
+      const difference = Math.abs(totalReceived - billCalc.grandTotal);
+      
+      if (difference > tolerance) {
+        if (totalReceived < billCalc.grandTotal) {
+          toast({ title: "Error", description: `Total payment is ${formatCurrency(billCalc.grandTotal - totalReceived)} short. Cash + Fonepay must equal the bill amount.`, variant: "destructive" });
+        } else {
+          toast({ title: "Error", description: `Total payment is ${formatCurrency(totalReceived - billCalc.grandTotal)} over. Cash + Fonepay must equal the bill amount.`, variant: "destructive" });
+        }
+        return;
+      }
+      if (cashReceivedAmount <= 0 || fonepayReceivedAmount <= 0) {
+        toast({ title: "Error", description: "Both cash and fonepay amounts must be greater than zero", variant: "destructive" });
+        return;
+      }
     }
 
-    // Prepare split details if applicable
-    let splitDetails = null;
-    if (splitMode === "equal") {
-      const splitAmount = Math.round((billCalc.grandTotal / splitCount) * 100) / 100;
-      splitDetails = {
-        mode: "equal",
-        count: splitCount,
-        amountPerPerson: splitAmount
-      };
-    } else if (splitMode === "custom" && customSplits.length > 0) {
-      splitDetails = {
-        mode: "custom",
-        splits: customSplits
-      };
+    try {
+      if (appliedVoucher) {
+        await redeemVoucherMutation.mutateAsync(appliedVoucher.id);
+      }
+
+      const tableRef = `Table: ${tables.find((t: any) => t.id === selectedTable)?.name || selectedTable}${appliedVoucher ? ` | Voucher: ${appliedVoucher.code}` : ''}`;
+
+      if (selectedPaymentMethod === 'cash_fonepay') {
+        // Create separate transactions for cash and fonepay
+        await createTransactionMutation.mutateAsync({
+          txnType: 'cash_in',
+          amount: cashReceivedAmount.toFixed(2),
+          paymentMethod: 'cash',
+          purpose: 'restaurant_sale',
+          reference: tableRef
+        });
+
+        await createTransactionMutation.mutateAsync({
+          txnType: 'fonepay_in',
+          amount: fonepayReceivedAmount.toFixed(2),
+          paymentMethod: 'fonepay',
+          purpose: 'restaurant_sale',
+          reference: tableRef
+        });
+      } else {
+        // Single payment method
+        const txnType = selectedPaymentMethod === 'cash' ? 'cash_in' : 
+                        selectedPaymentMethod === 'pos' ? 'pos_in' : 
+                        selectedPaymentMethod === 'fonepay' ? 'fonepay_in' : 'cash_in';
+
+        await createTransactionMutation.mutateAsync({
+          txnType: txnType,
+          amount: billCalc.grandTotal.toFixed(2),
+          paymentMethod: selectedPaymentMethod,
+          purpose: 'restaurant_sale',
+          reference: tableRef
+        });
+      }
+
+      for (const order of selectedTableOrders) {
+        await updateOrderStatusMutation.mutateAsync({
+          orderId: order.id,
+          status: 'served'
+        });
+      }
+
+      // Mark table as available for new guests
+      await apiRequest("PUT", `/api/hotels/current/restaurant-tables/${selectedTable}`, {
+        status: 'available'
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/restaurant-tables"] });
+
+      handlePrintBill();
+      
+      toast({ title: "Payment processed successfully" });
+      
+      setSelectedTable("");
+      setSelectedPaymentMethod("");
+      setVoucherCode("");
+      setAppliedVoucher(null);
+      setCashReceived("");
+      setFonepayAmount("");
+      setOrderItemQuantities({});
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to process payment", variant: "destructive" });
     }
-
-    const billData = {
-      tableIds: selectedTables,
-      orderIds: selectedTableOrders.map((o: any) => o.id),
-      subtotal: billCalc.subtotal.toString(),
-      taxBreakdown: billCalc.taxBreakdown,
-      totalTax: billCalc.totalTax.toString(),
-      discount: billCalc.discountAmount.toString(),
-      voucherId: appliedVoucher?.id || null,
-      voucherCode: appliedVoucher?.code || null,
-      tipType: tipValue > 0 ? tipType : null,
-      tipValue: tipValue > 0 ? tipValue.toString() : "0",
-      tipAmount: billCalc.tipAmount.toString(),
-      grandTotal: billCalc.grandTotal.toString(),
-      splitMode: splitMode !== "none" ? splitMode : null,
-      splitDetails,
-      items: billCalc.items,
-      status: "final",
-      payments: payments.map(p => ({
-        paymentMethod: p.paymentMethod,
-        amount: p.amount.toString(),
-        reference: p.reference
-      }))
-    };
-
-    createBillMutation.mutate(billData);
   };
 
-  const handlePrintBill = (bill?: any) => {
-    const billToPrint = bill || {
-      billNumber: `PREVIEW-${Date.now().toString().slice(-6)}`,
-      ...billCalc,
-      tableNames: selectedTables.map(id => tables.find((t: any) => t.id === id)?.name).join(", "),
-      createdAt: new Date().toISOString(),
-      payments: payments
-    };
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setVoucherCode("");
+    toast({ title: "Voucher removed" });
+  };
 
+  const handlePrintBill = () => {
     const hotelName = hotel?.name || "HOTEL";
     const hotelAddress = hotel?.address || "";
     const hotelPhone = hotel?.phone || "";
-    const now = new Date(billToPrint.createdAt);
+    const tableName = tables.find((t: any) => t.id === selectedTable)?.name || "Unknown";
+    const now = new Date();
     
     let billContent = `
 <div style="font-family: 'Courier New', monospace; width: 300px; padding: 10px;">
@@ -425,13 +312,13 @@ export default function CashierTableBilling() {
   
   <div style="text-align: center; font-size: 12px; margin-bottom: 15px;">
     Restaurant Bill<br/>
-    ${billToPrint.tableNames || billToPrint.tableIds?.map((id: string) => tables.find((t: any) => t.id === id)?.name).join(", ")}
+    ${tableName}
   </div>
   
   <div style="font-size: 11px; margin-bottom: 10px;">
     <div>Date: ${now.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' })}</div>
     <div>Time: ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</div>
-    <div>Bill No: ${billToPrint.billNumber}</div>
+    <div>Bill No: ${now.getTime().toString().slice(-8)}</div>
     <div>Cashier: ${user?.username}</div>
   </div>
   
@@ -444,15 +331,26 @@ export default function CashierTableBilling() {
           <th style="text-align: right; padding-bottom: 5px;">Amount</th>
         </tr>
       </thead>
-      <tbody>`;
+      <tbody>
+`;
 
-    (billToPrint.items || []).forEach((item: any) => {
-      billContent += `
+    selectedTableOrders.forEach((order: any) => {
+      order.items?.forEach((item: any) => {
+        if (item.status === 'approved' || item.status === 'ready') {
+          const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
+          if (menuItem) {
+            const quantity = orderItemQuantities[item.id] ?? item.qty;
+            if (quantity > 0) {
+              billContent += `
         <tr>
-          <td style="padding: 3px 0;">${item.name}</td>
-          <td style="text-align: center;">${item.qty}</td>
-          <td style="text-align: right;">${formatCurrency(item.total)}</td>
+          <td style="padding: 3px 0;">${menuItem.name}</td>
+          <td style="text-align: center;">${quantity}</td>
+          <td style="text-align: right;">${formatCurrency(menuItem.price * quantity)}</td>
         </tr>`;
+            }
+          }
+        }
+      });
     });
 
     billContent += `
@@ -463,149 +361,131 @@ export default function CashierTableBilling() {
   <div style="font-size: 11px; margin-top: 10px;">
     <div style="display: flex; justify-content: space-between; padding: 3px 0;">
       <span>Subtotal:</span>
-      <span>${formatCurrency(billToPrint.subtotal)}</span>
-    </div>`;
+      <span>${formatCurrency(billCalc.subtotal)}</span>
+    </div>
+`;
 
-    Object.entries(billToPrint.taxBreakdown || {}).forEach(([taxName, taxInfo]: [string, any]) => {
+    Object.entries(billCalc.taxBreakdown).forEach(([taxType, details]: [string, any]) => {
       billContent += `
-    <div style="display: flex; justify-content: space-between; padding: 3px 0; padding-left: 10px;">
-      <span>${taxName} (${taxInfo.rate}%):</span>
-      <span>${formatCurrency(taxInfo.amount)}</span>
+    <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+      <span>${taxType} (${details.rate}%):</span>
+      <span>${formatCurrency(details.amount)}</span>
     </div>`;
     });
 
-    if (billToPrint.discountAmount > 0) {
+    if (billCalc.discountAmount > 0 && appliedVoucher) {
       billContent += `
-    <div style="display: flex; justify-content: space-between; padding: 3px 0; color: green;">
-      <span>Discount:</span>
-      <span>-${formatCurrency(billToPrint.discountAmount)}</span>
+    <div style="display: flex; justify-content: space-between; padding: 3px 0; color: #16a34a;">
+      <span>Discount (${appliedVoucher.code}):</span>
+      <span>-${formatCurrency(billCalc.discountAmount)}</span>
     </div>`;
     }
 
-    if (billToPrint.tipAmount > 0) {
+    const paymentMethodText = selectedPaymentMethod === 'cash' ? 'CASH' :
+                              selectedPaymentMethod === 'pos' ? 'CARD/POS' :
+                              selectedPaymentMethod === 'fonepay' ? 'FONEPAY' :
+                              selectedPaymentMethod === 'cash_fonepay' ? 'CASH + FONEPAY' : selectedPaymentMethod.toUpperCase();
+
+    billContent += `
+    <div style="display: flex; justify-content: space-between; padding: 10px 0 5px 0; margin-top: 5px; border-top: 2px dashed #000; font-weight: bold; font-size: 14px;">
+      <span>GRAND TOTAL:</span>
+      <span>${formatCurrency(billCalc.grandTotal)}</span>
+    </div>
+    
+    <div style="display: flex; justify-content: space-between; padding: 5px 0; font-weight: bold;">
+      <span>Payment Method:</span>
+      <span>${paymentMethodText}</span>
+    </div>`;
+
+    if (selectedPaymentMethod === 'cash' && cashReceivedAmount > 0) {
       billContent += `
     <div style="display: flex; justify-content: space-between; padding: 3px 0;">
-      <span>Tip/Gratuity:</span>
-      <span>${formatCurrency(billToPrint.tipAmount)}</span>
-    </div>`;
-    }
-
-    billContent += `
-    <div style="display: flex; justify-content: space-between; padding: 8px 0; margin-top: 5px; border-top: 2px solid #000; font-weight: bold; font-size: 13px;">
-      <span>GRAND TOTAL:</span>
-      <span>${formatCurrency(billToPrint.grandTotal)}</span>
+      <span>Cash Received:</span>
+      <span>${formatCurrency(cashReceivedAmount)}</span>
     </div>
-  </div>`;
-
-    if (billToPrint.payments && billToPrint.payments.length > 0) {
-      billContent += `
-  <div style="font-size: 11px; margin-top: 10px; border-top: 1px dashed #000; padding-top: 10px;">
-    <div style="font-weight: bold; margin-bottom: 5px;">Payment Details:</div>`;
-      
-      billToPrint.payments.forEach((payment: any) => {
-        const methodName = payment.paymentMethod === 'cash' ? 'Cash' :
-                          payment.paymentMethod === 'pos' ? 'Card/POS' : 
-                          payment.paymentMethod === 'fonepay' ? 'Fonepay' : payment.paymentMethod;
-        billContent += `
-    <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-      <span>${methodName}:</span>
-      <span>${formatCurrency(payment.amount)}</span>
+    <div style="display: flex; justify-content: space-between; padding: 3px 0; font-weight: bold;">
+      <span>Change:</span>
+      <span>${formatCurrency(changeAmount)}</span>
     </div>`;
-      });
-
-      billContent += `
-  </div>`;
     }
 
-    if (billToPrint.splitMode && billToPrint.splitDetails) {
+    if (selectedPaymentMethod === 'cash_fonepay') {
       billContent += `
-  <div style="font-size: 11px; margin-top: 10px; border-top: 1px dashed #000; padding-top: 10px;">
-    <div style="font-weight: bold; margin-bottom: 5px;">Split Bill:</div>`;
-      
-      if (billToPrint.splitMode === 'equal') {
-        billContent += `
-    <div>Split ${billToPrint.splitDetails.count} ways: ${formatCurrency(billToPrint.splitDetails.amountPerPerson)} each</div>`;
-      } else if (billToPrint.splitMode === 'custom') {
-        billToPrint.splitDetails.splits.forEach((split: any) => {
-          billContent += `
-    <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-      <span>${split.name}:</span>
-      <span>${formatCurrency(split.amount)}</span>
+    <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+      <span>Cash:</span>
+      <span>${formatCurrency(cashReceivedAmount)}</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; padding: 3px 0;">
+      <span>Fonepay:</span>
+      <span>${formatCurrency(fonepayReceivedAmount)}</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; padding: 3px 0; font-weight: bold;">
+      <span>Total Received:</span>
+      <span>${formatCurrency(totalReceived)}</span>
     </div>`;
-        });
+      if (changeAmount > 0) {
+        billContent += `
+    <div style="display: flex; justify-content: space-between; padding: 3px 0; font-weight: bold;">
+      <span>Change:</span>
+      <span>${formatCurrency(changeAmount)}</span>
+    </div>`;
       }
-
-      billContent += `
-  </div>`;
     }
 
     billContent += `
-  
-  <div style="text-align: center; font-size: 10px; margin-top: 15px; padding-top: 10px; border-top: 2px dashed #000;">
-    Thank you for your visit!<br/>
-    Please come again
   </div>
-</div>`;
+  
+  <div style="text-align: center; margin-top: 20px; padding-top: 10px; border-top: 2px dashed #000; font-size: 12px;">
+    Thank You! Visit Again<br/>
+    <div style="margin-top: 5px; font-size: 10px;">
+      This is a computer generated bill
+    </div>
+  </div>
+</div>
+    `;
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (printWindow) {
       printWindow.document.write(`
         <html>
           <head>
-            <title>Bill ${billToPrint.billNumber}</title>
+            <title>Bill - ${hotelName}</title>
+            <style>
+              @media print {
+                body { margin: 0; }
+              }
+              body {
+                margin: 0;
+                padding: 20px;
+                font-family: 'Courier New', monospace;
+              }
+            </style>
           </head>
-          <body>${billContent}</body>
+          <body onload="window.print(); window.close();">
+            ${billContent}
+          </body>
         </html>
       `);
       printWindow.document.close();
-      printWindow.print();
     }
-  };
-
-  const handleAmendBill = () => {
-    if (!selectedBillForAmendment) return;
-    if (!amendmentNote.trim()) {
-      toast({ title: "Error", description: "Please provide an amendment note", variant: "destructive" });
-      return;
-    }
-
-    amendBillMutation.mutate({
-      id: selectedBillForAmendment.id,
-      data: {
-        amendmentNote: amendmentNote.trim(),
-        status: 'amended'
-      }
-    });
   };
 
   return (
-    <DashboardLayout title="Table Billing">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
+    <DashboardLayout title="Cashier Billing">
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Table Billing</h1>
         </div>
 
-        <Tabs defaultValue="billing" className="w-full">
-          <TabsList>
-            <TabsTrigger value="billing" data-testid="tab-billing">
-              <Receipt className="w-4 h-4 mr-2" />
-              Create Bill
-            </TabsTrigger>
-            <TabsTrigger value="history" data-testid="tab-history">
-              <History className="w-4 h-4 mr-2" />
-              Bill History
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="billing" className="space-y-6">
+        <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left Column - Table Selection & Order Details */}
+              {/* Left Column - Visual Table Selection */}
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center">
-                      <Users className="w-5 h-5 mr-2" />
-                      Select Tables
+                      <Utensils className="h-5 w-5 mr-2" />
+                      Select Table
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -619,533 +499,383 @@ export default function CashierTableBilling() {
                         );
                         
                         return (
-                          <div
+                          <button
                             key={table.id}
-                            className={`flex items-center space-x-2 p-3 rounded-lg border ${
-                              selectedTables.includes(table.id) ? 'bg-blue-50 border-blue-500' : 'border-gray-200'
-                            } ${!hasOrders ? 'opacity-50' : 'cursor-pointer hover:bg-gray-50'}`}
-                            onClick={() => hasOrders && handleTableToggle(table.id)}
-                            data-testid={`table-select-${table.id}`}
+                            onClick={() => hasOrders && setSelectedTable(table.id)}
+                            disabled={!hasOrders}
+                            className={`p-4 rounded-lg border-2 transition-all ${
+                              selectedTable === table.id
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+                                : hasOrders
+                                ? 'border-gray-300 hover:border-blue-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800'
+                                : 'border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed dark:border-gray-800 dark:bg-gray-900'
+                            }`}
+                            data-testid={`table-visual-${table.id}`}
                           >
-                            <Checkbox
-                              checked={selectedTables.includes(table.id)}
-                              disabled={!hasOrders}
-                              onCheckedChange={() => hasOrders && handleTableToggle(table.id)}
-                              data-testid={`checkbox-table-${table.id}`}
-                            />
-                            <div>
-                              <div className="font-medium">{table.name}</div>
-                              {hasOrders && <div className="text-xs text-green-600">Active Orders</div>}
+                            <div className="text-center">
+                              <div className="font-bold text-lg">{table.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                Capacity: {table.capacity}
+                              </div>
+                              {hasOrders && (
+                                <div className="text-xs text-green-600 dark:text-green-400 font-medium mt-1">
+                                  Active Orders
+                                </div>
+                              )}
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Order Items</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {selectedTableOrders.length === 0 ? (
-                      <p className="text-gray-500 text-center py-4">Select tables to view orders</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {selectedTableOrders.map((order: any) => (
-                          <div key={order.id} className="border rounded-lg p-3">
-                            <div className="font-medium text-sm mb-2">
-                              Table: {tables.find((t: any) => t.id === order.tableId)?.name}
-                            </div>
-                            {order.items?.filter((item: any) => item.status === 'approved' || item.status === 'ready').map((item: any) => {
-                              const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
-                              if (!menuItem) return null;
-                              return (
-                                <div key={item.id} className="flex justify-between items-center text-sm py-1">
-                                  <span>{menuItem.name}</span>
-                                  <span>x{item.qty}</span>
-                                  <span className="font-medium">{formatCurrency(menuItem.price * item.qty)}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Right Column - Bill Details & Payment */}
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Bill Summary</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span>Subtotal:</span>
-                        <span data-testid="text-subtotal">{formatCurrency(billCalc.subtotal)}</span>
-                      </div>
-                      
-                      {Object.entries(billCalc.taxBreakdown).map(([taxName, taxInfo]: [string, any]) => (
-                        <div key={taxName} className="flex justify-between text-sm pl-4">
-                          <span>{taxName} ({taxInfo.rate}%):</span>
-                          <span>{formatCurrency(taxInfo.amount)}</span>
-                        </div>
-                      ))}
-
-                      {billCalc.discountAmount > 0 && (
-                        <div className="flex justify-between text-sm text-green-600">
-                          <span>Discount:</span>
-                          <span data-testid="text-discount">-{formatCurrency(billCalc.discountAmount)}</span>
-                        </div>
-                      )}
-
-                      {/* Tip/Gratuity */}
-                      <div className="border-t pt-3 mt-3">
-                        <Label className="text-sm font-medium">Tip/Gratuity (Optional)</Label>
-                        <div className="flex gap-2 mt-2">
-                          <Select value={tipType} onValueChange={(val: any) => setTipType(val)}>
-                            <SelectTrigger className="w-32" data-testid="select-tip-type">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="percentage">Percentage</SelectItem>
-                              <SelectItem value="flat">Flat Amount</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            type="number"
-                            placeholder={tipType === "percentage" ? "%" : "Amount"}
-                            value={tipValue}
-                            onChange={(e) => setTipValue(parseFloat(e.target.value) || 0)}
-                            className="flex-1"
-                            data-testid="input-tip-value"
-                          />
-                        </div>
-                        {billCalc.tipAmount > 0 && (
-                          <div className="flex justify-between text-sm mt-2">
-                            <span>Tip Amount:</span>
-                            <span data-testid="text-tip-amount">{formatCurrency(billCalc.tipAmount)}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex justify-between text-lg font-bold border-t pt-3 mt-3">
-                        <span>GRAND TOTAL:</span>
-                        <span data-testid="text-grand-total">{formatCurrency(billCalc.grandTotal)}</span>
-                      </div>
-                    </div>
-
-                    {/* Voucher */}
-                    <div className="border-t pt-4">
-                      <Label className="text-sm font-medium">Apply Voucher</Label>
-                      <div className="flex gap-2 mt-2">
-                        <Input
-                          placeholder="Voucher code"
-                          value={voucherCode}
-                          onChange={(e) => setVoucherCode(e.target.value)}
-                          disabled={!!appliedVoucher}
-                          data-testid="input-voucher-code"
-                        />
-                        <Button 
-                          onClick={handleApplyVoucher}
-                          disabled={validateVoucherMutation.isPending || !!appliedVoucher}
-                          data-testid="button-apply-voucher"
-                        >
-                          Apply
-                        </Button>
-                        {appliedVoucher && (
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setAppliedVoucher(null);
-                              setVoucherCode("");
-                            }}
-                            data-testid="button-remove-voucher"
-                          >
-                            Remove
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Split Bill */}
-                    <div className="border-t pt-4">
-                      <Label className="text-sm font-medium flex items-center">
-                        <Split className="w-4 h-4 mr-2" />
-                        Split Bill
-                      </Label>
-                      <Select value={splitMode} onValueChange={(val: any) => setSplitMode(val)}>
-                        <SelectTrigger className="mt-2" data-testid="select-split-mode">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No Split</SelectItem>
-                          <SelectItem value="equal">Split Equally</SelectItem>
-                          <SelectItem value="custom">Custom Split</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      {splitMode === "equal" && (
-                        <div className="mt-2">
-                          <Label className="text-xs">Number of people</Label>
-                          <Input
-                            type="number"
-                            min="2"
-                            value={splitCount}
-                            onChange={(e) => setSplitCount(parseInt(e.target.value) || 2)}
-                            data-testid="input-split-count"
-                          />
-                          <p className="text-sm text-gray-600 mt-2">
-                            {formatCurrency(billCalc.grandTotal / splitCount)} per person
-                          </p>
-                        </div>
-                      )}
-
-                      {splitMode === "custom" && (
-                        <div className="mt-2 space-y-2">
-                          {customSplits.map((split, index) => (
-                            <div key={index} className="flex gap-2">
-                              <Input
-                                placeholder="Name"
-                                value={split.name}
-                                onChange={(e) => {
-                                  const newSplits = [...customSplits];
-                                  newSplits[index].name = e.target.value;
-                                  setCustomSplits(newSplits);
-                                }}
-                                className="flex-1"
-                                data-testid={`input-split-name-${index}`}
-                              />
-                              <Input
-                                type="number"
-                                placeholder="Amount"
-                                value={split.amount}
-                                onChange={(e) => {
-                                  const newSplits = [...customSplits];
-                                  newSplits[index].amount = parseFloat(e.target.value) || 0;
-                                  setCustomSplits(newSplits);
-                                }}
-                                className="w-32"
-                                data-testid={`input-split-amount-${index}`}
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setCustomSplits(customSplits.filter((_, i) => i !== index))}
-                                data-testid={`button-remove-split-${index}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                {selectedTable && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Order Items (Approved/Ready)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {selectedTableOrders.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">No approved orders for this table</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {selectedTableOrders.map((order: any) => (
+                            <div key={order.id} className="text-sm">
+                              {order.items?.map((item: any, idx: number) => {
+                                if (item.status === 'approved' || item.status === 'ready') {
+                                  const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
+                                  if (!menuItem) return null;
+                                  return (
+                                    <div key={idx} className="flex justify-between py-1" data-testid={`order-item-${idx}`}>
+                                      <span>{menuItem.name} x {item.qty}</span>
+                                      <span>{formatCurrency(menuItem.price * item.qty)}</span>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })}
                             </div>
                           ))}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCustomSplits([...customSplits, { name: "", amount: 0 }])}
-                            data-testid="button-add-split"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Split
-                          </Button>
                         </div>
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Payment</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Add Payment Form */}
-                    <div className="space-y-3">
-                      <div>
-                        <Label className="text-sm">Payment Method</Label>
-                        <Select value={currentPaymentMethod} onValueChange={setCurrentPaymentMethod}>
-                          <SelectTrigger data-testid="select-payment-method">
-                            <SelectValue placeholder="Select method" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="cash">Cash</SelectItem>
-                            <SelectItem value="pos">Card/POS</SelectItem>
-                            <SelectItem value="fonepay">Fonepay</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <Label className="text-sm">Amount</Label>
-                        <Input
-                          type="number"
-                          placeholder="Enter amount"
-                          value={currentPaymentAmount}
-                          onChange={(e) => setCurrentPaymentAmount(e.target.value)}
-                          data-testid="input-payment-amount"
-                        />
-                      </div>
-
-                      <div>
-                        <Label className="text-sm">Reference (Optional)</Label>
-                        <Input
-                          placeholder="Transaction ref"
-                          value={currentPaymentReference}
-                          onChange={(e) => setCurrentPaymentReference(e.target.value)}
-                          data-testid="input-payment-reference"
-                        />
-                      </div>
-
-                      <Button 
-                        onClick={handleAddPayment} 
-                        className="w-full"
-                        variant="outline"
-                        data-testid="button-add-payment"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Payment
-                      </Button>
-                    </div>
-
-                    {/* Payment List */}
-                    {payments.length > 0 && (
-                      <div className="border-t pt-4 space-y-2">
-                        <Label className="text-sm font-medium">Payments Added:</Label>
-                        {payments.map((payment) => (
-                          <div key={payment.id} className="flex items-center justify-between p-2 bg-gray-50 rounded" data-testid={`payment-entry-${payment.id}`}>
-                            <div className="flex-1">
-                              <div className="font-medium text-sm">
-                                {payment.paymentMethod === 'cash' ? 'Cash' :
-                                 payment.paymentMethod === 'pos' ? 'Card/POS' : 'Fonepay'}
-                              </div>
-                              <div className="text-xs text-gray-600">{formatCurrency(payment.amount)}</div>
-                              {payment.reference && <div className="text-xs text-gray-500">Ref: {payment.reference}</div>}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemovePayment(payment.id)}
-                              data-testid={`button-remove-payment-${payment.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
-                        <div className="flex justify-between font-medium pt-2 border-t">
-                          <span>Total Paid:</span>
-                          <span data-testid="text-total-paid">{formatCurrency(totalPaymentAmount)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span>Remaining:</span>
-                          <span className={remainingAmount > 0 ? 'text-red-600' : 'text-green-600'} data-testid="text-remaining">
-                            {formatCurrency(remainingAmount)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 pt-4">
-                      <Button 
-                        onClick={handleProcessBill} 
-                        disabled={createBillMutation.isPending || remainingAmount !== 0 || payments.length === 0}
-                        className="flex-1"
-                        data-testid="button-process-bill"
-                      >
-                        <Receipt className="w-4 h-4 mr-2" />
-                        Process Bill
-                      </Button>
-                      <Button 
-                        onClick={() => handlePrintBill()} 
-                        variant="outline"
-                        data-testid="button-print-preview"
-                      >
-                        <Printer className="w-4 h-4 mr-2" />
-                        Preview
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
-            </div>
-          </TabsContent>
 
-          <TabsContent value="history" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Filter Bills</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <Label className="text-sm">Start Date</Label>
-                    <Input
-                      type="date"
-                      value={historyStartDate}
-                      onChange={(e) => setHistoryStartDate(e.target.value)}
-                      data-testid="input-history-start-date"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm">End Date</Label>
-                    <Input
-                      type="date"
-                      value={historyEndDate}
-                      onChange={(e) => setHistoryEndDate(e.target.value)}
-                      data-testid="input-history-end-date"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm">Status</Label>
-                    <Select value={historyStatus} onValueChange={setHistoryStatus}>
-                      <SelectTrigger data-testid="select-history-status">
-                        <SelectValue placeholder="All" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">All</SelectItem>
-                        <SelectItem value="final">Final</SelectItem>
-                        <SelectItem value="amended">Amended</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      onClick={() => {
-                        setHistoryStartDate("");
-                        setHistoryEndDate("");
-                        setHistoryStatus("");
-                      }}
-                      variant="outline"
-                      data-testid="button-clear-filters"
-                    >
-                      Clear Filters
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+              {/* Right Column - Bill Summary & Payment */}
+              <div className="space-y-6">
+                {selectedTable && selectedTableOrders.length > 0 && (
+                  <>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Bill Summary</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="border rounded-lg p-4 space-y-3">
+                          <div className="font-medium text-sm mb-2">Order Items</div>
+                          {selectedTableOrders.map((order: any) => (
+                            <div key={order.id} className="space-y-2">
+                              {order.items?.map((item: any, idx: number) => {
+                                if (item.status === 'approved' || item.status === 'ready') {
+                                  const menuItem = menuItems.find((m: any) => m.id === item.menuItemId);
+                                  if (!menuItem) return null;
+                                  const quantity = orderItemQuantities[item.id] ?? item.qty;
+                                  return (
+                                    <div key={idx} className="flex items-center justify-between gap-2 py-1 border-b last:border-b-0" data-testid={`bill-item-${idx}`}>
+                                      <div className="flex-1">
+                                        <div className="text-sm font-medium">{menuItem.name}</div>
+                                        <div className="text-xs text-muted-foreground">{formatCurrency(menuItem.price)} each</div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max={item.qty}
+                                          value={quantity}
+                                          onChange={(e) => {
+                                            const newQty = parseInt(e.target.value) || 0;
+                                            if (newQty >= 0 && newQty <= item.qty) {
+                                              setOrderItemQuantities(prev => ({
+                                                ...prev,
+                                                [item.id]: newQty
+                                              }));
+                                            }
+                                          }}
+                                          className="w-16 h-8 text-center"
+                                          data-testid={`input-item-quantity-${idx}`}
+                                        />
+                                        <span className="text-sm text-muted-foreground">/ {item.qty}</span>
+                                        <span className="text-sm font-medium min-w-[80px] text-right">
+                                          {formatCurrency(menuItem.price * quantity)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })}
+                            </div>
+                          ))}
+                        </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Bill History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {billHistory.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">No bills found</p>
-                ) : (
-                  <div className="space-y-3">
-                    {billHistory.map((bill: any) => (
-                      <div key={bill.id} className="border rounded-lg p-4" data-testid={`bill-history-${bill.id}`}>
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <div className="font-medium">{bill.billNumber}</div>
-                            <div className="text-sm text-gray-600">
-                              {new Date(bill.createdAt).toLocaleString()}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              Tables: {bill.tableIds?.map((id: string) => 
-                                tables.find((t: any) => t.id === id)?.name
-                              ).join(", ")}
-                            </div>
+                        <div className="border rounded-lg p-4 space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Subtotal:</span>
+                            <span data-testid="text-subtotal">{formatCurrency(billCalc.subtotal)}</span>
                           </div>
-                          <div className="text-right">
-                            <div className="font-bold text-lg">{formatCurrency(parseFloat(bill.grandTotal))}</div>
-                            <div className={`text-xs px-2 py-1 rounded ${
-                              bill.status === 'final' ? 'bg-green-100 text-green-700' :
-                              bill.status === 'amended' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100'
-                            }`}>
-                              {bill.status}
+                          {Object.entries(billCalc.taxBreakdown).map(([taxType, details]: [string, any]) => (
+                            <div key={taxType} className="flex justify-between text-sm">
+                              <span>{taxType} ({details.rate}%):</span>
+                              <span>{formatCurrency(details.amount)}</span>
                             </div>
+                          ))}
+                          {billCalc.discountAmount > 0 && appliedVoucher && (
+                            <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                              <span>Discount ({appliedVoucher.code}):</span>
+                              <span>-{formatCurrency(billCalc.discountAmount)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                            <span>Total:</span>
+                            <span data-testid="text-grand-total">{formatCurrency(billCalc.grandTotal)}</span>
                           </div>
                         </div>
 
-                        {bill.amendmentNote && (
-                          <div className="text-xs bg-yellow-50 p-2 rounded mb-2">
-                            <strong>Amendment:</strong> {bill.amendmentNote}
+                        <div className="border rounded-lg p-4 space-y-3">
+                          <label className="text-sm font-medium text-foreground">
+                            Discount Voucher (Optional)
+                          </label>
+                          {!appliedVoucher ? (
+                            <div className="flex gap-2">
+                              <Input
+                                type="text"
+                                placeholder="Enter voucher code"
+                                value={voucherCode}
+                                onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                                data-testid="input-voucher-code"
+                              />
+                              <Button 
+                                onClick={handleValidateVoucher}
+                                disabled={!voucherCode.trim() || isValidatingVoucher}
+                                data-testid="button-apply-voucher"
+                              >
+                                Apply
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                <div>
+                                  <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                                    Voucher Applied: {appliedVoucher.code}
+                                  </p>
+                                  <p className="text-xs text-green-700 dark:text-green-300">
+                                    {appliedVoucher.discountType === 'percentage' 
+                                      ? `${appliedVoucher.discountAmount}% discount` 
+                                      : `${formatCurrency(parseFloat(appliedVoucher.discountAmount))} off`}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={handleRemoveVoucher}
+                                data-testid="button-remove-voucher"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium text-foreground mb-2 block">
+                            Payment Method
+                          </label>
+                          <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
+                            <SelectTrigger className="w-full" data-testid="select-payment-method">
+                              <SelectValue placeholder="Choose payment method" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="cash" data-testid="payment-option-cash">
+                                <div className="flex items-center">
+                                  <Banknote className="h-4 w-4 mr-2" />
+                                  Cash
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="fonepay" data-testid="payment-option-fonepay">
+                                <div className="flex items-center">
+                                  <Smartphone className="h-4 w-4 mr-2" />
+                                  Fonepay
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="pos" data-testid="payment-option-pos">
+                                <div className="flex items-center">
+                                  <CreditCard className="h-4 w-4 mr-2" />
+                                  POS
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="cash_fonepay" data-testid="payment-option-cash-fonepay">
+                                <div className="flex items-center">
+                                  <Banknote className="h-4 w-4 mr-1" />
+                                  <Smartphone className="h-4 w-4 mr-2" />
+                                  Cash + Fonepay
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {selectedPaymentMethod === 'cash' && (
+                          <div className="border rounded-lg p-4 space-y-3 bg-blue-50 dark:bg-blue-950/20">
+                            <Label className="text-sm font-medium">Cash Received</Label>
+                            <Input
+                              type="number"
+                              placeholder="Enter cash amount"
+                              value={cashReceived}
+                              onChange={(e) => setCashReceived(e.target.value)}
+                              step="0.01"
+                              min={billCalc.grandTotal}
+                              data-testid="input-cash-received"
+                            />
+                            {cashReceivedAmount >= billCalc.grandTotal && (
+                              <div className="flex justify-between items-center p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-800 rounded-lg">
+                                <span className="font-medium text-green-900 dark:text-green-100">Change:</span>
+                                <span className="text-xl font-bold text-green-700 dark:text-green-300" data-testid="text-change-amount">
+                                  {formatCurrency(changeAmount)}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         )}
 
-                        <div className="flex gap-2 mt-3">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handlePrintBill(bill)}
-                            data-testid={`button-print-bill-${bill.id}`}
-                          >
-                            <Printer className="w-3 h-3 mr-1" />
-                            Print
-                          </Button>
-                          {(user?.role?.name === 'manager' || user?.role?.name === 'owner') && bill.status === 'final' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedBillForAmendment(bill);
-                                setAmendmentDialogOpen(true);
-                              }}
-                              data-testid={`button-amend-bill-${bill.id}`}
-                            >
-                              <Edit className="w-3 h-3 mr-1" />
-                              Amend
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                        {selectedPaymentMethod === 'cash_fonepay' && (
+                          <div className="border rounded-lg p-4 space-y-3 bg-blue-50 dark:bg-blue-950/20">
+                            <div className="space-y-3">
+                              <div>
+                                <Label className="text-sm font-medium">Cash Amount</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="Enter cash amount"
+                                  value={cashReceived}
+                                  onChange={(e) => setCashReceived(e.target.value)}
+                                  step="0.01"
+                                  min="0"
+                                  data-testid="input-cash-amount-split"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium">Fonepay Amount</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="Enter fonepay amount"
+                                  value={fonepayAmount}
+                                  onChange={(e) => setFonepayAmount(e.target.value)}
+                                  step="0.01"
+                                  min="0"
+                                  data-testid="input-fonepay-amount"
+                                />
+                              </div>
+                              {(() => {
+                                const tolerance = 0.01;
+                                const difference = Math.abs(totalReceived - billCalc.grandTotal);
+                                const isExactMatch = difference <= tolerance;
+                                
+                                if (totalReceived === 0) {
+                                  return (
+                                    <div className="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg">
+                                      <span className="font-medium">Total Received:</span>
+                                      <span className="text-lg font-bold" data-testid="text-total-received">
+                                        {formatCurrency(totalReceived)}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+                                
+                                if (isExactMatch) {
+                                  return (
+                                    <div className="flex justify-between items-center p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-800 rounded-lg">
+                                      <span className="font-medium text-green-900 dark:text-green-100">✓ Total Received (Exact Match):</span>
+                                      <span className="text-lg font-bold text-green-700 dark:text-green-300" data-testid="text-total-received">
+                                        {formatCurrency(totalReceived)}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+                                
+                                if (totalReceived < billCalc.grandTotal) {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg">
+                                        <span className="font-medium">Total Received:</span>
+                                        <span className="text-lg font-bold" data-testid="text-total-received">
+                                          {formatCurrency(totalReceived)}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between items-center p-3 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-800 rounded-lg">
+                                        <span className="font-medium text-yellow-900 dark:text-yellow-100">Remaining:</span>
+                                        <span className="text-lg font-bold text-yellow-700 dark:text-yellow-300" data-testid="text-remaining-amount">
+                                          {formatCurrency(billCalc.grandTotal - totalReceived)}
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                }
+                                
+                                return (
+                                  <>
+                                    <div className="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg">
+                                      <span className="font-medium">Total Received:</span>
+                                      <span className="text-lg font-bold" data-testid="text-total-received">
+                                        {formatCurrency(totalReceived)}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-800 rounded-lg">
+                                      <span className="font-medium text-red-900 dark:text-red-100">Over by:</span>
+                                      <span className="text-lg font-bold text-red-700 dark:text-red-300" data-testid="text-over-amount">
+                                        {formatCurrency(totalReceived - billCalc.grandTotal)}
+                                      </span>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
 
-        {/* Amendment Dialog */}
-        <Dialog open={amendmentDialogOpen} onOpenChange={setAmendmentDialogOpen}>
-          <DialogContent data-testid="dialog-amendment">
-            <DialogHeader>
-              <DialogTitle>Amend Bill</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Bill Number</Label>
-                <Input value={selectedBillForAmendment?.billNumber || ""} disabled />
-              </div>
-              <div>
-                <Label>Amendment Note (Required)</Label>
-                <Textarea
-                  placeholder="Explain why this bill is being amended..."
-                  value={amendmentNote}
-                  onChange={(e) => setAmendmentNote(e.target.value)}
-                  rows={4}
-                  data-testid="textarea-amendment-note"
-                />
+                        <div className="flex gap-3">
+                          <Button className="flex-1" onClick={handlePrintBill} variant="outline" data-testid="button-print-bill">
+                            <Printer className="h-4 w-4 mr-2" />
+                            Print Bill
+                          </Button>
+                          <Button 
+                            className="flex-1" 
+                            onClick={handleProcessPayment}
+                            disabled={!selectedPaymentMethod || createTransactionMutation.isPending}
+                            data-testid="button-process-payment"
+                          >
+                            {selectedPaymentMethod === 'cash' && <Banknote className="h-4 w-4 mr-2" />}
+                            {selectedPaymentMethod === 'pos' && <CreditCard className="h-4 w-4 mr-2" />}
+                            {selectedPaymentMethod === 'fonepay' && <Smartphone className="h-4 w-4 mr-2" />}
+                            {selectedPaymentMethod === 'cash_fonepay' && (
+                              <>
+                                <Banknote className="h-4 w-4 mr-1" />
+                                <Smartphone className="h-4 w-4 mr-2" />
+                              </>
+                            )}
+                            Process Payment
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
               </div>
             </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setAmendmentDialogOpen(false);
-                  setAmendmentNote("");
-                  setSelectedBillForAmendment(null);
-                }}
-                data-testid="button-cancel-amendment"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAmendBill}
-                disabled={!amendmentNote.trim() || amendBillMutation.isPending}
-                data-testid="button-confirm-amendment"
-              >
-                Confirm Amendment
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        </div>
       </div>
     </DashboardLayout>
   );

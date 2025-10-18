@@ -12,7 +12,7 @@ type AuthContextType = {
   user: SelectUser | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
+  loginMutation: UseMutationResult<LoginResponse, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
 };
@@ -20,6 +20,14 @@ type AuthContextType = {
 type LoginData = {
   username: string;
   password: string;
+  deviceFingerprint?: string;
+  browser?: string;
+  os?: string;
+};
+
+type LoginResponse = SelectUser & {
+  isNewDevice?: boolean;
+  isNewLocation?: boolean;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);

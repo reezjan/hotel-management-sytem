@@ -10,11 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Coffee, Clock, CheckCircle, XCircle, Package, AlertTriangle } from "lucide-react";
+import { Coffee, Clock, CheckCircle, XCircle, Package, AlertTriangle, Camera, RotateCcw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import Webcam from "react-webcam";
 
 interface KotItem {
   id: string;
@@ -60,6 +61,8 @@ export default function BaristaDashboard() {
     unit: "",
     reason: ""
   });
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const webcamRef = useRef<Webcam>(null);
 
   const { data: kotOrders = [] } = useQuery({
     queryKey: ["/api/hotels/current/kot-orders"],
@@ -95,12 +98,22 @@ export default function BaristaDashboard() {
 
   const createWastageMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest("POST", "/api/hotels/current/wastages", data);
+      const response = await fetch("/api/hotels/current/wastages", {
+        method: "POST",
+        credentials: "include",
+        body: data,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to record wastage");
+      }
+      return response.json();
     },
     onSuccess: () => {
       toast({ title: "Wastage recorded successfully" });
       setWastageDialogOpen(false);
       setWastageData({ itemId: "", qty: "", unit: "", reason: "" });
+      setCapturedPhoto(null);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -141,9 +154,41 @@ export default function BaristaDashboard() {
     });
   };
 
-  const submitWastage = () => {
+  const capturePhoto = () => {
+    const imageSrc = webcamRef.current?.getScreenshot();
+    if (imageSrc) {
+      const canvas = document.createElement('canvas');
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const timestamp = new Date().toLocaleString();
+          ctx.font = 'bold 20px Arial';
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(10, img.height - 40, ctx.measureText(timestamp).width + 20, 35);
+          ctx.fillStyle = 'white';
+          ctx.fillText(timestamp, 20, img.height - 15);
+          setCapturedPhoto(canvas.toDataURL('image/jpeg'));
+        }
+      };
+      img.src = imageSrc;
+    }
+  };
+
+  const retakePhoto = () => {
+    setCapturedPhoto(null);
+  };
+
+  const submitWastage = async () => {
     if (!wastageData.itemId || !wastageData.qty || !wastageData.reason.trim()) {
       toast({ title: "Please fill all wastage fields", variant: "destructive" });
+      return;
+    }
+    if (!capturedPhoto) {
+      toast({ title: "Please capture a photo of the wastage", variant: "destructive" });
       return;
     }
     const qty = parseFloat(wastageData.qty);
@@ -151,12 +196,16 @@ export default function BaristaDashboard() {
       toast({ title: "Please enter a valid quantity", variant: "destructive" });
       return;
     }
-    createWastageMutation.mutate({
-      itemId: wastageData.itemId,
-      qty: qty.toString(),
-      unit: wastageData.unit,
-      reason: wastageData.reason.trim()
-    });
+
+    const blob = await (await fetch(capturedPhoto)).blob();
+    const formData = new FormData();
+    formData.append('photo', blob, 'wastage.jpg');
+    formData.append('itemId', wastageData.itemId);
+    formData.append('qty', qty.toString());
+    formData.append('unit', wastageData.unit);
+    formData.append('reason', wastageData.reason.trim());
+
+    createWastageMutation.mutate(formData);
   };
 
   const pendingOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
@@ -282,14 +331,14 @@ export default function BaristaDashboard() {
                 <Package className="w-4 h-4 mr-2" /> Record Wastage
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Record Wastage</DialogTitle>
-                <DialogDescription>Record inventory wastage with reason</DialogDescription>
+                <DialogDescription>Capture photo and record inventory wastage</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label>Inventory Item</Label>
+                  <Label>Inventory Item *</Label>
                   <Select
                     value={wastageData.itemId}
                     onValueChange={(value) => {
@@ -301,7 +350,7 @@ export default function BaristaDashboard() {
                       });
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger data-testid="select-wastage-item">
                       <SelectValue placeholder="Select item" />
                     </SelectTrigger>
                     <SelectContent>
@@ -314,25 +363,74 @@ export default function BaristaDashboard() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Quantity</Label>
+                  <Label>Quantity *</Label>
                   <Input
                     type="number"
                     step="0.01"
                     value={wastageData.qty}
                     onChange={(e) => setWastageData({ ...wastageData, qty: e.target.value })}
                     placeholder="Enter quantity"
+                    data-testid="input-wastage-quantity"
                   />
                 </div>
                 <div>
-                  <Label>Reason</Label>
+                  <Label>Reason *</Label>
                   <Textarea
                     value={wastageData.reason}
                     onChange={(e) => setWastageData({ ...wastageData, reason: e.target.value })}
                     placeholder="Explain reason for wastage"
+                    data-testid="input-wastage-reason"
                   />
                 </div>
-                <Button onClick={submitWastage} className="w-full" disabled={createWastageMutation.isPending}>
-                  Record Wastage
+                <div>
+                  <Label>Photo Evidence * (Required)</Label>
+                  {!capturedPhoto ? (
+                    <div className="space-y-2">
+                      <div className="relative rounded-lg overflow-hidden bg-black">
+                        <Webcam
+                          ref={webcamRef}
+                          audio={false}
+                          screenshotFormat="image/jpeg"
+                          className="w-full"
+                          videoConstraints={{
+                            facingMode: "environment"
+                          }}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={capturePhoto}
+                        className="w-full"
+                        variant="secondary"
+                        data-testid="button-capture-photo"
+                      >
+                        <Camera className="w-4 h-4 mr-2" /> Capture Photo
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative rounded-lg overflow-hidden border">
+                        <img src={capturedPhoto} alt="Captured wastage" className="w-full" />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={retakePhoto}
+                        className="w-full"
+                        variant="outline"
+                        data-testid="button-retake-photo"
+                      >
+                        <RotateCcw className="w-4 h-4 mr-2" /> Retake Photo
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                <Button 
+                  onClick={submitWastage} 
+                  className="w-full" 
+                  disabled={createWastageMutation.isPending}
+                  data-testid="button-submit-wastage"
+                >
+                  {createWastageMutation.isPending ? "Recording..." : "Record Wastage"}
                 </Button>
               </div>
             </DialogContent>

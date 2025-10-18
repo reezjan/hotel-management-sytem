@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -5,8 +6,10 @@ import { setupWebSocket } from "./websocket";
 import cron from "node-cron";
 import { storage } from "./storage";
 import { db } from "./db";
-import { kotOrders, type KotOrder, users } from "@shared/schema";
+import { kotOrders, type KotOrder, users, hotels } from "@shared/schema";
 import { and, eq, isNull } from "drizzle-orm";
+import { patternDetector } from "./pattern-detector";
+import { alertService } from "./alert-service";
 
 // Set timezone to Nepal
 process.env.TZ = 'Asia/Kathmandu';
@@ -45,6 +48,9 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'));
 
 (async () => {
   const server = await registerRoutes(app);
@@ -132,16 +138,65 @@ app.use((req, res, next) => {
   
   log('Annual leave balance reset cron job scheduled (every January 1st)');
 
+  // Set up daily pattern detection audit - runs every day at 6 AM
+  cron.schedule('0 6 * * *', async () => {
+    try {
+      log('Running daily pattern detection audit...');
+      
+      // Get all active hotels
+      const activeHotels = await db
+        .select()
+        .from(hotels)
+        .where(eq(hotels.isActive, true));
+      
+      // Run audit for each hotel
+      for (const hotel of activeHotels) {
+        await patternDetector.runDailyAudit(hotel.id);
+      }
+      
+      log(`Daily audit completed for ${activeHotels.length} hotels`);
+    } catch (error) {
+      console.error('Error in daily pattern detection audit:', error);
+    }
+  });
+  
+  log('Daily pattern detection audit scheduled (every day at 6 AM)');
+
+  // Set up daily owner summary email - runs every day at 7 AM
+  cron.schedule('0 7 * * *', async () => {
+    try {
+      log('Sending daily owner summary emails...');
+      
+      // Get all active hotels
+      const activeHotels = await db
+        .select()
+        .from(hotels)
+        .where(eq(hotels.isActive, true));
+      
+      // Send summary email for each hotel
+      for (const hotel of activeHotels) {
+        const result = await alertService.sendDailySummaryEmail(hotel.id);
+        if (result.success) {
+          log(`Daily summary sent for hotel: ${hotel.name}`);
+        } else {
+          log(`Failed to send summary for hotel ${hotel.name}: ${result.error}`);
+        }
+      }
+      
+      log(`Daily summary emails sent for ${activeHotels.length} hotels`);
+    } catch (error) {
+      console.error('Error in daily summary email cron job:', error);
+    }
+  });
+  
+  log('Daily owner summary email scheduled (every day at 7 AM)');
+
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
   });
 })();

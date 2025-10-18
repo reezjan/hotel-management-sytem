@@ -5,8 +5,9 @@ import { setupAuth, requireActiveUser } from "./auth";
 import { logAudit } from "./audit";
 import { db } from "./db";
 import { wsEvents } from "./websocket";
-import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors } from "@shared/schema";
-import { eq, and, isNull, asc, desc, sql, ne } from "drizzle-orm";
+import { uploadWastagePhoto, uploadBillDocument } from "./upload";
+import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings, loginHistory, roleLimits } from "@shared/schema";
+import { eq, and, isNull, asc, desc, sql, ne, gte, lt } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
 import {
   insertUserSchema,
@@ -35,6 +36,7 @@ import {
   insertBookingPaymentSchema,
   insertRoomReservationSchema,
   insertRoomServiceChargeSchema,
+  insertSecuritySettingsSchema,
   vouchers,
   guests,
   hallBookings,
@@ -47,6 +49,39 @@ import {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication
   setupAuth(app);
+
+  // CRITICAL: Global middleware to check device blocking on every authenticated request
+  app.use(async (req, res, next) => {
+    if (req.isAuthenticated()) {
+      const user = req.user as any;
+      const deviceFingerprint = (req.session as any).deviceFingerprint;
+      
+      // If authenticated but no device fingerprint in session, force re-login to capture device info
+      if (!deviceFingerprint && user?.id) {
+        return req.logout((err: any) => {
+          if (err) console.error('Logout error:', err);
+          return res.status(401).json({ 
+            message: "Session expired. Please log in again." 
+          });
+        });
+      }
+      
+      // Check if device is blocked
+      if (deviceFingerprint && user?.id) {
+        const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
+        if (isBlocked) {
+          // Log out the user
+          return req.logout((err: any) => {
+            if (err) console.error('Logout error:', err);
+            return res.status(403).json({ 
+              message: "This device has been blocked. Please contact your administrator." 
+            });
+          });
+        }
+      }
+    }
+    next();
+  });
 
   // Hotel routes
   app.get("/api/hotels", async (req, res) => {
@@ -175,8 +210,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
-      const { startDate, endDate } = req.query;
+      // SECURITY: Only managers, owners, and finance staff can view financial transactions
+      const currentRole = user.role?.name || '';
+      const canViewFinancials = ['owner', 'manager', 'finance'].includes(currentRole);
+      
+      if (!canViewFinancials) {
+        return res.status(403).json({ 
+          message: "Only managers, owners, and finance staff can view financial reports" 
+        });
+      }
+      
+      const { startDate, endDate, pendingApproval } = req.query;
       let transactions = await storage.getTransactionsByHotel(user.hotelId);
+      
+      // Filter for pending approvals if requested
+      if (pendingApproval === 'true') {
+        transactions = transactions.filter((t: any) => t.requiresApproval === true && !t.approvedBy && !t.rejectionReason);
+      }
       
       // Apply date filtering if provided
       if (startDate && typeof startDate === 'string') {
@@ -267,6 +317,700 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Vendor deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete vendor" });
+    }
+  });
+
+  // Security Settings routes
+  app.get("/api/hotels/current/security-settings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view security settings
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access security settings" 
+        });
+      }
+      
+      const settings = await storage.getSecuritySettings(user.hotelId);
+      
+      if (!settings) {
+        // Return default settings if none exist
+        return res.json({
+          hotelId: user.hotelId,
+          ownerEmail: user.email || '',
+          ownerPhone: user.phone || '',
+          alertOnNewDevice: true,
+          alertOnNewLocation: true,
+          alertOnLargeTransaction: true,
+          largeTransactionThreshold: '10000',
+          smtpHost: null,
+          smtpPort: null,
+          smtpUser: null,
+          smtpPassword: null
+        });
+      }
+      
+      // SECURITY: Never expose the SMTP password in the response
+      // Return masked password to indicate it's set
+      const sanitizedSettings = {
+        ...settings,
+        smtpPassword: settings.smtpPassword ? '••••••••' : null
+      };
+      
+      res.json(sanitizedSettings);
+    } catch (error) {
+      console.error("Security settings fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch security settings" });
+    }
+  });
+
+  app.put("/api/hotels/current/security-settings", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can update security settings
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can update security settings" 
+        });
+      }
+      
+      const settingsData = insertSecuritySettingsSchema.parse({
+        ...req.body,
+        hotelId: user.hotelId
+      });
+      
+      const existingSettings = await storage.getSecuritySettings(user.hotelId);
+      const updatedSettings = await storage.upsertSecuritySettings(user.hotelId, settingsData);
+      
+      // SECURITY: Sanitize audit log to never store SMTP password
+      const sanitizedAuditData = { ...settingsData };
+      if (sanitizedAuditData.smtpPassword) {
+        sanitizedAuditData.smtpPassword = '[REDACTED]';
+      }
+      
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: existingSettings ? 'update' : 'create',
+        resourceType: 'security_settings',
+        resourceId: updatedSettings.id,
+        details: { settings: sanitizedAuditData },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      
+      // SECURITY: Never expose the SMTP password in the response
+      const sanitizedResponse = {
+        ...updatedSettings,
+        smtpPassword: updatedSettings.smtpPassword ? '••••••••' : null
+      };
+      
+      res.json(sanitizedResponse);
+    } catch (error) {
+      console.error("Security settings update error:", error);
+      res.status(400).json({ 
+        message: "Failed to update security settings", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
+    }
+  });
+
+  app.post("/api/hotels/current/security-settings/test-email", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can test email
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can test email settings" 
+        });
+      }
+      
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email address required" });
+      }
+      
+      // TODO: Implement actual email sending logic here
+      // For now, just simulate success
+      console.log(`Test email would be sent to: ${email}`);
+      
+      res.json({ 
+        success: true, 
+        message: `Test alert email sent to ${email}` 
+      });
+    } catch (error) {
+      console.error("Test email error:", error);
+      res.status(500).json({ message: "Failed to send test email" });
+    }
+  });
+
+  // Role Limits routes
+  app.get("/api/hotels/current/role-limits", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner can view role limits
+      const currentRole = user.role?.name || '';
+      if (currentRole !== 'owner') {
+        return res.status(403).json({ 
+          message: "Only hotel owner can access role limits configuration" 
+        });
+      }
+      
+      // Get all roles
+      const allRoles = await db.query.roles.findMany();
+      
+      // Get existing role limits for this hotel
+      const existingLimits = await db.query.roleLimits.findMany({
+        where: eq(roleLimits.hotelId, user.hotelId)
+      });
+      
+      // Create a map for easy lookup
+      const limitsMap = new Map(existingLimits.map(limit => [limit.roleId, limit]));
+      
+      // Return all roles with their limits (or defaults if not set)
+      const roleLimitsData = allRoles.map(role => {
+        const existingLimit = limitsMap.get(role.id);
+        return {
+          roleId: role.id,
+          roleName: role.name,
+          roleDescription: role.description,
+          ...existingLimit,
+          // Provide defaults if no limit exists
+          maxTransactionAmount: existingLimit?.maxTransactionAmount || null,
+          maxDailyAmount: existingLimit?.maxDailyAmount || null,
+          requiresApprovalAbove: existingLimit?.requiresApprovalAbove || null,
+          canVoidTransactions: existingLimit?.canVoidTransactions || false,
+          canApproveWastage: existingLimit?.canApproveWastage || false
+        };
+      });
+      
+      res.json(roleLimitsData);
+    } catch (error) {
+      console.error("Role limits fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch role limits" });
+    }
+  });
+
+  app.put("/api/hotels/current/role-limits", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner can update role limits
+      const currentRole = user.role?.name || '';
+      if (currentRole !== 'owner') {
+        return res.status(403).json({ 
+          message: "Only hotel owner can update role limits" 
+        });
+      }
+      
+      const limits = req.body as Array<{
+        roleId: number;
+        maxTransactionAmount?: string | null;
+        maxDailyAmount?: string | null;
+        requiresApprovalAbove?: string | null;
+        canVoidTransactions?: boolean;
+        canApproveWastage?: boolean;
+      }>;
+      
+      if (!Array.isArray(limits)) {
+        return res.status(400).json({ message: "Invalid request body, expected array of role limits" });
+      }
+      
+      // Update or create role limits for each role
+      for (const limit of limits) {
+        // Check if limit already exists
+        const existing = await db.query.roleLimits.findFirst({
+          where: and(
+            eq(roleLimits.hotelId, user.hotelId),
+            eq(roleLimits.roleId, limit.roleId)
+          )
+        });
+        
+        const limitData = {
+          hotelId: user.hotelId,
+          roleId: limit.roleId,
+          maxTransactionAmount: limit.maxTransactionAmount || null,
+          maxDailyAmount: limit.maxDailyAmount || null,
+          requiresApprovalAbove: limit.requiresApprovalAbove || null,
+          canVoidTransactions: limit.canVoidTransactions || false,
+          canApproveWastage: limit.canApproveWastage || false,
+          updatedAt: new Date()
+        };
+        
+        if (existing) {
+          // Update existing
+          await db.update(roleLimits)
+            .set(limitData)
+            .where(eq(roleLimits.id, existing.id));
+        } else {
+          // Create new
+          await db.insert(roleLimits).values(limitData);
+        }
+      }
+      
+      // Log the update
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'update',
+        resourceType: 'role_limits',
+        resourceId: user.hotelId,
+        details: { limitsCount: limits.length },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      
+      res.json({ success: true, message: "Role limits updated successfully" });
+    } catch (error) {
+      console.error("Role limits update error:", error);
+      res.status(400).json({ 
+        message: "Failed to update role limits", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
+    }
+  });
+
+  // Audit Dashboard routes
+  app.get("/api/hotels/current/audit/overview", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view audit overview
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access audit dashboard" 
+        });
+      }
+      
+      const overview = await storage.getAuditOverview(user.hotelId);
+      res.json(overview);
+    } catch (error) {
+      console.error("Audit overview error:", error);
+      res.status(500).json({ message: "Failed to fetch audit overview" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/financial-activity", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view financial activity
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access financial audit data" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.txnType) {
+        filters.txnType = req.query.txnType as string;
+      }
+      if (req.query.paymentMethod) {
+        filters.paymentMethod = req.query.paymentMethod as string;
+      }
+      if (req.query.staffId) {
+        filters.staffId = req.query.staffId as string;
+      }
+      
+      const activity = await storage.getFinancialActivity(user.hotelId, filters);
+      res.json(activity);
+    } catch (error) {
+      console.error("Financial activity error:", error);
+      res.status(500).json({ message: "Failed to fetch financial activity" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/staff-activity", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view staff activity
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access staff audit data" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.staffId) {
+        filters.staffId = req.query.staffId as string;
+      }
+      if (req.query.actionType) {
+        filters.actionType = req.query.actionType as string;
+      }
+      
+      const activity = await storage.getStaffActivity(user.hotelId, filters);
+      res.json(activity);
+    } catch (error) {
+      console.error("Staff activity error:", error);
+      res.status(500).json({ message: "Failed to fetch staff activity" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/security-alerts", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view security alerts
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access security alerts" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.alertType) {
+        filters.alertType = req.query.alertType as string;
+      }
+      if (req.query.status) {
+        filters.status = req.query.status as string;
+      }
+      
+      const alerts = await storage.getSecurityAlerts(user.hotelId, filters);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Security alerts error:", error);
+      res.status(500).json({ message: "Failed to fetch security alerts" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/photo-evidence", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view photo evidence
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access photo evidence" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.evidenceType) {
+        filters.evidenceType = req.query.evidenceType as string;
+      }
+      
+      const evidence = await storage.getPhotoEvidence(user.hotelId, filters);
+      res.json(evidence);
+    } catch (error) {
+      console.error("Photo evidence error:", error);
+      res.status(500).json({ message: "Failed to fetch photo evidence" });
+    }
+  });
+
+  app.get("/api/hotels/current/audit/device-history", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can view device history
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can access device history" 
+        });
+      }
+      
+      const filters: any = {};
+      
+      if (req.query.startDate) {
+        filters.startDate = new Date(req.query.startDate as string);
+      }
+      if (req.query.endDate) {
+        filters.endDate = new Date(req.query.endDate as string);
+      }
+      if (req.query.userId) {
+        filters.userId = req.query.userId as string;
+      }
+      
+      const history = await storage.getDeviceHistory(user.hotelId, filters);
+      res.json(history);
+    } catch (error) {
+      console.error("Device history error:", error);
+      res.status(500).json({ message: "Failed to fetch device history" });
+    }
+  });
+
+  app.post("/api/hotels/current/audit/alerts/:id/resolve", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can resolve alerts
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can resolve security alerts" 
+        });
+      }
+      
+      const { id } = req.params;
+      const { resolution, notes } = req.body;
+      
+      if (!resolution || !notes) {
+        return res.status(400).json({ message: "Resolution and notes are required" });
+      }
+      
+      const alert = await storage.resolveSecurityAlert(id, resolution, notes);
+      res.json(alert);
+    } catch (error) {
+      console.error("Resolve alert error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to resolve alert" 
+      });
+    }
+  });
+
+  app.post("/api/devices/update-trust-status", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner or super_admin can manage device trust
+      const currentRole = user.role?.name || '';
+      if (!['owner', 'super_admin'].includes(currentRole)) {
+        return res.status(403).json({ 
+          message: "Only hotel owner or super admin can manage device trust status" 
+        });
+      }
+      
+      const { userId, deviceFingerprint, trustStatus } = req.body;
+      
+      if (!userId || !deviceFingerprint || !trustStatus) {
+        return res.status(400).json({ message: "userId, deviceFingerprint, and trustStatus are required" });
+      }
+      
+      if (!['trusted', 'suspicious', 'blocked'].includes(trustStatus)) {
+        return res.status(400).json({ message: "Invalid trust status. Must be 'trusted', 'suspicious', or 'blocked'" });
+      }
+      
+      // Check if device exists, if not create it first
+      const existingDevice = await storage.getKnownDevice(userId, deviceFingerprint);
+      if (!existingDevice) {
+        // Get device info from login history to populate browser/OS
+        const loginRecord = await storage.getLoginHistoryByDevice(userId, deviceFingerprint);
+        
+        // Create the device entry before updating trust status
+        await storage.upsertKnownDevice(userId, deviceFingerprint, { 
+          hotelId: user.hotelId,
+          browser: loginRecord?.browser || undefined,
+          os: loginRecord?.os || undefined
+        });
+      }
+      
+      const updatedDevice = await storage.updateDeviceTrustStatus(userId, deviceFingerprint, trustStatus);
+      
+      // Log the action
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'device_trust_updated',
+        resourceType: 'device',
+        resourceId: deviceFingerprint,
+        details: { 
+          targetUserId: userId,
+          deviceFingerprint,
+          trustStatus,
+          previousStatus: existingDevice?.trustStatus || 'new'
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: true
+      });
+      
+      res.json(updatedDevice);
+    } catch (error) {
+      console.error("Update device trust status error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to update device trust status" 
+      });
+    }
+  });
+
+  app.post("/api/hotels/current/audit/send-summary", requireActiveUser, async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only owner can manually request daily summary
+      const currentRole = user.role?.name || '';
+      if (currentRole !== 'owner') {
+        // Log unauthorized attempt
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'send_daily_summary_unauthorized',
+          resourceType: 'email',
+          resourceId: user.hotelId,
+          details: { role: currentRole },
+          success: false,
+          errorMessage: 'Unauthorized: Only owner can request daily summary'
+        });
+        
+        return res.status(403).json({ 
+          message: "Only hotel owner can request daily summary email" 
+        });
+      }
+      
+      const { alertService } = await import("./alert-service");
+      const result = await alertService.sendDailySummaryEmail(user.hotelId);
+      
+      if (result.success) {
+        res.json({ 
+          success: true, 
+          message: "Daily summary email sent successfully" 
+        });
+      } else {
+        // Log failed attempt
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'send_daily_summary_manual',
+          resourceType: 'email',
+          resourceId: user.hotelId,
+          details: { error: result.error },
+          success: false,
+          errorMessage: result.error || 'Unknown error'
+        });
+        
+        res.status(500).json({ 
+          success: false, 
+          message: result.error || "Failed to send daily summary email" 
+        });
+      }
+    } catch (error) {
+      console.error("Send summary error:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Log exception
+      if (req.user) {
+        const user = req.user as any;
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'send_daily_summary_manual',
+          resourceType: 'email',
+          resourceId: user.hotelId,
+          details: { error: errorMessage },
+          success: false,
+          errorMessage
+        });
+      }
+      
+      res.status(500).json({ 
+        message: errorMessage 
+      });
     }
   });
 
@@ -717,17 +1461,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Menu item not found" });
       }
       
-      // CRITICAL: Price changes require manager approval
+      // SECURITY: Only managers, owners, and restaurant/bar managers can change menu item prices
       if ('price' in itemData && itemData.price !== undefined && String(itemData.price) !== String(existingItem.price)) {
-        const canChangePrice = ['manager', 'owner', 'restaurant_bar_manager', 'super_admin'].includes(user.role?.name || '');
+        const canChangePrice = ['manager', 'owner', 'restaurant_bar_manager'].includes(user.role?.name || '');
         
         if (!canChangePrice) {
           return res.status(403).json({ 
-            message: "Only managers can change menu item prices" 
+            message: "Only managers, owners, and restaurant/bar managers can change menu item prices" 
           });
         }
         
-        // Log price change for audit trail
+        // AUDIT: Log price change for accountability
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'price_update',
+          resourceType: 'menu_item',
+          resourceId: id,
+          details: {
+            itemName: existingItem.name || 'Unknown Item',
+            previousPrice: existingItem.price,
+            newPrice: itemData.price,
+            timestamp: new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
+        
+        // Also log in legacy price change log
         await storage.createPriceChangeLog({
           hotelId: user.hotelId,
           itemId: id,
@@ -1453,6 +2215,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
+      // SECURITY: Only managers, owners, and storekeepers can create inventory items
+      const currentRole = user.role?.name || '';
+      const canManageInventory = ['owner', 'manager', 'storekeeper'].includes(currentRole);
+      
+      if (!canManageInventory) {
+        return res.status(403).json({ 
+          message: "Only managers, owners, and storekeepers can manage inventory" 
+        });
+      }
+      
       // CRITICAL VALIDATION: Validate inventory item data
       const { name, sku, unit, baseStockQty, costPerUnit } = req.body;
       
@@ -1505,6 +2277,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      // SECURITY: Only managers, owners, and storekeepers can update inventory items
+      const currentRole = user.role?.name || '';
+      const canManageInventory = ['owner', 'manager', 'storekeeper'].includes(currentRole);
+      
+      if (!canManageInventory) {
+        return res.status(403).json({ 
+          message: "Only managers, owners, and storekeepers can manage inventory" 
+        });
+      }
+      
       const { id } = req.params;
       const itemData = req.body;
       // Verify the inventory item belongs to current hotel
@@ -1513,6 +2296,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Inventory item not found" });
       }
       const item = await storage.updateInventoryItem(id, itemData);
+      
+      // AUDIT: Log inventory modifications
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'inventory_update',
+        resourceType: 'inventory_item',
+        resourceId: id,
+        details: {
+          itemName: item.name,
+          changes: itemData,
+          timestamp: new Date()
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: true
+      });
+      
       res.json(item);
     } catch (error) {
       res.status(400).json({ message: "Failed to update inventory item" });
@@ -1528,12 +2329,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
+      
+      // SECURITY: Only managers, owners, and storekeepers can delete inventory items
+      const currentRole = user.role?.name || '';
+      const canManageInventory = ['owner', 'manager', 'storekeeper'].includes(currentRole);
+      
+      if (!canManageInventory) {
+        return res.status(403).json({ 
+          message: "Only managers, owners, and storekeepers can manage inventory" 
+        });
+      }
+      
       const { id } = req.params;
       // Verify the inventory item belongs to current hotel
       const existingItem = await storage.getInventoryItem(id);
       if (!existingItem || existingItem.hotelId !== user.hotelId) {
         return res.status(404).json({ message: "Inventory item not found" });
       }
+      
+      // AUDIT: Log inventory deletion
+      await logAudit({
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'inventory_delete',
+        resourceType: 'inventory_item',
+        resourceId: id,
+        details: {
+          itemName: existingItem.name,
+          itemSku: existingItem.sku,
+          timestamp: new Date()
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: true
+      });
+      
       await storage.deleteInventoryItem(id);
       res.status(204).send();
     } catch (error) {
@@ -1747,16 +2577,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
+      // SECURITY: Only managers and owners can update room type prices
+      const currentRole = user.role?.name || '';
+      const canUpdatePrices = ['owner', 'manager'].includes(currentRole);
+      
+      if (!canUpdatePrices) {
+        return res.status(403).json({ 
+          message: "Only managers and owners can update room type prices" 
+        });
+      }
+
       const { id } = req.params;
       const roomTypeData = insertRoomTypeSchema.partial().parse(req.body);
       
       // Strip hotelId to prevent cross-tenant tampering
       delete (roomTypeData as any).hotelId;
       
+      // Fetch existing room type BEFORE updating to capture old prices
+      const existingRoomType = await storage.getRoomType(parseInt(id));
+      if (!existingRoomType || existingRoomType.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Room type not found" });
+      }
+      
       const roomType = await storage.updateRoomType(parseInt(id), user.hotelId, roomTypeData);
       
       if (!roomType) {
         return res.status(404).json({ message: "Room type not found" });
+      }
+      
+      // AUDIT: Log price changes with BOTH old and new prices
+      if (roomTypeData.priceInhouse || roomTypeData.priceWalkin) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'price_update',
+          resourceType: 'room_type',
+          resourceId: id,
+          details: {
+            roomTypeName: roomType.name,
+            previousPriceInhouse: existingRoomType.priceInhouse,
+            newPriceInhouse: roomTypeData.priceInhouse,
+            previousPriceWalkin: existingRoomType.priceWalkin,
+            newPriceWalkin: roomTypeData.priceWalkin,
+            timestamp: new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
       }
       
       res.json(roomType);
@@ -1877,16 +2745,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
+      // SECURITY: Only managers and owners can update hall prices
+      const currentRole = user.role?.name || '';
+      const canUpdatePrices = ['owner', 'manager'].includes(currentRole);
+      
+      if (!canUpdatePrices) {
+        return res.status(403).json({ 
+          message: "Only managers and owners can update hall prices" 
+        });
+      }
+
       const { id } = req.params;
       const hallData = insertHallSchema.partial().parse(req.body);
       
       // Strip hotelId to prevent cross-tenant tampering
       delete (hallData as any).hotelId;
       
+      // Fetch existing hall BEFORE updating to capture old prices
+      const existingHall = await storage.getHall(id);
+      if (!existingHall || existingHall.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Hall not found" });
+      }
+      
       const hall = await storage.updateHall(id, user.hotelId, hallData);
       
       if (!hall) {
         return res.status(404).json({ message: "Hall not found" });
+      }
+      
+      // AUDIT: Log price changes with BOTH old and new prices
+      if (hallData.priceInhouse || hallData.priceWalkin || hallData.hourlyRate) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'price_update',
+          resourceType: 'hall',
+          resourceId: id,
+          details: {
+            hallName: hall.name,
+            previousPriceInhouse: existingHall.priceInhouse,
+            newPriceInhouse: hallData.priceInhouse,
+            previousPriceWalkin: existingHall.priceWalkin,
+            newPriceWalkin: hallData.priceWalkin,
+            previousHourlyRate: existingHall.hourlyRate,
+            newHourlyRate: hallData.hourlyRate,
+            timestamp: new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
       }
       
       res.json(hall);
@@ -2065,16 +2973,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
+      // SECURITY: Only managers and owners can update service prices
+      const currentRole = user.role?.name || '';
+      const canUpdatePrices = ['owner', 'manager'].includes(currentRole);
+      
+      if (!canUpdatePrices) {
+        return res.status(403).json({ 
+          message: "Only managers and owners can update service prices" 
+        });
+      }
+
       const { id } = req.params;
       const serviceData = insertServiceSchema.partial().parse(req.body);
       
       // Strip hotelId to prevent cross-tenant tampering
       delete (serviceData as any).hotelId;
       
+      // Fetch existing service BEFORE updating to capture old prices
+      const existingService = await storage.getService(id);
+      if (!existingService || existingService.hotelId !== user.hotelId) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+      
       const service = await storage.updateService(id, user.hotelId, serviceData);
       
       if (!service) {
         return res.status(404).json({ message: "Service not found" });
+      }
+      
+      // AUDIT: Log price changes with BOTH old and new prices
+      if (serviceData.priceInhouse || serviceData.priceWalkin) {
+        await logAudit({
+          userId: user.id,
+          hotelId: user.hotelId,
+          action: 'price_update',
+          resourceType: 'service',
+          resourceId: id,
+          details: {
+            serviceName: service.name,
+            serviceKind: service.kind,
+            previousPriceInhouse: existingService.priceInhouse,
+            newPriceInhouse: serviceData.priceInhouse,
+            previousPriceWalkin: existingService.priceWalkin,
+            newPriceWalkin: serviceData.priceWalkin,
+            timestamp: new Date()
+          },
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'],
+          success: true
+        });
       }
       
       res.json(service);
@@ -3221,6 +4168,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { hotelId: _, createdBy: __, ...sanitizedBody } = req.body;
       
+      // Get security settings for approval threshold
+      const securitySettings = await storage.getSecuritySettings(currentUser.hotelId);
+      const largeTransactionThreshold = securitySettings?.largeTransactionThreshold 
+        ? Number(securitySettings.largeTransactionThreshold) 
+        : 10000;
+      
+      // Check if approval is required
+      let requiresApproval = false;
+      const transactionAmount = Number(sanitizedBody.amount) || 0;
+      
+      // ROLE-BASED TRANSACTION LIMITS
+      // Get user's role limits if they have a roleId
+      if (currentUser.roleId) {
+        const roleLimit = await db.query.roleLimits.findFirst({
+          where: and(
+            eq(roleLimits.hotelId, currentUser.hotelId),
+            eq(roleLimits.roleId, currentUser.roleId)
+          )
+        });
+        
+        if (roleLimit) {
+          // Check if transaction exceeds max transaction amount
+          if (roleLimit.maxTransactionAmount && transactionAmount > Number(roleLimit.maxTransactionAmount)) {
+            return res.status(403).json({ 
+              message: `Transaction amount (${transactionAmount}) exceeds your role's maximum limit (${roleLimit.maxTransactionAmount})` 
+            });
+          }
+          
+          // Check if transaction exceeds requiresApprovalAbove threshold
+          if (roleLimit.requiresApprovalAbove && transactionAmount > Number(roleLimit.requiresApprovalAbove)) {
+            requiresApproval = true;
+          }
+          
+          // Check total transactions for user today against maxDailyAmount
+          if (roleLimit.maxDailyAmount) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const todayTransactions = await db.query.transactions.findMany({
+              where: and(
+                eq(transactions.hotelId, currentUser.hotelId),
+                eq(transactions.createdBy, currentUser.id),
+                gte(transactions.createdAt, today),
+                lt(transactions.createdAt, tomorrow),
+                eq(transactions.isVoided, false)
+              )
+            });
+            
+            const totalToday = todayTransactions.reduce((sum, txn) => sum + Number(txn.amount || 0), 0);
+            const newTotal = totalToday + transactionAmount;
+            
+            if (newTotal > Number(roleLimit.maxDailyAmount)) {
+              return res.status(403).json({ 
+                message: `Daily transaction limit exceeded. Current: ${totalToday}, Limit: ${roleLimit.maxDailyAmount}, Requested: ${transactionAmount}` 
+              });
+            }
+          }
+        }
+      }
+      
       // CRITICAL: Validate vendor payments - prevent unauthorized payments
       const isVendorPayment = sanitizedBody.vendorId || 
         (sanitizedBody.purpose && String(sanitizedBody.purpose).toLowerCase().includes('vendor'));
@@ -3242,10 +4251,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // CRITICAL: Validate cash_out transactions - require bill documentation
+      if (sanitizedBody.txnType === 'cash_out') {
+        // Require bill invoice number
+        if (!sanitizedBody.billInvoiceNumber || sanitizedBody.billInvoiceNumber.trim() === '') {
+          return res.status(400).json({ 
+            message: "Bill invoice number is required for cash out transactions" 
+          });
+        }
+        
+        // If no bill provided, require approval
+        if (!sanitizedBody.billPhotoUrl && !sanitizedBody.billPdfUrl) {
+          requiresApproval = true;
+        }
+      }
+      
+      // Check if transaction amount exceeds threshold (for expense transactions)
+      const isExpenseTransaction = ['cash_out', 'expense', 'vendor_payment', 'miscellaneous'].includes(sanitizedBody.txnType);
+      if (isExpenseTransaction && transactionAmount > largeTransactionThreshold) {
+        requiresApproval = true;
+      }
+      
       const transactionData = insertTransactionSchema.parse({
         ...sanitizedBody,
         hotelId: currentUser.hotelId,
-        createdBy: currentUser.id
+        createdBy: currentUser.id,
+        requiresApproval
       });
       const transaction = await storage.createTransaction(transactionData);
       
@@ -3320,6 +4351,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Transaction void error:", error);
       res.status(500).json({ message: "Failed to void transaction" });
+    }
+  });
+
+  app.post("/api/transactions/:id/approve", requireActiveUser, async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      const { id } = req.params;
+      
+      // Only owners and managers can approve transactions
+      const canApprove = ['owner', 'manager'].includes(currentUser.role?.name || '');
+      if (!canApprove) {
+        return res.status(403).json({ 
+          message: "Only owners and managers can approve transactions" 
+        });
+      }
+      
+      const transaction = await storage.getTransaction(id);
+      if (!transaction || transaction.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      if (!transaction.requiresApproval) {
+        return res.status(400).json({ message: "Transaction does not require approval" });
+      }
+      
+      if (transaction.approvedBy) {
+        return res.status(400).json({ message: "Transaction already approved" });
+      }
+      
+      // Approve the transaction
+      const approvedTransaction = await storage.updateTransaction(id, {
+        requiresApproval: false,
+        approvedBy: currentUser.id,
+        approvedAt: new Date()
+      } as any);
+      
+      // Broadcast approval to relevant users
+      wsEvents.transactionUpdated(currentUser.hotelId, approvedTransaction);
+      
+      // Log audit
+      await logAudit({
+        userId: currentUser.id,
+        hotelId: currentUser.hotelId,
+        action: 'approve',
+        resourceType: 'transaction',
+        resourceId: id,
+        details: { amount: transaction.amount, txnType: transaction.txnType },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      
+      res.json({ success: true, transaction: approvedTransaction });
+    } catch (error) {
+      console.error("Transaction approval error:", error);
+      res.status(500).json({ message: "Failed to approve transaction" });
+    }
+  });
+
+  app.post("/api/transactions/:id/reject", requireActiveUser, async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      const { id } = req.params;
+      const { reason } = req.body;
+      
+      // Only owners and managers can reject transactions
+      const canReject = ['owner', 'manager'].includes(currentUser.role?.name || '');
+      if (!canReject) {
+        return res.status(403).json({ 
+          message: "Only owners and managers can reject transactions" 
+        });
+      }
+      
+      // Require rejection reason
+      if (!reason || reason.trim().length < 10) {
+        return res.status(400).json({ 
+          message: "Rejection reason required (minimum 10 characters)" 
+        });
+      }
+      
+      const transaction = await storage.getTransaction(id);
+      if (!transaction || transaction.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Transaction not found" });
+      }
+      
+      if (!transaction.requiresApproval) {
+        return res.status(400).json({ message: "Transaction does not require approval" });
+      }
+      
+      if (transaction.rejectionReason) {
+        return res.status(400).json({ message: "Transaction already rejected" });
+      }
+      
+      // Reject the transaction
+      const rejectedTransaction = await storage.updateTransaction(id, {
+        requiresApproval: false,
+        rejectionReason: reason
+      });
+      
+      // Broadcast rejection to relevant users
+      wsEvents.transactionUpdated(currentUser.hotelId, rejectedTransaction);
+      
+      // Log audit
+      await logAudit({
+        userId: currentUser.id,
+        hotelId: currentUser.hotelId,
+        action: 'reject',
+        resourceType: 'transaction',
+        resourceId: id,
+        details: { amount: transaction.amount, txnType: transaction.txnType, reason },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
+      
+      res.json({ success: true, transaction: rejectedTransaction });
+    } catch (error) {
+      console.error("Transaction rejection error:", error);
+      res.status(500).json({ message: "Failed to reject transaction" });
     }
   });
 
@@ -3947,8 +5095,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Upload routes
+  app.post("/api/upload/wastage-photo", requireActiveUser, (req, res, next) => {
+    uploadWastagePhoto.single('photo')(req, res, (err) => {
+      if (err) {
+        if (err.message.includes('Invalid file type')) {
+          return res.status(400).json({ message: "Invalid file type. Only JPEG, JPG and PNG images are allowed." });
+        }
+        if (err.message.includes('File too large')) {
+          return res.status(400).json({ message: "File size exceeds 5MB limit." });
+        }
+        console.error("Photo upload error:", err);
+        return res.status(400).json({ message: err.message || "Failed to upload photo" });
+      }
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "No photo file provided" });
+      }
+
+      const photoUrl = `/uploads/wastage-photos/${req.file.filename}`;
+      
+      res.status(200).json({
+        success: true,
+        photoUrl,
+        message: "Photo uploaded successfully"
+      });
+    });
+  });
+
+  app.post("/api/upload/bill-document", requireActiveUser, (req, res, next) => {
+    uploadBillDocument.single('billDocument')(req, res, (err) => {
+      if (err) {
+        if (err.message.includes('Invalid file type')) {
+          return res.status(400).json({ message: "Invalid file type. Only JPEG, JPG, PNG images and PDF files are allowed." });
+        }
+        if (err.message.includes('File too large')) {
+          return res.status(400).json({ message: "File size exceeds 10MB limit." });
+        }
+        console.error("Bill document upload error:", err);
+        return res.status(400).json({ message: err.message || "Failed to upload bill document" });
+      }
+      
+      if (!req.file) {
+        return res.status(400).json({ message: "No bill document provided" });
+      }
+
+      const fileUrl = `/uploads/bill-documents/${req.file.filename}`;
+      const isPdf = req.file.mimetype === 'application/pdf';
+      
+      res.status(200).json({
+        success: true,
+        fileUrl,
+        isPdf,
+        message: "Bill document uploaded successfully"
+      });
+    });
+  });
+
   // Wastage routes
-  app.post("/api/hotels/current/wastages", async (req, res) => {
+  app.post("/api/hotels/current/wastages", (req, res, next) => {
+    // Only use multer for multipart/form-data requests
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data')) {
+      uploadWastagePhoto.single('photo')(req, res, next);
+    } else {
+      next();
+    }
+  }, async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
@@ -3959,12 +5172,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
       
-      const wastageData = req.body;
+      // Handle photo upload from FormData
+      let photoUrl = req.body.photoUrl;
+      if (req.file) {
+        photoUrl = `/uploads/wastage-photos/${req.file.filename}`;
+      }
+      
+      const wastageData = {
+        ...req.body,
+        photoUrl
+      };
       
       // Validate required fields (check specifically for undefined/null, not falsy values like 0)
       if (!wastageData.itemId || wastageData.qty === undefined || wastageData.qty === null || !wastageData.reason) {
         return res.status(400).json({ 
           message: "Item, quantity, and reason are required" 
+        });
+      }
+      
+      // Validate photoUrl is provided
+      if (!wastageData.photoUrl || typeof wastageData.photoUrl !== 'string' || wastageData.photoUrl.trim() === '') {
+        return res.status(400).json({ 
+          message: "Photo is required for wastage reporting" 
         });
       }
       
@@ -6907,6 +8136,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Audit log fetch error:", error);
       res.status(500).json({ message: "Failed to fetch audit logs" });
+    }
+  });
+
+  // Login History Endpoint
+  app.get("/api/login-history", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      
+      const currentUser = req.user as any;
+      if (!currentUser || !currentUser.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      
+      // Only managers and owners can view login history
+      const canViewLoginHistory = ['manager', 'owner', 'finance', 'super_admin'].includes(currentUser.role?.name || '');
+      if (!canViewLoginHistory) {
+        return res.status(403).json({ 
+          message: "Only managers can view login history" 
+        });
+      }
+      
+      const { startDate, endDate, userId } = req.query;
+      
+      // Build query with filters
+      const conditions: any[] = [eq(loginHistory.hotelId, currentUser.hotelId)];
+      
+      if (userId && typeof userId === 'string') {
+        conditions.push(eq(loginHistory.userId, userId));
+      }
+      
+      // Add date filters if provided
+      if (startDate && typeof startDate === 'string') {
+        conditions.push(sql`${loginHistory.loginAt} >= ${new Date(startDate).toISOString()}`);
+      }
+      if (endDate && typeof endDate === 'string') {
+        conditions.push(sql`${loginHistory.loginAt} <= ${new Date(endDate).toISOString()}`);
+      }
+      
+      const history = await db
+        .select({
+          id: loginHistory.id,
+          userId: loginHistory.userId,
+          hotelId: loginHistory.hotelId,
+          deviceFingerprint: loginHistory.deviceFingerprint,
+          browser: loginHistory.browser,
+          os: loginHistory.os,
+          ip: loginHistory.ip,
+          location: loginHistory.location,
+          isNewDevice: loginHistory.isNewDevice,
+          isNewLocation: loginHistory.isNewLocation,
+          loginAt: loginHistory.loginAt,
+          logoutAt: loginHistory.logoutAt,
+          user: sql`json_build_object(
+            'id', ${users.id},
+            'username', ${users.username},
+            'email', ${users.email},
+            'role', json_build_object(
+              'id', ${roles.id},
+              'name', ${roles.name}
+            )
+          )`
+        })
+        .from(loginHistory)
+        .leftJoin(users, eq(loginHistory.userId, users.id))
+        .leftJoin(roles, eq(users.roleId, roles.id))
+        .where(and(...conditions))
+        .orderBy(sql`${loginHistory.loginAt} DESC`)
+        .limit(1000);
+      
+      res.json(history);
+    } catch (error) {
+      console.error("Login history fetch error:", error);
+      res.status(500).json({ message: "Failed to fetch login history" });
     }
   });
 

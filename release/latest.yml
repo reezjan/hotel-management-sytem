@@ -1,0 +1,8 @@
+version: 1.0.0
+files:
+  - url: HotelManagement-Setup-1.0.0.exe
+    sha512: JEZdo/L+d6p3+KdcPR4sDKITUIKNuWM5cSoL3JDd3p4Y+TpJDnL0I3KRHjAb1xP8D2y+x5uvb2JxFeG8AzM47w==
+    size: 115941630
+path: HotelManagement-Setup-1.0.0.exe
+sha512: JEZdo/L+d6p3+KdcPR4sDKITUIKNuWM5cSoL3JDd3p4Y+TpJDnL0I3KRHjAb1xP8D2y+x5uvb2JxFeG8AzM47w==
+releaseDate: '2025-10-17T16:14:05.524Z'
