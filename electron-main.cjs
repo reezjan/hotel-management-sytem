@@ -1,7 +1,7 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const isDev = require('electron-is-dev');
-const { spawn } = require('child_process');
+const { spawn, fork } = require('child_process');
 const fs = require('fs');
 
 let mainWindow;
@@ -195,7 +195,7 @@ function createWindow() {
 
   // Wait for server to start
   setTimeout(() => {
-    mainWindow.loadURL('http://localhost:5000');
+    mainWindow.loadURL('http://localhost:5000/auth');
   }, 3000);
 
   mainWindow.on('closed', () => {
@@ -208,27 +208,47 @@ function startServer() {
     ? path.join(__dirname, 'server/index.ts')
     : path.join(__dirname, 'app_dist/index.js');
 
-  const nodeCommand = isDev ? 'npx' : 'node';
+  if (isDev) {
+    // In development, spawn the server as a separate process with tsx
+    serverProcess = spawn('npx', ['tsx', serverPath], {
+      env: {
+        ...process.env,
+        NODE_ENV: 'development',
+        PORT: '5000'
+      },
+      cwd: __dirname,
+      shell: true
+    });
 
-  const args = isDev ? ['tsx', serverPath] : [serverPath];
-  
-  serverProcess = spawn(nodeCommand, args, {
-    env: {
-      ...process.env,
-      NODE_ENV: isDev ? 'development' : 'production',
-      PORT: '5000'
-    },
-    cwd: __dirname,
-    shell: true
-  });
+    serverProcess.stdout.on('data', (data) => {
+      console.log(`Server: ${data}`);
+    });
 
-  serverProcess.stdout.on('data', (data) => {
-    if (isDev) console.log(`Server: ${data}`);
-  });
+    serverProcess.stderr.on('data', (data) => {
+      console.error(`Server Error: ${data}`);
+    });
+  } else {
+    // In production, use fork() which doesn't require a shell
+    serverProcess = fork(serverPath, [], {
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        PORT: '5000'
+      },
+      cwd: __dirname,
+      silent: false,
+      execArgv: [] // Don't pass any V8 flags
+    });
 
-  serverProcess.stderr.on('data', (data) => {
-    if (isDev) console.error(`Server Error: ${data}`);
-  });
+    serverProcess.on('error', (error) => {
+      console.error('Failed to start server:', error);
+      dialog.showErrorBox('Server Error', `Failed to start server: ${error.message}`);
+    });
+
+    serverProcess.on('spawn', () => {
+      console.log('Server started in production mode');
+    });
+  }
 }
 
 // Handle print requests from renderer
