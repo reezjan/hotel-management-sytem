@@ -1,6 +1,9 @@
-# Dependencies
+# Dependencies and build files
 /node_modules
-
+/dist
+/release 
+*.exe
+*.asar
 
 
 # Logs and system files
