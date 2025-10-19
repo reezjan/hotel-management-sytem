@@ -136,13 +136,16 @@
   "build": {
     "appId": "com.hotelmanagement.secure",
     "productName": "Hotel Management System",
+    "npmRebuild": false,
     "directories": {
       "output": "release"
     },
     "win": {
       "target": "nsis",
       "icon": "app-icon.ico",
-      "artifactName": "HotelManagement-Setup-${version}.${ext}"
+      "artifactName": "HotelManagement-Setup-${version}.${ext}",
+      "sign": null,
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
