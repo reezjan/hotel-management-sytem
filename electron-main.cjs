@@ -208,46 +208,56 @@ function startServer() {
     ? path.join(__dirname, 'server/index.ts')
     : path.join(__dirname, 'app_dist/index.js');
 
-  if (isDev) {
+  // Check if we're in a packaged app (more reliable than isDev)
+  const isPackaged = app.isPackaged;
+
+  if (!isPackaged && isDev) {
     // In development, spawn the server as a separate process with tsx
-    serverProcess = spawn('npx', ['tsx', serverPath], {
-      env: {
-        ...process.env,
-        NODE_ENV: 'development',
-        PORT: '5000'
-      },
-      cwd: __dirname,
-      shell: true
-    });
+    try {
+      serverProcess = spawn('npx', ['tsx', serverPath], {
+        env: {
+          ...process.env,
+          NODE_ENV: 'development',
+          PORT: '5000'
+        },
+        cwd: __dirname,
+        shell: true
+      });
 
-    serverProcess.stdout.on('data', (data) => {
-      console.log(`Server: ${data}`);
-    });
+      serverProcess.stdout.on('data', (data) => {
+        console.log(`Server: ${data}`);
+      });
 
-    serverProcess.stderr.on('data', (data) => {
-      console.error(`Server Error: ${data}`);
-    });
+      serverProcess.stderr.on('data', (data) => {
+        console.error(`Server Error: ${data}`);
+      });
+    } catch (error) {
+      console.error('Failed to start dev server:', error);
+    }
   } else {
-    // In production, use fork() which doesn't require a shell
-    serverProcess = fork(serverPath, [], {
-      env: {
-        ...process.env,
-        NODE_ENV: 'production',
-        PORT: '5000'
-      },
-      cwd: __dirname,
-      silent: false,
-      execArgv: [] // Don't pass any V8 flags
-    });
+    // In production, use fork() which doesn't require a shell or cmd.exe
+    try {
+      serverProcess = fork(serverPath, [], {
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          PORT: '5000'
+        },
+        cwd: __dirname,
+        silent: false,
+        execArgv: []
+      });
 
-    serverProcess.on('error', (error) => {
-      console.error('Failed to start server:', error);
-      dialog.showErrorBox('Server Error', `Failed to start server: ${error.message}`);
-    });
+      serverProcess.on('error', (error) => {
+        console.error('Failed to start server:', error);
+      });
 
-    serverProcess.on('spawn', () => {
-      console.log('Server started in production mode');
-    });
+      serverProcess.on('spawn', () => {
+        console.log('Server started in production mode');
+      });
+    } catch (error) {
+      console.error('Failed to start production server:', error);
+    }
   }
 }
 
