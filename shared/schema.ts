@@ -479,6 +479,8 @@ export const kotOrders = pgTable("kot_orders", {
   tableId: uuid("table_id").references(() => restaurantTables.id),
   createdBy: uuid("created_by").references(() => users.id),
   status: text("status").default('open'),
+  source: text("source").default('restaurant'),
+  roomNumber: text("room_number"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });

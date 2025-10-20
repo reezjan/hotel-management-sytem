@@ -1025,6 +1025,22 @@ export default function FrontDeskDashboard() {
         orderedBy: user?.username
       };
 
+      // Create KOT order for kitchen staff to see
+      const kotOrderData = {
+        hotelId: user?.hotelId,
+        source: 'room_service',
+        roomNumber: selectedRoom.roomNumber,
+        items: foodOrderItems.map(({ item, quantity }) => ({
+          menuItemId: item.id,
+          description: item.name,
+          qty: quantity,
+          unit: 'piece',
+          status: 'pending'
+        }))
+      };
+
+      const kotOrder: any = await apiRequest("POST", "/api/kot-orders", kotOrderData);
+
       // Update room with food charges in occupantDetails
       await apiRequest("PUT", `/api/rooms/${selectedRoom.id}`, {
         occupantDetails: {
@@ -1039,15 +1055,19 @@ export default function FrontDeskDashboard() {
         roomId: selectedRoom.id,
         requestedBy: user?.id,
         status: 'completed',
-        specialInstructions: `Food Order:\n${itemsList}\nTotal: ${formatCurrency(totalAmount)}`
+        specialInstructions: `Food Order:\n${itemsList}\nTotal: ${formatCurrency(totalAmount)}\nKOT ID: ${kotOrder?.id || 'N/A'}`
       });
 
-      toast({ title: "Food order added to room bill successfully" });
+      toast({ 
+        title: "Food order submitted successfully", 
+        description: `KOT created for Room ${selectedRoom.roomNumber}. Kitchen staff will prepare the order.` 
+      });
       setFoodOrderItems([]);
       setFoodSearchQuery("");
       setSelectedCategory("all");
       setIsFoodOrderModalOpen(false);
       setSelectedRoom(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "room-service-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
     } catch (error) {

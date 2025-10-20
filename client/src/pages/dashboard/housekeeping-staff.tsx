@@ -1,323 +1,536 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckSquare, Clock, Wrench, Send } from "lucide-react";
+import { ChefHat, Clock, CheckCircle, XCircle, Package, AlertTriangle, Camera, RotateCcw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { getStatusColor } from "@/lib/utils";
+import { useState, useRef } from "react";
+import Webcam from "react-webcam";
 
-export default function HousekeepingStaffDashboard() {
+interface KotItem {
+  id: string;
+  menuItemId: string;
+  qty: number;
+  notes: string | null;
+  status: string;
+  declineReason: string | null;
+  menuItem?: { name: string };
+}
+
+interface KotOrder {
+  id: string;
+  tableId: string;
+  status: string;
+  source?: string;
+  roomNumber?: string;
+  createdAt: string;
+  items?: KotItem[];
+}
+
+interface RestaurantTable {
+  id: string;
+  name: string;
+}
+
+interface InventoryItem {
+  id: string;
+  name: string;
+  unit: string;
+}
+
+export default function KitchenStaffDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [, setLocation] = useLocation();
+  const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
+  const [wastageDialogOpen, setWastageDialogOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<KotItem | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [wastageData, setWastageData] = useState({
+    itemId: "",
+    qty: "",
+    unit: "",
+    reason: ""
+  });
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const webcamRef = useRef<Webcam>(null);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState("medium");
-  const [location, setLocation] = useState("");
-  const [photo, setPhoto] = useState<string>("");
+  const { data: kotOrders = [] } = useQuery({
+    queryKey: ["/api/hotels/current/kot-orders"],
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true
+  });
 
-  const { data: tasks = [] } = useQuery<any[]>({
-    queryKey: ["/api/users", user?.id, "tasks"],
-    enabled: !!user?.id,
+  const { data: tables = [] } = useQuery({
+    queryKey: ["/api/hotels/current/restaurant-tables"],
     refetchInterval: 5000,
     refetchIntervalInBackground: true
   });
 
-  const updateTaskMutation = useMutation({
-    mutationFn: async ({ taskId, status }: { taskId: string; status: string }) => {
-      await apiRequest("PUT", `/api/tasks/${taskId}`, { status });
+  const { data: inventoryItems = [] } = useQuery({
+    queryKey: ["/api/hotels/current/inventory-items"]
+  });
+
+  const updateKotItemMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      return await apiRequest("PUT", `/api/kot-items/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users", user?.id, "tasks"] });
-      toast({ title: "Task updated successfully" });
-      setSelectedTask(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
+      toast({ title: "KOT item updated successfully" });
+      setDeclineDialogOpen(false);
+      setDeclineReason("");
+      setSelectedItem(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   });
 
-  const createMaintenanceRequestMutation = useMutation({
-    mutationFn: async (requestData: any) => {
-      await apiRequest("POST", "/api/hotels/current/maintenance-requests", requestData);
+  const createWastageMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch("/api/hotels/current/wastages", {
+        method: "POST",
+        credentials: "include",
+        body: data,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to record wastage");
+      }
+      return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/maintenance-requests"] });
-      toast({ title: "Maintenance request submitted successfully" });
-      setTitle("");
-      setDescription("");
-      setPriority("medium");
-      setLocation("");
-      setPhoto("");
+      toast({ title: "Wastage recorded successfully" });
+      setWastageDialogOpen(false);
+      setWastageData({ itemId: "", qty: "", unit: "", reason: "" });
+      setCapturedPhoto(null);
     },
-    onError: () => {
-      toast({ 
-        title: "Failed to submit request", 
-        description: "Please try again later",
-        variant: "destructive" 
-      });
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   });
 
-  const pendingTasks = tasks.filter(t => t.status === 'pending');
-  const performingTasks = tasks.filter(t => t.status === 'performing');
-  const completedTasks = tasks.filter(t => t.status === 'completed');
-  const todayCompleted = completedTasks.filter(t => {
-    const today = new Date().toDateString();
-    return new Date(t.updatedAt || t.createdAt).toDateString() === today;
-  });
-
-  const handleTaskStatusUpdate = (task: any, newStatus: string) => {
-    updateTaskMutation.mutate({ taskId: task.id, status: newStatus });
-  };
-
-  const handleMaintenanceSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!title || !description || !location || !photo) {
-      toast({ 
-        title: "Missing information", 
-        description: "Please fill in all required fields including photo",
-        variant: "destructive" 
-      });
-      return;
-    }
-
-    createMaintenanceRequestMutation.mutate({
-      title,
-      description,
-      priority,
-      location,
-      photo,
-      status: 'pending'
+  const handleApprove = (item: KotItem) => {
+    updateKotItemMutation.mutate({
+      id: item.id,
+      data: { status: "approved" }
     });
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low':
-        return 'bg-green-100 text-green-800 border-green-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+  const handleDecline = (item: KotItem) => {
+    setSelectedItem(item);
+    setDeclineDialogOpen(true);
+  };
+
+  const handleSetReady = (item: KotItem) => {
+    updateKotItemMutation.mutate({
+      id: item.id,
+      data: { status: "ready" }
+    });
+  };
+
+  const submitDecline = () => {
+    if (!selectedItem || !declineReason.trim()) {
+      toast({ title: "Please provide a reason for declining", variant: "destructive" });
+      return;
+    }
+    if (declineReason.trim().length < 10) {
+      toast({ title: "Decline reason must be at least 10 characters", variant: "destructive" });
+      return;
+    }
+    updateKotItemMutation.mutate({
+      id: selectedItem.id,
+      data: { status: "declined", declineReason: declineReason.trim() }
+    });
+  };
+
+  const capturePhoto = () => {
+    const imageSrc = webcamRef.current?.getScreenshot();
+    if (imageSrc) {
+      const canvas = document.createElement('canvas');
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          const timestamp = new Date().toLocaleString();
+          ctx.font = 'bold 20px Arial';
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(10, img.height - 40, ctx.measureText(timestamp).width + 20, 35);
+          ctx.fillStyle = 'white';
+          ctx.fillText(timestamp, 20, img.height - 15);
+          setCapturedPhoto(canvas.toDataURL('image/jpeg'));
+        }
+      };
+      img.src = imageSrc;
     }
   };
 
+  const retakePhoto = () => {
+    setCapturedPhoto(null);
+  };
+
+  const submitWastage = async () => {
+    if (!wastageData.itemId || !wastageData.qty || !wastageData.reason.trim()) {
+      toast({ title: "Please fill all wastage fields", variant: "destructive" });
+      return;
+    }
+    if (!capturedPhoto) {
+      toast({ title: "Please capture a photo of the wastage", variant: "destructive" });
+      return;
+    }
+    const qty = parseFloat(wastageData.qty);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: "Please enter a valid quantity", variant: "destructive" });
+      return;
+    }
+
+    const blob = await (await fetch(capturedPhoto)).blob();
+    const formData = new FormData();
+    formData.append('photo', blob, 'wastage.jpg');
+    formData.append('itemId', wastageData.itemId);
+    formData.append('qty', qty.toString());
+    formData.append('unit', wastageData.unit);
+    formData.append('reason', wastageData.reason.trim());
+
+    createWastageMutation.mutate(formData);
+  };
+
+  const pendingOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
+    order.items?.some((item: KotItem) => item.status === 'pending')
+  ) : [];
+  
+  const approvedOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
+    order.items?.some((item: KotItem) => item.status === 'approved')
+  ) : [];
+  
+  const readyOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
+    order.items?.every((item: KotItem) => item.status === 'ready')
+  ) : [];
+  
+  const declinedOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
+    order.items?.some((item: KotItem) => item.status === 'declined')
+  ) : [];
+
+  const getTableNumber = (order: KotOrder) => {
+    if (order.source === 'room_service') {
+      return `Room ${order.roomNumber || 'Service'}`;
+    }
+    if (!Array.isArray(tables)) return order.tableId || 'Unknown';
+    const table = (tables as RestaurantTable[]).find((t: RestaurantTable) => t.id === order.tableId);
+    return table?.name || order.tableId || 'Unknown';
+  };
+
+  const renderKotCard = (order: KotOrder) => (
+    <Card key={order.id}>
+      <CardHeader>
+        <CardTitle className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <span>{getTableNumber(order)}</span>
+            {order.source === 'room_service' && (
+              <Badge variant="outline" className="text-xs">Room Service</Badge>
+            )}
+          </div>
+          <span className="text-sm text-gray-500">
+            {new Date(order.createdAt).toLocaleTimeString()}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {order.items?.map((item: KotItem) => (
+          <div key={item.id} className="mb-4 p-3 border rounded">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <p className="font-semibold">{item.menuItem?.name}</p>
+                <p className="text-sm text-gray-600">Quantity: {item.qty}</p>
+                {item.notes && <p className="text-sm text-gray-500">Notes: {item.notes}</p>}
+                {item.declineReason && (
+                  <p className="text-sm text-red-600">Declined: {item.declineReason}</p>
+                )}
+              </div>
+              <Badge variant={
+                item.status === 'approved' ? 'default' :
+                item.status === 'ready' ? 'default' :
+                item.status === 'declined' ? 'destructive' : 'secondary'
+              }>
+                {item.status}
+              </Badge>
+            </div>
+            {item.status === 'pending' && (
+              <div className="flex gap-2 mt-2">
+                <Button
+                  size="sm"
+                  onClick={() => handleApprove(item)}
+                  className="flex-1"
+                >
+                  <CheckCircle className="w-4 h-4 mr-1" /> Approve
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDecline(item)}
+                  className="flex-1"
+                >
+                  <XCircle className="w-4 h-4 mr-1" /> Decline
+                </Button>
+              </div>
+            )}
+            {item.status === 'approved' && (
+              <Button
+                size="sm"
+                onClick={() => handleSetReady(item)}
+                className="w-full mt-2"
+              >
+                <Clock className="w-4 h-4 mr-1" /> Set Ready
+              </Button>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <DashboardLayout title="Housekeeping Staff Dashboard">
+    <DashboardLayout title="Kitchen Staff Dashboard">
       <div className="space-y-6">
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
-            title="Pending Tasks"
-            value={pendingTasks.length}
+            title="Pending Orders"
+            value={pendingOrders.length}
             icon={<Clock />}
             iconColor="text-orange-500"
           />
           <StatsCard
-            title="In Progress"
-            value={performingTasks.length}
-            icon={<CheckSquare />}
+            title="In Preparation"
+            value={approvedOrders.length}
+            icon={<ChefHat />}
             iconColor="text-blue-500"
           />
           <StatsCard
-            title="Completed Today"
-            value={todayCompleted.length}
-            icon={<CheckSquare />}
+            title="Ready to Serve"
+            value={readyOrders.length}
+            icon={<CheckCircle />}
             iconColor="text-green-500"
-            trend={{ 
-              value: todayCompleted.length > 0 ? 100 : 0, 
-              label: "completion rate", 
-              isPositive: true 
-            }}
           />
           <StatsCard
-            title="Total Tasks"
-            value={tasks.length}
-            icon={<CheckSquare />}
-            iconColor="text-purple-500"
+            title="Declined"
+            value={declinedOrders.length}
+            icon={<XCircle />}
+            iconColor="text-red-500"
           />
         </div>
 
-        {/* Task Management */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* My Tasks */}
-          <Card>
-            <CardHeader>
-              <CardTitle>My Tasks</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {tasks.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-4" data-testid="no-tasks-message">
-                    No tasks assigned
-                  </p>
-                ) : (
-                  tasks.slice(0, 10).map((task, index) => (
-                    <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`task-item-${index}`}>
-                      <div className="flex-1">
-                        <h4 className="font-medium text-foreground">{task.title}</h4>
-                        <p className="text-sm text-muted-foreground">{task.description}</p>
-                        <div className="flex items-center space-x-2 mt-2">
-                          <Badge className={getPriorityColor(task.priority)} variant="outline">
-                            {task.priority?.toUpperCase() || 'MEDIUM'}
-                          </Badge>
-                          <Badge className={getStatusColor(task.status)} variant="secondary">
-                            {task.status}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(task.createdAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col space-y-1">
-                        {task.status === 'pending' && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleTaskStatusUpdate(task, 'performing')}
-                            disabled={updateTaskMutation.isPending}
-                            data-testid={`button-start-task-${index}`}
-                          >
-                            Start
-                          </Button>
-                        )}
-                        {task.status === 'performing' && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleTaskStatusUpdate(task, 'completed')}
-                            disabled={updateTaskMutation.isPending}
-                            data-testid={`button-complete-task-${index}`}
-                          >
-                            Complete
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Maintenance Request */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Send className="h-5 w-5 mr-2" />
-                Submit Maintenance Request
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleMaintenanceSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Issue Title *</Label>
-                  <Input
-                    id="title"
-                    placeholder="e.g., Broken AC in Room 201"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    required
-                    data-testid="input-maintenance-title"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="location">Location *</Label>
-                  <Input
-                    id="location"
-                    placeholder="e.g., Room 201, Hallway 2nd Floor"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    required
-                    data-testid="input-maintenance-location"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="priority">Priority *</Label>
-                  <Select value={priority} onValueChange={setPriority}>
-                    <SelectTrigger id="priority" className="h-11" data-testid="select-maintenance-priority">
-                      <SelectValue />
+        <div className="flex gap-2 justify-end">
+          <Dialog open={wastageDialogOpen} onOpenChange={setWastageDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Package className="w-4 h-4 mr-2" /> Record Wastage
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Record Wastage</DialogTitle>
+                <DialogDescription>Capture photo and record inventory wastage</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Inventory Item *</Label>
+                  <Select
+                    value={wastageData.itemId}
+                    onValueChange={(value) => {
+                      const selectedInventoryItem = (inventoryItems as InventoryItem[]).find(item => item.id === value);
+                      setWastageData({ 
+                        ...wastageData, 
+                        itemId: value,
+                        unit: selectedInventoryItem?.unit || 'piece'
+                      });
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-wastage-item">
+                      <SelectValue placeholder="Select item" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Low - Can wait</SelectItem>
-                      <SelectItem value="medium">Medium - Soon</SelectItem>
-                      <SelectItem value="high">High - Urgent</SelectItem>
+                      {Array.isArray(inventoryItems) && (inventoryItems as InventoryItem[]).map((item: InventoryItem) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name} ({item.unit})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description *</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Provide detailed information about the issue..."
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={4}
-                    required
-                    data-testid="textarea-maintenance-description"
+                <div>
+                  <Label>Quantity *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={wastageData.qty}
+                    onChange={(e) => setWastageData({ ...wastageData, qty: e.target.value })}
+                    placeholder="Enter quantity"
+                    data-testid="input-wastage-quantity"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="photo">Photo *</Label>
-                  <Input
-                    id="photo"
-                    type="file"
-                    accept="image/*"
-                    required
-                    data-testid="input-maintenance-photo"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setPhoto(reader.result as string);
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
+                <div>
+                  <Label>Reason *</Label>
+                  <Textarea
+                    value={wastageData.reason}
+                    onChange={(e) => setWastageData({ ...wastageData, reason: e.target.value })}
+                    placeholder="Explain reason for wastage"
+                    data-testid="input-wastage-reason"
                   />
-                  {photo && (
-                    <div className="mt-2">
-                      <img src={photo} alt="Preview" className="max-w-full h-32 object-cover rounded border" />
+                </div>
+                <div>
+                  <Label>Photo Evidence * (Required)</Label>
+                  {!capturedPhoto ? (
+                    <div className="space-y-2">
+                      <div className="relative rounded-lg overflow-hidden bg-black">
+                        <Webcam
+                          ref={webcamRef}
+                          audio={false}
+                          screenshotFormat="image/jpeg"
+                          className="w-full"
+                          videoConstraints={{
+                            facingMode: "environment"
+                          }}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={capturePhoto}
+                        className="w-full"
+                        variant="secondary"
+                        data-testid="button-capture-photo"
+                      >
+                        <Camera className="w-4 h-4 mr-2" /> Capture Photo
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="relative rounded-lg overflow-hidden border">
+                        <img src={capturedPhoto} alt="Captured wastage" className="w-full" />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={retakePhoto}
+                        className="w-full"
+                        variant="outline"
+                        data-testid="button-retake-photo"
+                      >
+                        <RotateCcw className="w-4 h-4 mr-2" /> Retake Photo
+                      </Button>
                     </div>
                   )}
                 </div>
-
                 <Button 
-                  type="submit" 
-                  className="w-full h-11 min-h-11"
-                  disabled={createMaintenanceRequestMutation.isPending}
-                  data-testid="button-submit-maintenance"
+                  onClick={submitWastage} 
+                  className="w-full" 
+                  disabled={createWastageMutation.isPending}
+                  data-testid="button-submit-wastage"
                 >
-                  {createMaintenanceRequestMutation.isPending ? (
-                    "Submitting..."
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Submit Request
-                    </>
-                  )}
+                  {createWastageMutation.isPending ? "Recording..." : "Record Wastage"}
                 </Button>
-              </form>
-            </CardContent>
-          </Card>
+              </div>
+            </DialogContent>
+          </Dialog>
+
         </div>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <ChefHat className="h-5 w-5 text-blue-500" />
+              <span>Kitchen Orders</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold mb-2">Pending Orders ({pendingOrders.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {pendingOrders.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4">No pending orders</p>
+                  ) : (
+                    pendingOrders.map(renderKotCard)
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-2">In Preparation ({approvedOrders.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {approvedOrders.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4">No orders in preparation</p>
+                  ) : (
+                    approvedOrders.map(renderKotCard)
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-2">Ready ({readyOrders.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {readyOrders.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4">No ready orders</p>
+                  ) : (
+                    readyOrders.map(renderKotCard)
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-2">Declined ({declinedOrders.length})</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {declinedOrders.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4">No declined orders</p>
+                  ) : (
+                    declinedOrders.map(renderKotCard)
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      <Dialog open={declineDialogOpen} onOpenChange={setDeclineDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Decline KOT Item</DialogTitle>
+            <DialogDescription>Please provide a reason for declining this item</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Reason for Decline</Label>
+              <Textarea
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+                placeholder="e.g., Out of stock, Wrong order"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDeclineDialogOpen(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={submitDecline} className="flex-1" variant="destructive" disabled={updateKotItemMutation.isPending}>
+                Decline
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

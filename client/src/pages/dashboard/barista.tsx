@@ -31,6 +31,8 @@ interface KotOrder {
   id: string;
   tableId: string;
   status: string;
+  source?: string;
+  roomNumber?: string;
   createdAt: string;
   items?: KotItem[];
 }
@@ -224,17 +226,25 @@ export default function BaristaDashboard() {
     order.items?.some((item: KotItem) => item.status === 'declined')
   ) : [];
 
-  const getTableNumber = (tableId: string) => {
-    if (!Array.isArray(tables)) return tableId;
-    const table = (tables as RestaurantTable[]).find((t: RestaurantTable) => t.id === tableId);
-    return table?.name || tableId;
+  const getTableNumber = (order: KotOrder) => {
+    if (order.source === 'room_service') {
+      return `Room ${order.roomNumber || 'Service'}`;
+    }
+    if (!Array.isArray(tables)) return order.tableId || 'Unknown';
+    const table = (tables as RestaurantTable[]).find((t: RestaurantTable) => t.id === order.tableId);
+    return table?.name || order.tableId || 'Unknown';
   };
 
   const renderKotCard = (order: KotOrder) => (
     <Card key={order.id}>
       <CardHeader>
         <CardTitle className="flex justify-between items-center">
-          <span>{getTableNumber(order.tableId)}</span>
+          <div className="flex items-center gap-2">
+            <span>{getTableNumber(order)}</span>
+            {order.source === 'room_service' && (
+              <Badge variant="outline" className="text-xs">Room Service</Badge>
+            )}
+          </div>
           <span className="text-sm text-gray-500">
             {new Date(order.createdAt).toLocaleTimeString()}
           </span>
