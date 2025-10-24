@@ -6,7 +6,7 @@ import { logAudit } from "./audit";
 import { db } from "./db";
 import { wsEvents } from "./websocket";
 import { uploadWastagePhoto, uploadBillDocument } from "./upload";
-import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings, loginHistory, roleLimits } from "@shared/schema";
+import { users, roles, auditLogs, maintenanceStatusHistory, priceChangeLogs, taxChangeLogs, roomStatusLogs, inventoryTransactions, inventoryItems, transactions, vendors, securitySettings, loginHistory, roleLimits, kotItems } from "@shared/schema";
 import { eq, and, isNull, asc, desc, sql, ne, gte, lt } from "drizzle-orm";
 import { sanitizeObject } from "./sanitize";
 import {
@@ -4646,88 +4646,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const currentUser = req.user as any;
       const { id } = req.params;
-      const updateData = req.body;
+      const { version, ...updateData } = req.body;
       
       if (!currentUser || !currentUser.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
       }
 
-      const existingItem = await storage.getKotItemById(id);
-      if (!existingItem) {
-        return res.status(404).json({ message: "KOT item not found" });
-      }
+      // CRITICAL: Use database transaction for atomicity - all operations succeed or all fail
+      const result = await db.transaction(async (tx) => {
+        // CRITICAL: Fetch current item with row-level lock to prevent race conditions
+        const [currentItem] = await tx
+          .select()
+          .from(kotItems)
+          .where(eq(kotItems.id, id))
+          .for('update')
+          .limit(1);
 
-      // Verify the KOT item belongs to the user's hotel
-      const kotOrder = await db.query.kotOrders.findFirst({
-        where: (orders, { eq }) => eq(orders.id, existingItem.kotId!)
-      });
+        if (!currentItem) {
+          const error: any = new Error("KOT item not found");
+          error.statusCode = 404;
+          throw error;
+        }
 
-      if (!kotOrder || kotOrder.hotelId !== currentUser.hotelId) {
-        return res.status(403).json({ message: "Access denied" });
-      }
-      
-      // CRITICAL: Authorization check BEFORE validation - Declining/canceling requires manager role
-      if (updateData.status === 'declined' || updateData.status === 'cancelled') {
-        const canDecline = ['manager', 'owner', 'restaurant_bar_manager'].includes(currentUser.role?.name || '');
+        // CRITICAL: Check if version matches (optimistic locking)
+        if (version !== undefined && currentItem.version !== version) {
+          const error: any = new Error("Version conflict");
+          error.statusCode = 409;
+          error.data = {
+            message: "This item was modified by another user. Please refresh.",
+            currentItem: currentItem
+          };
+          throw error;
+        }
+
+        // Verify the KOT item belongs to the user's hotel
+        const kotOrder = await tx.query.kotOrders.findFirst({
+          where: (orders, { eq }) => eq(orders.id, currentItem.kotId!)
+        });
+
+        if (!kotOrder || kotOrder.hotelId !== currentUser.hotelId) {
+          const error: any = new Error("Access denied");
+          error.statusCode = 403;
+          throw error;
+        }
         
-        if (!canDecline) {
-          return res.status(403).json({ 
-            message: "Only managers can decline or cancel orders. Contact your supervisor." 
+        // CRITICAL: Authorization check BEFORE validation - Declining/canceling requires manager role
+        if (updateData.status === 'declined' || updateData.status === 'cancelled') {
+          const canDecline = ['manager', 'owner', 'restaurant_bar_manager'].includes(currentUser.role?.name || '');
+          
+          if (!canDecline) {
+            const error: any = new Error("Authorization failed");
+            error.statusCode = 403;
+            error.message = "Only managers can decline or cancel orders. Contact your supervisor.";
+            throw error;
+          }
+        }
+
+        // Validate the request body (includes 10-char minimum check for decline/cancel reasons)
+        const validatedData = updateKotItemSchema.parse(updateData);
+        
+        // Log decline/cancellation for audit trail
+        if (validatedData.status === 'declined' || validatedData.status === 'cancelled') {
+          await storage.createKotAuditLog({
+            kotItemId: id,
+            action: validatedData.status,
+            performedBy: currentUser.id,
+            reason: validatedData.declineReason,
+            previousStatus: currentItem.status || undefined,
+            newStatus: validatedData.status
           });
         }
-      }
 
-      // Validate the request body (includes 10-char minimum check for decline/cancel reasons)
-      const validatedData = updateKotItemSchema.parse(updateData);
-      
-      // Log decline/cancellation for audit trail
-      if (validatedData.status === 'declined' || validatedData.status === 'cancelled') {
-        await storage.createKotAuditLog({
-          kotItemId: id,
-          action: validatedData.status,
-          performedBy: currentUser.id,
-          reason: validatedData.declineReason,
-          previousStatus: existingItem.status || undefined,
-          newStatus: validatedData.status
-        });
-      }
-      
-      // CRITICAL: When marking as completed, verify inventory was deducted
-      if (validatedData.status === 'completed' && existingItem.status !== 'completed') {
-        // Get menu item to check inventory items
-        const menuItem = await storage.getMenuItem(existingItem.menuItemId!);
-        
-        // If menu item has inventory items, mark as verified
-        if (menuItem && menuItem.recipe) {
-          validatedData.inventoryVerified = true;
+        // If status is being changed to "approved", deduct inventory
+        if (validatedData.status === 'approved' && currentItem.status !== 'approved') {
+          await storage.deductInventoryForKotItem(id);
         }
-      }
 
-      // If status is being changed to "approved", deduct inventory
-      if (validatedData.status === 'approved' && existingItem.status !== 'approved') {
-        await storage.deductInventoryForKotItem(id);
-      }
+        // CRITICAL: Update with version increment to prevent concurrent modifications
+        // Remove version from validatedData to avoid passing it to the update
+        const { version: _, ...dataToUpdate } = validatedData;
+        
+        const [updatedItem] = await tx
+          .update(kotItems)
+          .set({
+            ...dataToUpdate,
+            version: (currentItem.version || 0) + 1
+          })
+          .where(eq(kotItems.id, id))
+          .returning();
+        
+        // Sync the parent order status after item update
+        if (currentItem.kotId) {
+          await storage.updateKotOrderStatus(currentItem.kotId);
+        }
+        
+        return {
+          updatedItem,
+          hotelId: currentUser.hotelId
+        };
+      });
 
-      // Update the KOT item
-      const updatedItem = await storage.updateKotItem(id, validatedData);
-      
-      // Sync the parent order status after item update
-      if (existingItem.kotId) {
-        await storage.updateKotOrderStatus(existingItem.kotId);
+      // Broadcast real-time KOT update after successful transaction
+      if (result.hotelId) {
+        wsEvents.kotOrderUpdated(result.hotelId, result.updatedItem);
       }
       
-      // Broadcast real-time KOT update
-      if (currentUser?.hotelId) {
-        wsEvents.kotOrderUpdated(currentUser.hotelId, updatedItem);
-      }
-      
-      res.json(updatedItem);
+      return res.json(result.updatedItem);
     } catch (error: any) {
       console.error("KOT item update error:", error);
+      
+      // Handle specific error types with appropriate status codes
+      if (error.statusCode === 409 && error.data) {
+        return res.status(409).json(error.data);
+      }
+      if (error.statusCode === 404) {
+        return res.status(404).json({ message: error.message });
+      }
+      if (error.statusCode === 403) {
+        return res.status(403).json({ message: error.message });
+      }
       if (error.name === 'ZodError') {
         return res.status(400).json({ message: error.errors[0]?.message || "Invalid data" });
       }
-      res.status(400).json({ message: "Failed to update KOT item" });
+      
+      return res.status(500).json({ message: "Failed to update KOT item" });
     }
   });
 

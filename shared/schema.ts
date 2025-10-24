@@ -496,6 +496,7 @@ export const kotItems = pgTable("kot_items", {
   inventoryUsage: jsonb("inventory_usage"),
   status: text("status").default('pending'),
   declineReason: text("decline_reason"),
+  version: integer("version").default(0).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
@@ -1395,7 +1396,7 @@ export const updateKotItemSchema = z.object({
   status: z.enum(['pending', 'approved', 'declined', 'ready', 'served', 'completed', 'cancelled']).optional(),
   qty: z.number().int().min(1).optional(),
   declineReason: z.string().optional(),
-  inventoryVerified: z.boolean().optional()
+  version: z.number().int().optional()
 }).refine(
   (data) => !data.status || data.status !== 'declined' || (data.declineReason && data.declineReason.trim().length >= 10),
   { message: "Decline reason requires minimum 10 characters when declining a KOT item", path: ['declineReason'] }
