@@ -4181,18 +4181,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ROLE-BASED TRANSACTION LIMITS
       // Get user's role limits if they have a roleId
       if (currentUser.roleId) {
-        const roleLimit = await db.query.roleLimits.findFirst({
-          where: and(
-            eq(roleLimits.hotelId, currentUser.hotelId),
-            eq(roleLimits.roleId, currentUser.roleId)
-          )
-        });
+        const roleLimit = await storage.getRoleLimitsByHotelAndRole(currentUser.hotelId, currentUser.roleId);
         
         if (roleLimit) {
           // Check if transaction exceeds max transaction amount
           if (roleLimit.maxTransactionAmount && transactionAmount > Number(roleLimit.maxTransactionAmount)) {
             return res.status(403).json({ 
-              message: `Transaction amount (${transactionAmount}) exceeds your role's maximum limit (${roleLimit.maxTransactionAmount})` 
+              message: `Transaction amount (${transactionAmount}) exceeds your role's maximum limit (${roleLimit.maxTransactionAmount})`,
+              requiresApproval: true,
+              limit: roleLimit.maxTransactionAmount
             });
           }
           
@@ -4203,27 +4200,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Check total transactions for user today against maxDailyAmount
           if (roleLimit.maxDailyAmount) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            
-            const todayTransactions = await db.query.transactions.findMany({
-              where: and(
-                eq(transactions.hotelId, currentUser.hotelId),
-                eq(transactions.createdBy, currentUser.id),
-                gte(transactions.createdAt, today),
-                lt(transactions.createdAt, tomorrow),
-                eq(transactions.isVoided, false)
-              )
-            });
-            
-            const totalToday = todayTransactions.reduce((sum, txn) => sum + Number(txn.amount || 0), 0);
+            const totalToday = await storage.getUserDailyTransactionTotal(currentUser.id);
             const newTotal = totalToday + transactionAmount;
             
             if (newTotal > Number(roleLimit.maxDailyAmount)) {
               return res.status(403).json({ 
-                message: `Daily transaction limit exceeded. Current: ${totalToday}, Limit: ${roleLimit.maxDailyAmount}, Requested: ${transactionAmount}` 
+                message: `This transaction would exceed your daily limit of ${roleLimit.maxDailyAmount}. Today's total: ${totalToday}`,
+                requiresApproval: true,
+                dailyLimit: roleLimit.maxDailyAmount,
+                todayTotal: totalToday
               });
             }
           }

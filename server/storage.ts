@@ -2,6 +2,7 @@ import {
   users,
   hotels,
   roles,
+  roleLimits,
   rooms,
   roomTypes,
   menuItems,
@@ -245,6 +246,8 @@ export interface IStorage {
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransaction(id: string, transaction: Partial<InsertTransaction>): Promise<Transaction>;
   voidTransaction(id: string, voidedBy: string, reason: string): Promise<Transaction>;
+  getRoleLimitsByHotelAndRole(hotelId: string, roleId: number): Promise<any | undefined>;
+  getUserDailyTransactionTotal(userId: string): Promise<number>;
   
   // Maintenance operations
   getMaintenanceRequestsByHotel(hotelId: string): Promise<MaintenanceRequest[]>;
@@ -1318,6 +1321,38 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return voided;
+  }
+
+  async getRoleLimitsByHotelAndRole(hotelId: string, roleId: number): Promise<any | undefined> {
+    const [roleLimit] = await db
+      .select()
+      .from(roleLimits)
+      .where(and(
+        eq(roleLimits.hotelId, hotelId),
+        eq(roleLimits.roleId, roleId)
+      ));
+    return roleLimit;
+  }
+
+  async getUserDailyTransactionTotal(userId: string): Promise<number> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const result = await db
+      .select({ total: sql<number>`COALESCE(SUM(${transactions.amount}), 0)` })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.createdBy, userId),
+          gte(transactions.createdAt, today),
+          lt(transactions.createdAt, tomorrow),
+          eq(transactions.isVoided, false)
+        )
+      );
+    
+    return Number(result[0]?.total || 0);
   }
 
   // Maintenance operations
