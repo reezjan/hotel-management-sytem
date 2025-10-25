@@ -3876,6 +3876,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process checkout
       const checkedOutReservation = await storage.checkOutGuest(id);
       
+      // CRITICAL: Write to sales table as required
+      const billNumber = `ROOM-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+      const sale = await storage.createSale({
+        hotelId: currentUser.hotelId,
+        tableId: null,
+        billNumber: billNumber,
+        totalAmount: String(totalAmount),
+        taxAmount: '0',
+        discountAmount: '0',
+        netAmount: String(totalAmount),
+        paymentMethod: 'cash',
+        createdBy: currentUser.username,
+        customerName: reservation.guestName || null,
+        customerPhone: reservation.guestPhone || null,
+        items: {
+          type: 'room_reservation',
+          reservationId: id,
+          roomNumber: reservation.roomId,
+          checkInDate: reservation.checkInDate,
+          checkOutDate: reservation.checkOutDate,
+          totalPrice: reservation.totalPrice
+        }
+      });
+      
       // Broadcast checkout event to front desk role in real-time
       wsEvents.roomStatusUpdated(currentUser.hotelId, { 
         id: checkedOutReservation.roomId, 
@@ -3883,7 +3907,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isOccupied: false 
       });
       
-      res.json(checkedOutReservation);
+      res.json({ ...checkedOutReservation, sale });
     } catch (error) {
       console.error("Checkout error:", error);
       res.status(500).json({ message: "Failed to check out guest" });
@@ -4929,6 +4953,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Update the bill object to reflect the change
           bill.status = 'paid';
           bill.finalizedAt = new Date();
+          
+          // CRITICAL: Write to sales table as required
+          const saleNumber = `SALE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+          await storage.createSale({
+            hotelId: user.hotelId,
+            tableId: billData.tableId || null,
+            billNumber: saleNumber,
+            totalAmount: String(bill.totalAmount || 0),
+            taxAmount: String(bill.taxAmount || 0),
+            discountAmount: String(bill.discountAmount || 0),
+            netAmount: String(bill.grandTotal),
+            paymentMethod: createdPayments[0]?.paymentMethod || 'cash',
+            createdBy: user.username,
+            customerName: billData.customerName || null,
+            customerPhone: billData.customerPhone || null,
+            items: bill.items || []
+          });
         }
       }
 

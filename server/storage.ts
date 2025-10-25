@@ -41,6 +41,7 @@ import {
   bookingPayments,
   restaurantBills,
   billPayments,
+  sales,
   auditLogs,
   priceChangeLogs,
   taxChangeLogs,
@@ -105,6 +106,8 @@ import {
   type InsertRestaurantBill,
   type SelectBillPayment,
   type InsertBillPayment,
+  type SelectSale,
+  type InsertSale,
   type RoomReservation,
   type InsertRoomReservation,
   roomReservations,
@@ -402,6 +405,11 @@ export interface IStorage {
   createBillPayment(payment: any): Promise<any>;
   getBillPayment(paymentId: string): Promise<any | undefined>;
   voidBillPayment(paymentId: string, voidedBy: string, reason: string): Promise<any>;
+  
+  // Sales operations
+  createSale(sale: InsertSale): Promise<SelectSale>;
+  getSalesByHotel(hotelId: string, filters?: { startDate?: Date; endDate?: Date }): Promise<SelectSale[]>;
+  getSale(id: string): Promise<SelectSale | undefined>;
   
   // Attendance operations
   createAttendance(userId: string, hotelId: string, clockInTime: Date, location: string | null, ip: string | null, source: string | null): Promise<any>;
@@ -3541,6 +3549,37 @@ export class DatabaseStorage implements IStorage {
       .where(eq(billPayments.id, paymentId))
       .returning();
     return voided;
+  }
+
+  async createSale(saleData: InsertSale): Promise<SelectSale> {
+    const [sale] = await db.insert(sales).values(saleData).returning();
+    return sale;
+  }
+
+  async getSalesByHotel(hotelId: string, filters?: { startDate?: Date; endDate?: Date }): Promise<SelectSale[]> {
+    const conditions = [eq(sales.hotelId, hotelId)];
+    
+    if (filters?.startDate) {
+      conditions.push(gte(sales.createdAt, filters.startDate));
+    }
+    
+    if (filters?.endDate) {
+      conditions.push(lte(sales.createdAt, filters.endDate));
+    }
+    
+    return await db
+      .select()
+      .from(sales)
+      .where(and(...conditions))
+      .orderBy(desc(sales.createdAt));
+  }
+
+  async getSale(id: string): Promise<SelectSale | undefined> {
+    const [sale] = await db
+      .select()
+      .from(sales)
+      .where(eq(sales.id, id));
+    return sale || undefined;
   }
 
   async createAttendance(userId: string, hotelId: string, clockInTime: Date, location: string | null, ip: string | null, source: string | null): Promise<Attendance> {
