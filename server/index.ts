@@ -11,6 +11,7 @@ import { kotOrders, type KotOrder, users, hotels } from "@shared/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { patternDetector } from "./pattern-detector";
 import { alertService } from "./alert-service";
+import { nanoid } from "nanoid";
 
 // Set timezone to Nepal
 process.env.TZ = 'Asia/Kathmandu';
@@ -38,9 +39,16 @@ app.use(helmet({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
+app.use((req: any, res, next) => {
+  req.id = nanoid();
+  res.setHeader('X-Request-ID', req.id);
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  const requestId = (req as any).id;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -52,13 +60,13 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      let logLine = `[${requestId}] ${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+      if (logLine.length > 100) {
+        logLine = logLine.slice(0, 99) + "…";
       }
 
       log(logLine);
