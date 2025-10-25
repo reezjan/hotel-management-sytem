@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, requireActiveUser } from "./auth";
+import { setupAuth, requireActiveUser, requireRole } from "./auth";
 import { logAudit } from "./audit";
 import { db } from "./db";
 import { wsEvents } from "./websocket";
@@ -84,7 +84,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Hotel routes
-  app.get("/api/hotels", async (req, res) => {
+  app.get("/api/hotels", requireRole('super_admin'), async (req, res) => {
     try {
       const hotels = await storage.getAllHotels();
       res.json(hotels);
@@ -93,7 +93,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/hotels", async (req, res) => {
+  app.post("/api/hotels", requireRole('super_admin'), async (req, res) => {
     try {
       const { ownerId, ...hotelFields } = req.body;
       const hotelData = insertHotelSchema.parse(hotelFields);
@@ -118,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/hotels/:id", async (req, res) => {
+  app.put("/api/hotels/:id", requireRole('super_admin', 'owner'), async (req, res) => {
     try {
       const { id } = req.params;
       const hotelData = insertHotelSchema.partial().parse(req.body);
@@ -129,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/hotels/:id/activate", async (req, res) => {
+  app.patch("/api/hotels/:id/activate", requireRole('super_admin'), async (req, res) => {
     try {
       const { id } = req.params;
       const hotel = await storage.updateHotel(id, { isActive: true });
@@ -139,7 +139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/hotels/:id/deactivate", async (req, res) => {
+  app.patch("/api/hotels/:id/deactivate", requireRole('super_admin'), async (req, res) => {
     try {
       const { id } = req.params;
       const hotel = await storage.updateHotel(id, { isActive: false });
@@ -3179,12 +3179,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", async (req, res) => {
+  app.post("/api/users", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const currentUser = req.user as any;
       
       // Handle role conversion and password hashing
@@ -3290,12 +3286,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", async (req, res) => {
+  app.delete("/api/users/:id", requireActiveUser, async (req, res) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const currentUser = req.user as any;
       const { id } = req.params;
       
@@ -3340,13 +3332,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:id", async (req, res) => {
+  app.put("/api/users/:id", requireActiveUser, async (req, res) => {
     try {
-      // CRITICAL: Require authentication
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
       const currentUser = req.user as any;
       const { id } = req.params;
       const userData = insertUserSchema.partial().parse(req.body);

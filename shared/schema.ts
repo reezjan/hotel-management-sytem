@@ -854,7 +854,7 @@ export const restaurantBills = pgTable("restaurant_bills", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   hotelId: uuid("hotel_id").references(() => hotels.id),
   billNumber: text("bill_number").notNull(),
-  tableIds: text("table_ids").array().notNull(),
+  tableId: uuid("table_id").references(() => restaurantTables.id),
   orderIds: text("order_ids").array().notNull(),
   subtotal: numeric("subtotal", { precision: 14, scale: 2 }).notNull(),
   taxBreakdown: jsonb("tax_breakdown").default('{}'),

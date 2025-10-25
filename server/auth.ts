@@ -75,6 +75,26 @@ export async function requireActiveUser(req: any, res: any, next: any) {
   next();
 }
 
+// Middleware to require specific roles
+export function requireRole(...allowedRoles: string[]) {
+  return async (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    
+    const user = req.user as any;
+    const userRole = user.role?.name || '';
+    
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({ 
+        message: `Access denied. Required role: ${allowedRoles.join(' or ')}` 
+      });
+    }
+    
+    next();
+  };
+}
+
 declare global {
   namespace Express {
     interface User extends SelectUser {}
