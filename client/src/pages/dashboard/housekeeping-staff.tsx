@@ -1,502 +1,230 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChefHat, Clock, CheckCircle, XCircle, Package, AlertTriangle, Camera, RotateCcw } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { Home, Clock, CheckCircle, ListTodo, Wrench, ClipboardCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useState, useRef } from "react";
-import Webcam from "react-webcam";
 
-interface KotItem {
+interface Task {
   id: string;
-  menuItemId: string;
-  qty: number;
-  notes: string | null;
+  roomId: string;
+  assignedToId: string;
+  title: string;
+  description: string;
+  priority: string;
   status: string;
-  declineReason: string | null;
-  menuItem?: { name: string };
-}
-
-interface KotOrder {
-  id: string;
-  tableId: string;
-  status: string;
-  source?: string;
-  roomNumber?: string;
+  dueDate: string;
   createdAt: string;
-  items?: KotItem[];
+  room?: {
+    number: string;
+    floor: string;
+  };
 }
 
-interface RestaurantTable {
-  id: string;
-  name: string;
-}
-
-interface InventoryItem {
-  id: string;
-  name: string;
-  unit: string;
-}
-
-export default function KitchenStaffDashboard() {
+export default function HousekeepingStaffDashboard() {
   const { user } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
-  const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
-  const [wastageDialogOpen, setWastageDialogOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<KotItem | null>(null);
-  const [declineReason, setDeclineReason] = useState("");
-  const [wastageData, setWastageData] = useState({
-    itemId: "",
-    qty: "",
-    unit: "",
-    reason: ""
-  });
-  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
-  const webcamRef = useRef<Webcam>(null);
 
-  const { data: kotOrders = [] } = useQuery({
-    queryKey: ["/api/hotels/current/kot-orders"],
-    refetchInterval: 3000,
-    refetchIntervalInBackground: true
-  });
-
-  const { data: tables = [] } = useQuery({
-    queryKey: ["/api/hotels/current/restaurant-tables"],
+  const { data: myTasks = [] } = useQuery<Task[]>({
+    queryKey: ["/api/hotels/current/tasks/my-tasks"],
     refetchInterval: 5000,
     refetchIntervalInBackground: true
   });
 
-  const { data: inventoryItems = [] } = useQuery({
-    queryKey: ["/api/hotels/current/inventory-items"]
-  });
+  const pendingTasks = Array.isArray(myTasks) ? myTasks.filter((task: Task) => task.status === 'pending') : [];
+  const inProgressTasks = Array.isArray(myTasks) ? myTasks.filter((task: Task) => task.status === 'in_progress') : [];
+  const completedTasks = Array.isArray(myTasks) ? myTasks.filter((task: Task) => task.status === 'completed') : [];
 
-  const updateKotItemMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      return await apiRequest("PUT", `/api/kot-items/${id}`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/kot-orders"] });
-      toast({ title: "KOT item updated successfully" });
-      setDeclineDialogOpen(false);
-      setDeclineReason("");
-      setSelectedItem(null);
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  });
+  const highPriorityTasks = Array.isArray(myTasks) ? myTasks.filter((task: Task) => task.priority === 'high' && task.status !== 'completed') : [];
 
-  const createWastageMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch("/api/hotels/current/wastages", {
-        method: "POST",
-        credentials: "include",
-        body: data,
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Failed to record wastage");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Wastage recorded successfully" });
-      setWastageDialogOpen(false);
-      setWastageData({ itemId: "", qty: "", unit: "", reason: "" });
-      setCapturedPhoto(null);
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    }
-  });
-
-  const handleApprove = (item: KotItem) => {
-    updateKotItemMutation.mutate({
-      id: item.id,
-      data: { status: "approved" }
-    });
-  };
-
-  const handleDecline = (item: KotItem) => {
-    setSelectedItem(item);
-    setDeclineDialogOpen(true);
-  };
-
-  const handleSetReady = (item: KotItem) => {
-    updateKotItemMutation.mutate({
-      id: item.id,
-      data: { status: "ready" }
-    });
-  };
-
-  const submitDecline = () => {
-    if (!selectedItem || !declineReason.trim()) {
-      toast({ title: "Please provide a reason for declining", variant: "destructive" });
-      return;
-    }
-    if (declineReason.trim().length < 10) {
-      toast({ title: "Decline reason must be at least 10 characters", variant: "destructive" });
-      return;
-    }
-    updateKotItemMutation.mutate({
-      id: selectedItem.id,
-      data: { status: "declined", declineReason: declineReason.trim() }
-    });
-  };
-
-  const capturePhoto = () => {
-    const imageSrc = webcamRef.current?.getScreenshot();
-    if (imageSrc) {
-      const canvas = document.createElement('canvas');
-      const img = new Image();
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          const timestamp = new Date().toLocaleString();
-          ctx.font = 'bold 20px Arial';
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.fillRect(10, img.height - 40, ctx.measureText(timestamp).width + 20, 35);
-          ctx.fillStyle = 'white';
-          ctx.fillText(timestamp, 20, img.height - 15);
-          setCapturedPhoto(canvas.toDataURL('image/jpeg'));
-        }
-      };
-      img.src = imageSrc;
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="secondary">Pending</Badge>;
+      case 'in_progress':
+        return <Badge variant="default">In Progress</Badge>;
+      case 'completed':
+        return <Badge variant="outline" className="bg-green-50 text-green-700">Completed</Badge>;
+      default:
+        return <Badge>{status}</Badge>;
     }
   };
 
-  const retakePhoto = () => {
-    setCapturedPhoto(null);
+  const getPriorityBadge = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return <Badge variant="destructive">High</Badge>;
+      case 'medium':
+        return <Badge variant="default">Medium</Badge>;
+      case 'low':
+        return <Badge variant="outline">Low</Badge>;
+      default:
+        return <Badge>{priority}</Badge>;
+    }
   };
 
-  const submitWastage = async () => {
-    if (!wastageData.itemId || !wastageData.qty || !wastageData.reason.trim()) {
-      toast({ title: "Please fill all wastage fields", variant: "destructive" });
-      return;
-    }
-    if (!capturedPhoto) {
-      toast({ title: "Please capture a photo of the wastage", variant: "destructive" });
-      return;
-    }
-    const qty = parseFloat(wastageData.qty);
-    if (isNaN(qty) || qty <= 0) {
-      toast({ title: "Please enter a valid quantity", variant: "destructive" });
-      return;
-    }
-
-    const blob = await (await fetch(capturedPhoto)).blob();
-    const formData = new FormData();
-    formData.append('photo', blob, 'wastage.jpg');
-    formData.append('itemId', wastageData.itemId);
-    formData.append('qty', qty.toString());
-    formData.append('unit', wastageData.unit);
-    formData.append('reason', wastageData.reason.trim());
-
-    createWastageMutation.mutate(formData);
-  };
-
-  const pendingOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
-    order.items?.some((item: KotItem) => item.status === 'pending')
-  ) : [];
-  
-  const approvedOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
-    order.items?.some((item: KotItem) => item.status === 'approved')
-  ) : [];
-  
-  const readyOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
-    order.items?.every((item: KotItem) => item.status === 'ready')
-  ) : [];
-  
-  const declinedOrders = Array.isArray(kotOrders) ? (kotOrders as KotOrder[]).filter((order: KotOrder) => 
-    order.items?.some((item: KotItem) => item.status === 'declined')
-  ) : [];
-
-  const getTableNumber = (order: KotOrder) => {
-    if (order.source === 'room_service') {
-      return `Room ${order.roomNumber || 'Service'}`;
-    }
-    if (!Array.isArray(tables)) return order.tableId || 'Unknown';
-    const table = (tables as RestaurantTable[]).find((t: RestaurantTable) => t.id === order.tableId);
-    return table?.name || order.tableId || 'Unknown';
-  };
-
-  const renderKotCard = (order: KotOrder) => (
-    <Card key={order.id}>
+  const renderTaskCard = (task: Task) => (
+    <Card key={task.id} className="hover:shadow-md transition-shadow">
       <CardHeader>
-        <CardTitle className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <span>{getTableNumber(order)}</span>
-            {order.source === 'room_service' && (
-              <Badge variant="outline" className="text-xs">Room Service</Badge>
-            )}
+        <CardTitle className="flex justify-between items-start">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Home className="w-4 h-4" />
+              <span className="text-base">Room {task.room?.number || 'N/A'}</span>
+              {getPriorityBadge(task.priority)}
+            </div>
+            <span className="text-sm font-medium text-gray-700">{task.title}</span>
           </div>
-          <span className="text-sm text-gray-500">
-            {new Date(order.createdAt).toLocaleTimeString()}
-          </span>
+          {getStatusBadge(task.status)}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {order.items?.map((item: KotItem) => (
-          <div key={item.id} className="mb-4 p-3 border rounded">
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <p className="font-semibold">{item.menuItem?.name}</p>
-                <p className="text-sm text-gray-600">Quantity: {item.qty}</p>
-                {item.notes && <p className="text-sm text-gray-500">Notes: {item.notes}</p>}
-                {item.declineReason && (
-                  <p className="text-sm text-red-600">Declined: {item.declineReason}</p>
-                )}
-              </div>
-              <Badge variant={
-                item.status === 'approved' ? 'default' :
-                item.status === 'ready' ? 'default' :
-                item.status === 'declined' ? 'destructive' : 'secondary'
-              }>
-                {item.status}
-              </Badge>
-            </div>
-            {item.status === 'pending' && (
-              <div className="flex gap-2 mt-2">
-                <Button
-                  size="sm"
-                  onClick={() => handleApprove(item)}
-                  className="flex-1"
-                >
-                  <CheckCircle className="w-4 h-4 mr-1" /> Approve
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => handleDecline(item)}
-                  className="flex-1"
-                >
-                  <XCircle className="w-4 h-4 mr-1" /> Decline
-                </Button>
-              </div>
-            )}
-            {item.status === 'approved' && (
-              <Button
-                size="sm"
-                onClick={() => handleSetReady(item)}
-                className="w-full mt-2"
-              >
-                <Clock className="w-4 h-4 mr-1" /> Set Ready
-              </Button>
-            )}
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">{task.description}</p>
+          <div className="flex justify-between items-center text-xs text-gray-500">
+            <span>Due: {new Date(task.dueDate).toLocaleDateString()}</span>
+            <span>{new Date(task.createdAt).toLocaleTimeString()}</span>
           </div>
-        ))}
+        </div>
       </CardContent>
     </Card>
   );
 
   return (
-    <DashboardLayout title="Kitchen Staff Dashboard">
+    <DashboardLayout title="Housekeeping Staff Dashboard">
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
-            title="Pending Orders"
-            value={pendingOrders.length}
+            title="Pending Tasks"
+            value={pendingTasks.length}
             icon={<Clock />}
             iconColor="text-orange-500"
+            data-testid="stat-pending-tasks"
           />
           <StatsCard
-            title="In Preparation"
-            value={approvedOrders.length}
-            icon={<ChefHat />}
+            title="In Progress"
+            value={inProgressTasks.length}
+            icon={<ListTodo />}
             iconColor="text-blue-500"
+            data-testid="stat-in-progress-tasks"
           />
           <StatsCard
-            title="Ready to Serve"
-            value={readyOrders.length}
+            title="Completed Today"
+            value={completedTasks.length}
             icon={<CheckCircle />}
             iconColor="text-green-500"
+            data-testid="stat-completed-tasks"
           />
           <StatsCard
-            title="Declined"
-            value={declinedOrders.length}
-            icon={<XCircle />}
+            title="High Priority"
+            value={highPriorityTasks.length}
+            icon={<ClipboardCheck />}
             iconColor="text-red-500"
+            data-testid="stat-high-priority-tasks"
           />
         </div>
 
-        <div className="flex gap-2 justify-end">
-          <Dialog open={wastageDialogOpen} onOpenChange={setWastageDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Package className="w-4 h-4 mr-2" /> Record Wastage
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Record Wastage</DialogTitle>
-                <DialogDescription>Capture photo and record inventory wastage</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Inventory Item *</Label>
-                  <Select
-                    value={wastageData.itemId}
-                    onValueChange={(value) => {
-                      const selectedInventoryItem = (inventoryItems as InventoryItem[]).find(item => item.id === value);
-                      setWastageData({ 
-                        ...wastageData, 
-                        itemId: value,
-                        unit: selectedInventoryItem?.unit || 'piece'
-                      });
-                    }}
-                  >
-                    <SelectTrigger data-testid="select-wastage-item">
-                      <SelectValue placeholder="Select item" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.isArray(inventoryItems) && (inventoryItems as InventoryItem[]).map((item: InventoryItem) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name} ({item.unit})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Quantity *</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={wastageData.qty}
-                    onChange={(e) => setWastageData({ ...wastageData, qty: e.target.value })}
-                    placeholder="Enter quantity"
-                    data-testid="input-wastage-quantity"
-                  />
-                </div>
-                <div>
-                  <Label>Reason *</Label>
-                  <Textarea
-                    value={wastageData.reason}
-                    onChange={(e) => setWastageData({ ...wastageData, reason: e.target.value })}
-                    placeholder="Explain reason for wastage"
-                    data-testid="input-wastage-reason"
-                  />
-                </div>
-                <div>
-                  <Label>Photo Evidence * (Required)</Label>
-                  {!capturedPhoto ? (
-                    <div className="space-y-2">
-                      <div className="relative rounded-lg overflow-hidden bg-black">
-                        <Webcam
-                          ref={webcamRef}
-                          audio={false}
-                          screenshotFormat="image/jpeg"
-                          className="w-full"
-                          videoConstraints={{
-                            facingMode: "environment"
-                          }}
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={capturePhoto}
-                        className="w-full"
-                        variant="secondary"
-                        data-testid="button-capture-photo"
-                      >
-                        <Camera className="w-4 h-4 mr-2" /> Capture Photo
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="relative rounded-lg overflow-hidden border">
-                        <img src={capturedPhoto} alt="Captured wastage" className="w-full" />
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={retakePhoto}
-                        className="w-full"
-                        variant="outline"
-                        data-testid="button-retake-photo"
-                      >
-                        <RotateCcw className="w-4 h-4 mr-2" /> Retake Photo
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <Button 
-                  onClick={submitWastage} 
-                  className="w-full" 
-                  disabled={createWastageMutation.isPending}
-                  data-testid="button-submit-wastage"
-                >
-                  {createWastageMutation.isPending ? "Recording..." : "Record Wastage"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Button
+            onClick={() => setLocation("/housekeeping-staff/my-tasks")}
+            className="h-20 text-lg"
+            data-testid="button-my-tasks"
+          >
+            <ListTodo className="w-6 h-6 mr-2" />
+            My Tasks
+          </Button>
+          <Button
+            onClick={() => setLocation("/housekeeping-staff/maintenance-reports")}
+            variant="outline"
+            className="h-20 text-lg"
+            data-testid="button-maintenance-reports"
+          >
+            <Wrench className="w-6 h-6 mr-2" />
+            Report Maintenance
+          </Button>
+          <Button
+            onClick={() => setLocation("/housekeeping-staff/duty-status")}
+            variant="outline"
+            className="h-20 text-lg"
+            data-testid="button-duty-status"
+          >
+            <Clock className="w-6 h-6 mr-2" />
+            Duty Status
+          </Button>
         </div>
+
+        {highPriorityTasks.length > 0 && (
+          <Card className="border-red-200 bg-red-50">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-red-700">
+                <ClipboardCheck className="h-5 w-5" />
+                <span>High Priority Tasks</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {highPriorityTasks.map(renderTaskCard)}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <ChefHat className="h-5 w-5 text-blue-500" />
-              <span>Kitchen Orders</span>
+              <ListTodo className="h-5 w-5 text-blue-500" />
+              <span>My Cleaning Tasks</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div>
-                <h3 className="font-semibold mb-2">Pending Orders ({pendingOrders.length})</h3>
+                <h3 className="font-semibold mb-2 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-orange-500" />
+                  Pending ({pendingTasks.length})
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {pendingOrders.length === 0 ? (
-                    <p className="text-gray-500 col-span-full text-center py-4">No pending orders</p>
+                  {pendingTasks.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4" data-testid="no-pending-tasks">
+                      No pending tasks
+                    </p>
                   ) : (
-                    pendingOrders.map(renderKotCard)
+                    pendingTasks.map(renderTaskCard)
                   )}
                 </div>
               </div>
 
               <div>
-                <h3 className="font-semibold mb-2">In Preparation ({approvedOrders.length})</h3>
+                <h3 className="font-semibold mb-2 flex items-center gap-2">
+                  <ListTodo className="w-4 h-4 text-blue-500" />
+                  In Progress ({inProgressTasks.length})
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {approvedOrders.length === 0 ? (
-                    <p className="text-gray-500 col-span-full text-center py-4">No orders in preparation</p>
+                  {inProgressTasks.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4" data-testid="no-in-progress-tasks">
+                      No tasks in progress
+                    </p>
                   ) : (
-                    approvedOrders.map(renderKotCard)
+                    inProgressTasks.map(renderTaskCard)
                   )}
                 </div>
               </div>
 
               <div>
-                <h3 className="font-semibold mb-2">Ready ({readyOrders.length})</h3>
+                <h3 className="font-semibold mb-2 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  Completed Today ({completedTasks.length})
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {readyOrders.length === 0 ? (
-                    <p className="text-gray-500 col-span-full text-center py-4">No ready orders</p>
+                  {completedTasks.length === 0 ? (
+                    <p className="text-gray-500 col-span-full text-center py-4" data-testid="no-completed-tasks">
+                      No completed tasks today
+                    </p>
                   ) : (
-                    readyOrders.map(renderKotCard)
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="font-semibold mb-2">Declined ({declinedOrders.length})</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {declinedOrders.length === 0 ? (
-                    <p className="text-gray-500 col-span-full text-center py-4">No declined orders</p>
-                  ) : (
-                    declinedOrders.map(renderKotCard)
+                    completedTasks.map(renderTaskCard)
                   )}
                 </div>
               </div>
@@ -504,33 +232,6 @@ export default function KitchenStaffDashboard() {
           </CardContent>
         </Card>
       </div>
-
-      <Dialog open={declineDialogOpen} onOpenChange={setDeclineDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Decline KOT Item</DialogTitle>
-            <DialogDescription>Please provide a reason for declining this item</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Reason for Decline</Label>
-              <Textarea
-                value={declineReason}
-                onChange={(e) => setDeclineReason(e.target.value)}
-                placeholder="e.g., Out of stock, Wrong order"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setDeclineDialogOpen(false)} className="flex-1">
-                Cancel
-              </Button>
-              <Button onClick={submitDecline} className="flex-1" variant="destructive" disabled={updateKotItemMutation.isPending}>
-                Decline
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 }

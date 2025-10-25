@@ -376,6 +376,22 @@ export function setupAuth(app: Express) {
           }
         }
         
+        // Auto clock-in on login
+        if (user.hotelId) {
+          try {
+            await storage.createAttendance(
+              user.id,
+              user.hotelId,
+              new Date(),
+              location,
+              ipAddress,
+              'auto_login'
+            );
+          } catch (error) {
+            console.error('Auto clock-in failed:', error);
+          }
+        }
+        
         return res.status(200).json({
           ...sanitizeUser(user),
           isNewDevice,
@@ -390,6 +406,29 @@ export function setupAuth(app: Express) {
     
     req.logout(async (err) => {
       if (err) return next(err);
+      
+      // Auto clock-out on logout
+      if (user && user.hotelId) {
+        try {
+          const ipAddress = req.ip || 'unknown';
+          const locationData = await getLocationFromIP(ipAddress);
+          const location = `${locationData.city}, ${locationData.country}`;
+          
+          const activeAttendance = await storage.getActiveAttendance(user.id);
+          
+          if (activeAttendance) {
+            await storage.clockOut(
+              activeAttendance.id,
+              new Date(),
+              location,
+              ipAddress,
+              'auto_logout'
+            );
+          }
+        } catch (error) {
+          console.error('Auto clock-out failed:', error);
+        }
+      }
       
       // Log logout
       if (user) {
