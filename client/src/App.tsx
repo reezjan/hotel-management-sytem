@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ConfirmDialogProvider } from "@/hooks/use-confirm-dialog";
 import { ProtectedRoute } from "./lib/protected-route";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Eager load auth page only (needed immediately)
 import AuthPage from "@/pages/auth-page";
@@ -268,15 +269,17 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <ConfirmDialogProvider />
-          <Router />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <ConfirmDialogProvider />
+            <Router />
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

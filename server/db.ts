@@ -8,6 +8,18 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Use postgres-js for better compatibility
-const client = postgres(process.env.DATABASE_URL);
+// Configure SSL for Neon compatibility
+const client = postgres(process.env.DATABASE_URL, {
+  ssl: process.env.NODE_ENV === 'production' ? 'require' : false,
+  max: 10,
+  idle_timeout: 20,
+  connect_timeout: 10,
+  onnotice: () => {},
+});
+
 export const db = drizzle(client, { schema });
+
+// Graceful shutdown
+process.on('beforeExit', () => {
+  client.end({ timeout: 5 });
+});
