@@ -81,9 +81,26 @@ app.use('/uploads', express.static('uploads'));
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
+    
+    // Log error server-side
+    console.error('Express error:', {
+      status,
+      message,
+      stack: err.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Send safe error to client
+    res.status(status).json({ 
+      message: process.env.NODE_ENV === 'production' 
+        ? "An error occurred" 
+        : message 
+    });
+    
+    // DO NOT throw in production - this exposes stack traces
+    if (process.env.NODE_ENV !== 'production') {
+      throw err;
+    }
   });
 
   // importantly only setup vite in development and after

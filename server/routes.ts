@@ -469,19 +469,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Role Limits routes
-  app.get("/api/hotels/current/role-limits", requireActiveUser, async (req, res) => {
+  app.get("/api/hotels/current/role-limits", requireRole('owner', 'super_admin'), async (req, res) => {
     try {
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
-      }
-      
-      // Only owner can view role limits
-      const currentRole = user.role?.name || '';
-      if (currentRole !== 'owner') {
-        return res.status(403).json({ 
-          message: "Only hotel owner can access role limits configuration" 
-        });
       }
       
       // Get all roles
@@ -519,19 +511,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/hotels/current/role-limits", requireActiveUser, async (req, res) => {
+  app.put("/api/hotels/current/role-limits", requireRole('owner', 'super_admin'), async (req, res) => {
     try {
       const user = req.user as any;
       if (!user || !user.hotelId) {
         return res.status(400).json({ message: "User not associated with a hotel" });
-      }
-      
-      // Only owner can update role limits
-      const currentRole = user.role?.name || '';
-      if (currentRole !== 'owner') {
-        return res.status(403).json({ 
-          message: "Only hotel owner can update role limits" 
-        });
       }
       
       const limits = req.body as Array<{
@@ -3158,7 +3142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
-  app.get("/api/hotels/:hotelId/users", requireActiveUser, async (req, res) => {
+  app.get("/api/hotels/:hotelId/users", requireRole('super_admin', 'owner', 'manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head'), async (req, res) => {
     try {
       const { hotelId } = req.params;
       const currentUser = req.user as any;
@@ -3179,7 +3163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", requireActiveUser, async (req, res) => {
+  app.post("/api/users", requireRole('super_admin', 'owner', 'manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head'), async (req, res) => {
     try {
       const currentUser = req.user as any;
       
@@ -3286,7 +3270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/users/:id", requireActiveUser, async (req, res) => {
+  app.delete("/api/users/:id", requireRole('super_admin', 'owner', 'manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head'), async (req, res) => {
     try {
       const currentUser = req.user as any;
       const { id } = req.params;
@@ -3332,7 +3316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:id", requireActiveUser, async (req, res) => {
+  app.put("/api/users/:id", requireRole('super_admin', 'owner', 'manager', 'housekeeping_supervisor', 'restaurant_bar_manager', 'security_head', 'finance'), async (req, res) => {
     try {
       const currentUser = req.user as any;
       const { id } = req.params;

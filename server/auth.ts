@@ -9,6 +9,7 @@ import { UserWithRole as SelectUser } from "@shared/schema";
 import { logAudit } from "./audit";
 import { getLocationFromIP } from "@shared/device-utils";
 import { alertService } from "./alert-service";
+import rateLimit from 'express-rate-limit';
 
 // Sanitize user object for API responses - remove sensitive fields
 function sanitizeUser(user: SelectUser): Omit<SelectUser, 'passwordHash'> {
@@ -130,6 +131,15 @@ export function setupAuth(app: Express) {
     );
   }
 
+  // Rate limiter for authentication endpoints
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // 5 attempts per window
+    message: { message: "Too many attempts. Please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -208,7 +218,7 @@ export function setupAuth(app: Express) {
     });
   });
 
-  app.post("/api/login", (req, res, next) => {
+  app.post("/api/login", authLimiter, (req, res, next) => {
     passport.authenticate("local", async (err: any, user: SelectUser | false, info: any) => {
       if (err) {
         return next(err);
@@ -396,7 +406,23 @@ export function setupAuth(app: Express) {
         });
       }
       
-      res.sendStatus(200);
+      // CRITICAL: Destroy session completely
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('Session destruction error:', err);
+          return res.status(500).json({ message: "Logout failed" });
+        }
+        
+        // Clear the session cookie
+        res.clearCookie('connect.sid', {
+          path: '/',
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
+        });
+        
+        res.sendStatus(200);
+      });
     });
   });
 
@@ -408,7 +434,7 @@ export function setupAuth(app: Express) {
   });
 
   // Password change endpoint
-  app.post("/api/reset-password", async (req, res) => {
+  app.post("/api/reset-password", authLimiter, async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
