@@ -248,7 +248,7 @@ export interface IStorage {
   getTransaction(id: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   updateTransaction(id: string, transaction: Partial<InsertTransaction>): Promise<Transaction>;
-  voidTransaction(id: string, voidedBy: string, reason: string): Promise<Transaction>;
+  voidTransaction(id: string, voidedBy: string, voidedByUsername: string, reason: string): Promise<Transaction>;
   getRoleLimitsByHotelAndRole(hotelId: string, roleId: number): Promise<any | undefined>;
   getUserDailyTransactionTotal(userId: string): Promise<number>;
   
@@ -271,8 +271,8 @@ export interface IStorage {
   createWastage(wastageData: any): Promise<any>;
   getWastagesByHotel(hotelId: string): Promise<any[]>;
   getWastage(id: string): Promise<any | undefined>;
-  approveWastage(id: string, approvedBy: string): Promise<any>;
-  rejectWastage(id: string, rejectedBy: string, rejectionReason: string): Promise<any>;
+  approveWastage(id: string, approvedBy: string, approvedByUsername: string): Promise<any>;
+  rejectWastage(id: string, rejectedBy: string, rejectedByUsername: string, rejectionReason: string): Promise<any>;
   
   // Inventory operations
   getInventoryItemsByHotel(hotelId: string): Promise<InventoryItem[]>;
@@ -404,7 +404,7 @@ export interface IStorage {
   getBillPayments(billId: string): Promise<any[]>;
   createBillPayment(payment: any): Promise<any>;
   getBillPayment(paymentId: string): Promise<any | undefined>;
-  voidBillPayment(paymentId: string, voidedBy: string, reason: string): Promise<any>;
+  voidBillPayment(paymentId: string, voidedBy: string, voidedByUsername: string, reason: string): Promise<any>;
   
   // Sales operations
   createSale(sale: InsertSale): Promise<SelectSale>;
@@ -1316,12 +1316,13 @@ export class DatabaseStorage implements IStorage {
     return transaction;
   }
 
-  async voidTransaction(id: string, voidedBy: string, reason: string): Promise<Transaction> {
+  async voidTransaction(id: string, voidedBy: string, voidedByUsername: string, reason: string): Promise<Transaction> {
     const [voided] = await db
       .update(transactions)
       .set({
         isVoided: true,
         voidedBy,
+        voidedByUsername,
         voidedAt: new Date(),
         voidReason: reason
       })
@@ -1832,7 +1833,7 @@ export class DatabaseStorage implements IStorage {
     return wastage;
   }
 
-  async approveWastage(id: string, approvedBy: string): Promise<any> {
+  async approveWastage(id: string, approvedBy: string, approvedByUsername: string): Promise<any> {
     const wastage = await this.getWastage(id);
     if (!wastage) {
       throw new Error('Wastage not found');
@@ -1892,6 +1893,7 @@ export class DatabaseStorage implements IStorage {
       .set({
         status: 'approved',
         approvedBy,
+        approvedByUsername,
         approvedAt: new Date()
       })
       .where(eq(wastages.id, id))
@@ -1900,7 +1902,7 @@ export class DatabaseStorage implements IStorage {
     return approvedWastage;
   }
 
-  async rejectWastage(id: string, rejectedBy: string, rejectionReason: string): Promise<any> {
+  async rejectWastage(id: string, rejectedBy: string, rejectedByUsername: string, rejectionReason: string): Promise<any> {
     const wastage = await this.getWastage(id);
     if (!wastage) {
       throw new Error('Wastage not found');
@@ -1912,6 +1914,7 @@ export class DatabaseStorage implements IStorage {
       .set({
         status: 'rejected',
         approvedBy: rejectedBy,
+        approvedByUsername: rejectedByUsername,
         approvedAt: new Date(),
         rejectionReason
       })
@@ -3537,12 +3540,13 @@ export class DatabaseStorage implements IStorage {
     return payment || undefined;
   }
 
-  async voidBillPayment(paymentId: string, voidedBy: string, reason: string): Promise<any> {
+  async voidBillPayment(paymentId: string, voidedBy: string, voidedByUsername: string, reason: string): Promise<any> {
     const [voided] = await db
       .update(billPayments)
       .set({
         isVoided: true,
         voidedBy,
+        voidedByUsername,
         voidedAt: new Date(),
         voidReason: reason
       })

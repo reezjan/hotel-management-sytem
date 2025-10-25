@@ -1891,6 +1891,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         hotelId: user.hotelId,
         reportedBy: user.id,
+        reportedByUsername: user.username,
         assignedTo
       });
       const request = await storage.createMaintenanceRequest(requestData);
@@ -4285,6 +4286,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...sanitizedBody,
         hotelId: currentUser.hotelId,
         createdBy: currentUser.id,
+        createdByUsername: currentUser.username,
         requiresApproval
       });
       const transaction = await storage.createTransaction(transactionData);
@@ -4354,7 +4356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Void the transaction
-      const voidedTransaction = await storage.voidTransaction(id, currentUser.id, reason);
+      const voidedTransaction = await storage.voidTransaction(id, currentUser.id, currentUser.username, reason);
       
       res.json({ success: true, transaction: voidedTransaction });
     } catch (error) {
@@ -4393,6 +4395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const approvedTransaction = await storage.updateTransaction(id, {
         requiresApproval: false,
         approvedBy: currentUser.id,
+        approvedByUsername: currentUser.username,
         approvedAt: new Date()
       } as any);
       
@@ -4903,6 +4906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         billNumber,
         hotelId: user.hotelId,
         createdBy: user.id,
+        createdByUsername: user.username,
         finalizedAt: billData.status === 'final' ? new Date() : null
       });
 
@@ -4918,7 +4922,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           paymentMethod: payment.paymentMethod,
           purpose: 'restaurant_sale',
           reference: `Bill: ${billNumber}`,
-          createdBy: user.id
+          createdBy: user.id,
+          createdByUsername: user.username
         });
 
         // Create bill payment
@@ -4929,7 +4934,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           paymentMethod: payment.paymentMethod,
           transactionId: transaction.id,
           reference: payment.reference,
-          receivedBy: user.id
+          receivedBy: user.id,
+          receivedByUsername: user.username
         });
 
         createdPayments.push(billPayment);
@@ -5106,7 +5112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Void the payment
-      const voidedPayment = await storage.voidBillPayment(paymentId, currentUser.id, reason);
+      const voidedPayment = await storage.voidBillPayment(paymentId, currentUser.id, currentUser.username, reason);
       
       // Log payment void
       await logAudit({
@@ -5308,6 +5314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...wastageData,
           hotelId: user.hotelId,
           recordedBy: user.id,
+          recordedByUsername: user.username,
           status: 'pending_approval',
           estimatedValue: wastageValue
         };
@@ -5343,8 +5350,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...wastageData,
         hotelId: user.hotelId,
         recordedBy: user.id,
+        recordedByUsername: user.username,
         status: 'approved',
         approvedBy: user.id,
+        approvedByUsername: user.username,
         approvedAt: new Date(),
         estimatedValue: wastageValue
       };
@@ -5397,7 +5406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (approved) {
-        const approvedWastage = await storage.approveWastage(id, currentUser.id);
+        const approvedWastage = await storage.approveWastage(id, currentUser.id, currentUser.username);
         
         // Notify the reporter
         await storage.createNotification({
@@ -5417,7 +5426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
         
-        const rejectedWastage = await storage.rejectWastage(id, currentUser.id, rejectionReason);
+        const rejectedWastage = await storage.rejectWastage(id, currentUser.id, currentUser.username, rejectionReason);
         
         // Notify the reporter
         await storage.createNotification({
@@ -6735,7 +6744,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const updatedLog = await storage.updateVehicleLog(id, { checkOut: checkout });
-      res.json(updatedLog);
+      
+      // CRITICAL: Write to sales table as required
+      const billNumber = `VEHICLE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+      const parkingFee = 0;
+      
+      const sale = await storage.createSale({
+        hotelId: currentUser.hotelId,
+        tableId: null,
+        billNumber: billNumber,
+        totalAmount: String(parkingFee),
+        taxAmount: '0',
+        discountAmount: '0',
+        netAmount: String(parkingFee),
+        paymentMethod: 'cash',
+        createdBy: currentUser.username,
+        customerName: log.driverName || null,
+        customerPhone: null,
+        items: {
+          type: 'vehicle_parking',
+          vehicleLogId: id,
+          vehicleNumber: log.vehicleNumber,
+          vehicleType: log.vehicleType,
+          purpose: log.purpose,
+          checkIn: log.checkIn,
+          checkOut: checkout
+        }
+      });
+      
+      res.json({ ...updatedLog, sale });
     } catch (error) {
       console.error("Vehicle checkout error:", error);
       res.status(500).json({ message: "Failed to checkout vehicle" });
