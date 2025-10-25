@@ -311,8 +311,10 @@ export const wastages = pgTable("wastages", {
   unit: text("unit"),
   reason: text("reason").notNull(),
   recordedBy: uuid("recorded_by").references(() => users.id),
+  recordedByUsername: text("recorded_by_username"),
   status: text("status").default('pending_approval'),
   approvedBy: uuid("approved_by").references(() => users.id),
+  approvedByUsername: text("approved_by_username"),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   estimatedValue: numeric("estimated_value", { precision: 12, scale: 2 }),
   rejectionReason: text("rejection_reason"),
@@ -334,6 +336,7 @@ export const inventoryTransactions = pgTable("inventory_transactions", {
   department: text("department"),
   notes: text("notes"),
   recordedBy: uuid("recorded_by").references(() => users.id),
+  recordedByUsername: text("recorded_by_username"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
@@ -359,10 +362,12 @@ export const transactions = pgTable("transactions", {
   reference: text("reference"),
   details: jsonb("details"),
   createdBy: uuid("created_by").references(() => users.id),
+  createdByUsername: text("created_by_username"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   isVoided: boolean("is_voided").default(false),
   voidedBy: uuid("voided_by").references(() => users.id),
+  voidedByUsername: text("voided_by_username"),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
   voidReason: text("void_reason"),
   billPhotoUrl: text("bill_photo_url"),
@@ -370,6 +375,7 @@ export const transactions = pgTable("transactions", {
   billInvoiceNumber: text("bill_invoice_number"),
   requiresApproval: boolean("requires_approval").default(false),
   approvedBy: uuid("approved_by").references(() => users.id),
+  approvedByUsername: text("approved_by_username"),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   rejectionReason: text("rejection_reason")
 });
@@ -379,6 +385,7 @@ export const maintenanceRequests = pgTable("maintenance_requests", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   hotelId: uuid("hotel_id").references(() => hotels.id),
   reportedBy: uuid("reported_by").references(() => users.id),
+  reportedByUsername: text("reported_by_username"),
   title: text("title").notNull(),
   location: text("location"),
   description: text("description"),
@@ -386,9 +393,12 @@ export const maintenanceRequests = pgTable("maintenance_requests", {
   priority: text("priority").default('medium'),
   status: text("status").default('pending'),
   assignedTo: uuid("assigned_to").references(() => users.id),
+  assignedToUsername: text("assigned_to_username"),
   approvedBy: uuid("approved_by").references(() => users.id),
+  approvedByUsername: text("approved_by_username"),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   declinedBy: uuid("declined_by").references(() => users.id),
+  declinedByUsername: text("declined_by_username"),
   declinedAt: timestamp("declined_at", { withTimezone: true }),
   declineReason: text("decline_reason"),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
@@ -478,6 +488,7 @@ export const kotOrders = pgTable("kot_orders", {
   hotelId: uuid("hotel_id").references(() => hotels.id),
   tableId: uuid("table_id").references(() => restaurantTables.id),
   createdBy: uuid("created_by").references(() => users.id),
+  createdByUsername: text("created_by_username"),
   status: text("status").default('open'),
   source: text("source").default('restaurant'),
   roomNumber: text("room_number"),
@@ -727,6 +738,7 @@ export const roomReservations = pgTable("room_reservations", {
   guestType: text("guest_type").default('walkin'),
   status: text("status").default('pending'),
   createdBy: uuid("created_by").references(() => users.id),
+  createdByUsername: text("created_by_username"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 });
@@ -745,6 +757,7 @@ export const roomServiceCharges = pgTable("room_service_charges", {
   totalCharge: numeric("total_charge", { precision: 12, scale: 2 }).notNull(),
   notes: text("notes"),
   addedBy: uuid("added_by").references(() => users.id),
+  addedByUsername: text("added_by_username"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
@@ -753,11 +766,13 @@ export const stockRequests = pgTable("stock_requests", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
   requestedBy: uuid("requested_by").references(() => users.id).notNull(),
+  requestedByUsername: text("requested_by_username"),
   itemId: uuid("item_id").references(() => inventoryItems.id).notNull(),
   quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
   unit: text("unit").notNull(),
   status: text("status").default('pending').notNull(),
   approvedBy: uuid("approved_by").references(() => users.id),
+  approvedByUsername: text("approved_by_username"),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   department: text("department"),
@@ -805,10 +820,14 @@ export const hallBookings = pgTable("hall_bookings", {
   status: text("status").default('quotation').notNull(),
   specialRequests: text("special_requests"),
   createdBy: uuid("created_by").references(() => users.id),
+  createdByUsername: text("created_by_username"),
   confirmedBy: uuid("confirmed_by").references(() => users.id),
+  confirmedByUsername: text("confirmed_by_username"),
   cancelledBy: uuid("cancelled_by").references(() => users.id),
+  cancelledByUsername: text("cancelled_by_username"),
   cancellationReason: text("cancellation_reason"),
   finalizedBy: uuid("finalized_by").references(() => users.id),
+  finalizedByUsername: text("finalized_by_username"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
@@ -826,6 +845,7 @@ export const bookingPayments = pgTable("booking_payments", {
   receiptNumber: text("receipt_number"),
   notes: text("notes"),
   recordedBy: uuid("recorded_by").references(() => users.id),
+  recordedByUsername: text("recorded_by_username"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
@@ -854,7 +874,9 @@ export const restaurantBills = pgTable("restaurant_bills", {
   amendmentNote: text("amendment_note"),
   originalBillId: uuid("original_bill_id"),
   createdBy: uuid("created_by").references(() => users.id),
+  createdByUsername: text("created_by_username"),
   amendedBy: uuid("amended_by").references(() => users.id),
+  amendedByUsername: text("amended_by_username"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   amendedAt: timestamp("amended_at", { withTimezone: true }),
   finalizedAt: timestamp("finalized_at", { withTimezone: true })
@@ -870,9 +892,11 @@ export const billPayments = pgTable("bill_payments", {
   transactionId: uuid("transaction_id").references(() => transactions.id),
   reference: text("reference"),
   receivedBy: uuid("received_by").references(() => users.id),
+  receivedByUsername: text("received_by_username"),
   isVoided: boolean("is_voided").default(false),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
   voidedBy: uuid("voided_by").references(() => users.id),
+  voidedByUsername: text("voided_by_username"),
   voidReason: text("void_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
@@ -895,6 +919,7 @@ export const sales = pgTable("sales", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   voidedAt: timestamp("voided_at", { withTimezone: true }),
   voidedBy: uuid("voided_by").references(() => users.id),
+  voidedByUsername: text("voided_by_username"),
   voidReason: text("void_reason")
 });
 
