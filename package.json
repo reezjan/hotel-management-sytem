@@ -13,7 +13,7 @@
     "db:seed": "tsx server/seed.ts",
     "electron:dev": "electron electron-main.cjs",
     "electron:build": "npm run build && node obfuscate.cjs && electron-builder",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "chmod +x node_modules/.bin/* && electron-builder install-app-deps"
   },
   "dependencies": {
     "@electron/fuses": "^1.8.0",

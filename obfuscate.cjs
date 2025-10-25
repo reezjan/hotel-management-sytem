@@ -59,8 +59,11 @@ async function obfuscateAndPackage() {
     const publicDir = path.join(buildDir, 'public');
     if (fs.existsSync(publicDir)) {
         fs.copySync(publicDir, path.join(outputDir, 'public'));
+        console.log('✅ Frontend assets copied from dist/public to app_dist/public');
+    } else {
+        console.error('❌ Frontend assets not found at:', publicDir);
+        process.exit(1);
     }
-    console.log('✅ Frontend assets copied.');
     
     console.log('Obfuscation and packaging complete!');
 }

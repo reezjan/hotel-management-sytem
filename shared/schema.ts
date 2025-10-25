@@ -877,6 +877,27 @@ export const billPayments = pgTable("bill_payments", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 });
 
+// Sales Table
+export const sales = pgTable("sales", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }).notNull(),
+  tableId: uuid("table_id").references(() => restaurantTables.id),
+  billNumber: text("bill_number").notNull().unique(),
+  totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
+  taxAmount: numeric("tax_amount", { precision: 12, scale: 2 }).default('0'),
+  discountAmount: numeric("discount_amount", { precision: 12, scale: 2 }).default('0'),
+  netAmount: numeric("net_amount", { precision: 12, scale: 2 }).notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  createdBy: text("created_by").notNull(),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  items: jsonb("items").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidedBy: uuid("voided_by").references(() => users.id),
+  voidReason: text("void_reason")
+});
+
 // Relations
 export const hotelRelations = relations(hotels, ({ many }) => ({
   users: many(users),
@@ -905,7 +926,8 @@ export const hotelRelations = relations(hotels, ({ many }) => ({
   servicePackages: many(servicePackages),
   bookingPayments: many(bookingPayments),
   restaurantBills: many(restaurantBills),
-  billPayments: many(billPayments)
+  billPayments: many(billPayments),
+  sales: many(sales)
 }));
 
 export const userRelations = relations(users, ({ one, many }) => ({
@@ -1514,6 +1536,21 @@ export const insertBillPaymentSchema = createInsertSchema(billPayments).omit({
 
 export type InsertBillPayment = z.infer<typeof insertBillPaymentSchema>;
 export type SelectBillPayment = typeof billPayments.$inferSelect;
+
+export const insertSaleSchema = createInsertSchema(sales).omit({
+  id: true,
+  createdAt: true,
+  voidedAt: true,
+  voidedBy: true
+}).extend({
+  totalAmount: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  taxAmount: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  discountAmount: z.union([z.string(), z.number()]).transform((val) => String(val)),
+  netAmount: z.union([z.string(), z.number()]).transform((val) => String(val))
+});
+
+export type InsertSale = z.infer<typeof insertSaleSchema>;
+export type SelectSale = typeof sales.$inferSelect;
 
 // Checkout Override Logs Table
 export const checkoutOverrideLogs = pgTable("checkout_override_logs", {

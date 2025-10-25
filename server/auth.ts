@@ -97,8 +97,21 @@ async function comparePasswords(supplied: string, stored: string) {
 }
 
 export function setupAuth(app: Express) {
+  // CRITICAL: Validate SESSION_SECRET exists and is secure
+  if (!process.env.SESSION_SECRET) {
+    throw new Error(
+      "SESSION_SECRET is required for secure sessions. Add it to .env file."
+    );
+  }
+  
+  if (process.env.SESSION_SECRET.length < 32) {
+    throw new Error(
+      "SESSION_SECRET must be at least 32 characters for security."
+    );
+  }
+
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,

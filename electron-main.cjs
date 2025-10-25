@@ -211,6 +211,12 @@ function startServer() {
   // Check if we're in a packaged app (more reliable than isDev)
   const isPackaged = app.isPackaged;
 
+  // Verify correct paths exist
+  if (!isPackaged && !fs.existsSync(serverPath)) {
+    console.error('Server file not found:', serverPath);
+    process.exit(1);
+  }
+
   if (!isPackaged && isDev) {
     // In development, spawn the server as a separate process with tsx
     try {
