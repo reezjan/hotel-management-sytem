@@ -35,6 +35,39 @@ function sanitizeInput(input: any): string {
   return sanitized.trim();
 }
 
+// Get real client IP address (works behind proxies like Render, Heroku, etc.)
+function getRealClientIP(req: any): string {
+  // Try X-Forwarded-For header first (most common for proxies/load balancers)
+  const xForwardedFor = req.headers['x-forwarded-for'];
+  if (xForwardedFor) {
+    // X-Forwarded-For can be a comma-separated list: "client, proxy1, proxy2"
+    // The first IP is the original client
+    const ips = xForwardedFor.split(',').map((ip: string) => ip.trim());
+    if (ips[0]) {
+      console.log(`[getRealClientIP] Using X-Forwarded-For: ${ips[0]} (full header: ${xForwardedFor})`);
+      return ips[0];
+    }
+  }
+  
+  // Try other common proxy headers
+  const xRealIp = req.headers['x-real-ip'];
+  if (xRealIp) {
+    console.log(`[getRealClientIP] Using X-Real-IP: ${xRealIp}`);
+    return xRealIp as string;
+  }
+  
+  const cfConnectingIp = req.headers['cf-connecting-ip']; // Cloudflare
+  if (cfConnectingIp) {
+    console.log(`[getRealClientIP] Using CF-Connecting-IP: ${cfConnectingIp}`);
+    return cfConnectingIp as string;
+  }
+  
+  // Fallback to req.ip (might be internal proxy IP)
+  const fallbackIp = req.ip || 'unknown';
+  console.log(`[getRealClientIP] Using fallback req.ip: ${fallbackIp}`);
+  return fallbackIp;
+}
+
 // Middleware to ensure user is active and device is not blocked
 export async function requireActiveUser(req: any, res: any, next: any) {
   if (!req.isAuthenticated()) {
@@ -231,7 +264,7 @@ export function setupAuth(app: Express) {
           action: 'login_failed',
           resourceType: 'user',
           details: { username: req.body.username, reason: info?.message },
-          ipAddress: req.ip,
+          ipAddress: getRealClientIP(req),
           userAgent: req.headers['user-agent'],
           success: false,
           errorMessage: info?.message || "Invalid username or password"
@@ -246,7 +279,7 @@ export function setupAuth(app: Express) {
       const deviceFingerprint = req.body.deviceFingerprint || 'unknown';
       const browser = req.body.browser || 'unknown';
       const os = req.body.os || 'unknown';
-      const ipAddress = req.ip || 'unknown';
+      const ipAddress = getRealClientIP(req);
       
       // CRITICAL: Check if device is blocked BEFORE creating session
       const isBlocked = await storage.isDeviceBlocked(user.id, deviceFingerprint);
@@ -265,7 +298,7 @@ export function setupAuth(app: Express) {
             os,
             reason: 'Device is blocked'
           },
-          ipAddress: req.ip,
+          ipAddress: getRealClientIP(req),
           userAgent: req.headers['user-agent'],
           success: false,
           errorMessage: 'Login denied: Device is blocked'
@@ -330,7 +363,7 @@ export function setupAuth(app: Express) {
             isNewDevice,
             isNewLocation
           },
-          ipAddress: req.ip,
+          ipAddress: getRealClientIP(req),
           userAgent: req.headers['user-agent'],
           success: true
         });
