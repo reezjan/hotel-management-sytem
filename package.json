@@ -14,8 +14,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx server/seed.ts",
     "electron:dev": "electron electron-main.cjs",
-    "electron:build": "npm run build && node obfuscate.cjs && electron-builder",
-    "postinstall": "chmod +x node_modules/.bin/* && electron-builder install-app-deps"
+    "electron:build": "chmod +x node_modules/.bin/* && electron-builder install-app-deps && npm run build && node obfuscate.cjs && electron-builder",
+    "postinstall": "chmod +x node_modules/.bin/* 2>/dev/null || true"
   },
   "dependencies": {
     "@electron/fuses": "^1.8.0",
