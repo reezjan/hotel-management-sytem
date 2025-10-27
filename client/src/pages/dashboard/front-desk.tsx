@@ -341,10 +341,68 @@ export default function FrontDeskDashboard() {
       if (roomPrice <= 0) {
         throw new Error(`Room price is not configured for ${data.guestType} guests. Please configure room pricing first.`);
       }
+
+      let reservationId: string | null = null;
       
-      // Update room occupancy
+      // Try to find existing reservation for this guest/room (for inhouse guests)
+      if (data.guestType === "inhouse") {
+        // Look for existing reservation by guest phone/email and room
+        const allReservations: any[] = await apiRequest("GET", "/api/hotels/current/reservations");
+        const existingReservation = allReservations.find((res: any) => 
+          (res.guestPhone === data.guestPhone || res.guestEmail === data.guestEmail) &&
+          res.roomId === data.roomId &&
+          (res.status === "pending" || res.status === "confirmed")
+        );
+        
+        if (existingReservation) {
+          reservationId = existingReservation.id;
+          // Update the paidAmount if advance payment is provided
+          if (data.advancePayment && Number(data.advancePayment) > 0) {
+            const currentPaid = Number(existingReservation.paidAmount || 0);
+            const newPaid = currentPaid + Number(data.advancePayment);
+            
+            await apiRequest("PUT", `/api/reservations/${reservationId}`, {
+              paidAmount: String(newPaid),
+              status: "confirmed"
+            });
+          }
+        }
+      }
+      
+      // If no existing reservation found (walk-in or inhouse without reservation), create one
+      if (!reservationId) {
+        // Calculate total price
+        const checkInDate = new Date(data.checkInDate);
+        const checkOutDate = new Date(data.checkOutDate);
+        const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 3600 * 24)));
+        const totalRoomPrice = roomPrice * nights;
+        const mealPlanTotalPrice = selectedMealPlan ? Number(selectedMealPlan.pricePerPerson) * (Number(data.numberOfPersons) || 0) * nights : 0;
+        const totalPrice = totalRoomPrice + mealPlanTotalPrice;
+        
+        const reservation: any = await apiRequest("POST", "/api/reservations", {
+          hotelId: user?.hotelId,
+          guestName: data.guestName,
+          guestEmail: data.guestEmail || null,
+          guestPhone: data.guestPhone,
+          roomId: data.roomId,
+          checkInDate: data.checkInDate,
+          checkOutDate: data.checkOutDate,
+          numberOfPersons: Number(data.numberOfPersons) || 1,
+          mealPlanId: data.mealPlanId || null,
+          roomPrice: String(roomPrice),
+          mealPlanPrice: selectedMealPlan ? String(selectedMealPlan.pricePerPerson) : "0",
+          totalPrice: String(totalPrice),
+          paidAmount: data.advancePayment ? String(Number(data.advancePayment)) : "0",
+          guestType: data.guestType || "walkin",
+          status: "confirmed"
+        });
+        reservationId = reservation.id;
+      }
+      
+      // Update room occupancy with reservation ID
       await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
         isOccupied: true,
+        currentReservationId: reservationId,
         occupantDetails: {
           name: data.guestName,
           email: data.guestEmail,
@@ -358,6 +416,7 @@ export default function FrontDeskDashboard() {
           roomTypeId: roomType?.id || null,
           roomTypeName: roomType?.name || null,
           roomPrice: roomPrice,
+          reservationId: reservationId,
           mealPlan: selectedMealPlan ? {
             planId: selectedMealPlan.id,
             planType: selectedMealPlan.planType,
@@ -382,7 +441,8 @@ export default function FrontDeskDashboard() {
             roomId: data.roomId,
             roomNumber: selectedRoom?.roomNumber,
             guestName: data.guestName,
-            checkInDate: data.checkInDate
+            checkInDate: data.checkInDate,
+            reservationId: reservationId
           },
           createdBy: user?.id
         });
@@ -391,6 +451,7 @@ export default function FrontDeskDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/reservations"] });
       toast({ title: "Guest checked in successfully" });
       checkInForm.reset();
       setIsCheckInModalOpen(false);
@@ -481,6 +542,7 @@ export default function FrontDeskDashboard() {
 
   const advancePaymentMutation = useMutation({
     mutationFn: async (data: any) => {
+      // Record the transaction
       await apiRequest("POST", "/api/transactions", {
         hotelId: user?.hotelId,
         txnType: data.paymentMethod === 'cash' ? 'cash_in' : data.paymentMethod === 'pos' ? 'pos_in' : data.paymentMethod === 'bank_transfer' ? 'bank_transfer_in' : 'fonepay_in',
@@ -492,10 +554,25 @@ export default function FrontDeskDashboard() {
           roomId: data.roomId,
           roomNumber: data.roomNumber,
           guestName: data.guestName,
-          checkInDate: data.checkInDate
+          checkInDate: data.checkInDate,
+          reservationId: data.reservationId
         },
         createdBy: user?.id
       });
+
+      // Update the reservation's paidAmount if reservationId exists
+      if (data.reservationId) {
+        const reservation = reservations.find((r: any) => r.id === data.reservationId);
+        if (reservation) {
+          const currentPaid = Number(reservation.paidAmount || 0);
+          const advanceAmount = Number(data.amount);
+          const newPaidAmount = currentPaid + advanceAmount;
+
+          await apiRequest("PATCH", `/api/reservations/${data.reservationId}`, {
+            paidAmount: String(newPaidAmount)
+          });
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
@@ -595,9 +672,11 @@ export default function FrontDeskDashboard() {
           createdBy: user?.id
         });
 
-        // Update reservation paidAmount
+        // Update reservation paidAmount to total amount (already includes advance payment)
+        // The grandTotal is the full amount, and we're now paying the finalAmount (remaining balance)
+        // So paidAmount should equal grandTotal after checkout
         await apiRequest("PATCH", `/api/reservations/${reservationId}`, {
-          paidAmount: String(data.finalAmount)
+          paidAmount: String(data.totalAmount)
         });
 
         // Now attempt checkout - this will validate balance
@@ -904,31 +983,17 @@ export default function FrontDeskDashboard() {
     // Calculate grand total: discounted subtotal + tax
     let grandTotal = Math.round((discountedSubtotal + totalTax) * 100) / 100;
 
-    // Calculate advance payment deductions
-    const roomId = room.id;
-    const guestName = room.occupantDetails?.name || '';
-    const roomNumber = room.roomNumber || '';
+    // Get advance payment from reservation instead of transactions
+    // This works for all users since reservations API is accessible to front desk
+    // Reuse the reservationId we already declared above for service charges
+    let totalAdvancePayment = 0;
     
-    // Find all advance payment transactions for this specific room
-    // Use exact roomId match for new transactions, fallback to reference string matching for legacy transactions
-    const advancePayments = transactions.filter((txn: any) => {
-      const isAdvancePayment = txn.purpose === 'room_advance_payment';
-      
-      // Prefer exact roomId match if available (new transactions)
-      if (txn.details?.roomId) {
-        return isAdvancePayment && txn.details.roomId === roomId;
+    if (reservationId) {
+      const reservation = reservations.find((r: any) => r.id === reservationId);
+      if (reservation) {
+        totalAdvancePayment = Number(reservation.paidAmount || 0);
       }
-      
-      // Fallback to reference string matching for legacy transactions (before this fix)
-      const matchesRoom = txn.reference?.includes(`Room ${roomNumber}`);
-      const matchesGuest = txn.reference?.includes(guestName);
-      return isAdvancePayment && matchesRoom && matchesGuest;
-    });
-    
-    // Sum up all advance payments
-    const totalAdvancePayment = advancePayments.reduce((sum: number, txn: any) => {
-      return sum + (parseFloat(txn.amount) || 0);
-    }, 0);
+    }
 
     // Deduct advance payment from grand total
     const finalAmount = Math.max(0, Math.round((grandTotal - totalAdvancePayment) * 100) / 100);
@@ -1752,7 +1817,8 @@ export default function FrontDeskDashboard() {
                               roomNumber: room.roomNumber,
                               guestName: occupantDetails?.name || 'Guest',
                               roomId: room.id,
-                              checkInDate: occupantDetails?.checkInDate
+                              checkInDate: occupantDetails?.checkInDate,
+                              reservationId: room.currentReservationId || occupantDetails?.reservationId
                             });
                             setIsAdvancePaymentModalOpen(true);
                             advancePaymentForm.reset();
@@ -3649,7 +3715,8 @@ export default function FrontDeskDashboard() {
                     roomId: selectedRoomForAdvance?.roomId,
                     roomNumber: selectedRoomForAdvance?.roomNumber,
                     guestName: selectedRoomForAdvance?.guestName,
-                    checkInDate: selectedRoomForAdvance?.checkInDate
+                    checkInDate: selectedRoomForAdvance?.checkInDate,
+                    reservationId: selectedRoomForAdvance?.reservationId
                   });
                 })}
                 className="space-y-4"
