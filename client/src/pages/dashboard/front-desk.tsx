@@ -85,6 +85,8 @@ export default function FrontDeskDashboard() {
   const [isServiceChargeModalOpen, setIsServiceChargeModalOpen] = useState(false);
   const [selectedReservationForService, setSelectedReservationForService] = useState<string>("");
   const [isPaxModalOpen, setIsPaxModalOpen] = useState(false);
+  const [isAdvancePaymentModalOpen, setIsAdvancePaymentModalOpen] = useState(false);
+  const [selectedRoomForAdvance, setSelectedRoomForAdvance] = useState<any>(null);
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
@@ -231,6 +233,14 @@ export default function FrontDeskDashboard() {
       amount: "",
       purpose: "",
       paymentMethod: "cash"
+    }
+  });
+
+  const advancePaymentForm = useForm({
+    defaultValues: {
+      amount: "",
+      paymentMethod: "cash",
+      reference: ""
     }
   });
 
@@ -458,6 +468,36 @@ export default function FrontDeskDashboard() {
       toast({ 
         title: "Failed to extend stay", 
         description: error.message || "Could not update checkout date",
+        variant: "destructive" 
+      });
+    }
+  });
+
+  const advancePaymentMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest("POST", "/api/hotels/current/transactions", {
+        hotelId: user?.hotelId,
+        reservationId: data.reservationId,
+        type: "advance_payment",
+        category: "deposit",
+        amount: data.amount,
+        paymentMethod: data.paymentMethod,
+        reference: data.reference || `Advance payment for Room ${data.roomNumber}`,
+        description: `Advance payment collected for Room ${data.roomNumber}`,
+        createdBy: user?.id
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/reservations"] });
+      toast({ title: "Advance payment recorded successfully" });
+      setIsAdvancePaymentModalOpen(false);
+      advancePaymentForm.reset();
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to record advance payment", 
+        description: error.message,
         variant: "destructive" 
       });
     }
@@ -722,19 +762,27 @@ export default function FrontDeskDashboard() {
     return checkOutDate && new Date(checkOutDate).toDateString() === today;
   });
 
-  const currentGuests = reservations.filter((r: any) => r.status === 'checked_in');
-  const totalPax = currentGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
-  const nepaliGuests = currentGuests.filter((r: any) => 
-    r.guestNationality?.toLowerCase() === 'nepali' || 
-    r.guestNationality?.toLowerCase() === 'nepalese' || 
-    r.guestNationality?.toLowerCase() === 'nepal'
+  const currentGuests = occupiedRooms.map(r => ({
+    ...r.occupantDetails,
+    numberOfPersons: (r.occupantDetails as any)?.mealPlan?.numberOfPersons || 1,
+    nationality: (r.occupantDetails as any)?.nationality || ''
+  }));
+  
+  const totalPax = currentGuests.reduce((sum: number, guest: any) => sum + (guest.numberOfPersons || 1), 0);
+  
+  const nepaliGuests = currentGuests.filter((guest: any) => 
+    guest.nationality?.toLowerCase() === 'nepali' || 
+    guest.nationality?.toLowerCase() === 'nepalese' || 
+    guest.nationality?.toLowerCase() === 'nepal'
   );
-  const foreignGuests = currentGuests.filter((r: any) => 
-    r.guestNationality && 
-    !['nepali', 'nepalese', 'nepal'].includes(r.guestNationality.toLowerCase())
+  
+  const foreignGuests = currentGuests.filter((guest: any) => 
+    guest.nationality && 
+    !['nepali', 'nepalese', 'nepal'].includes(guest.nationality.toLowerCase())
   );
-  const totalNepali = nepaliGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
-  const totalForeign = foreignGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
+  
+  const totalNepali = nepaliGuests.reduce((sum: number, guest: any) => sum + (guest.numberOfPersons || 1), 0);
+  const totalForeign = foreignGuests.reduce((sum: number, guest: any) => sum + (guest.numberOfPersons || 1), 0);
 
   const handleTaskStatusUpdate = (task: any, newStatus: string) => {
     updateTaskMutation.mutate({ taskId: task.id, status: newStatus });
@@ -1647,6 +1695,31 @@ export default function FrontDeskDashboard() {
                         >
                           <HandPlatter className="h-3 w-3 mr-1" />
                           Service
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const reservation = reservations.find((r: any) => 
+                              r.roomId === room.id && r.status === 'checked_in'
+                            );
+                            if (reservation) {
+                              setSelectedRoomForAdvance({ room, reservation });
+                              setIsAdvancePaymentModalOpen(true);
+                              advancePaymentForm.reset();
+                            } else {
+                              toast({ 
+                                title: "No reservation found", 
+                                description: "Cannot process advance payment",
+                                variant: "destructive" 
+                              });
+                            }
+                          }}
+                          className="h-6 text-xs px-2"
+                          data-testid={`button-advance-${index}`}
+                        >
+                          <DollarSign className="h-3 w-3 mr-1" />
+                          Advance
                         </Button>
                         <Button
                           size="sm"
@@ -3500,6 +3573,109 @@ export default function FrontDeskDashboard() {
                 </div>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Advance Payment Modal */}
+        <Dialog open={isAdvancePaymentModalOpen} onOpenChange={setIsAdvancePaymentModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Record Advance Payment</DialogTitle>
+            </DialogHeader>
+            {selectedRoomForAdvance && (
+              <div className="p-4 bg-muted rounded-lg mb-4">
+                <div className="font-medium">Room {selectedRoomForAdvance.room.roomNumber}</div>
+                <div className="text-sm text-muted-foreground">
+                  Guest: {selectedRoomForAdvance.reservation?.guestName || 'N/A'}
+                </div>
+              </div>
+            )}
+            <Form {...advancePaymentForm}>
+              <form 
+                onSubmit={advancePaymentForm.handleSubmit((data) => {
+                  advancePaymentMutation.mutate({
+                    ...data,
+                    reservationId: selectedRoomForAdvance?.reservation?.id,
+                    roomNumber: selectedRoomForAdvance?.room?.roomNumber
+                  });
+                })}
+                className="space-y-4"
+              >
+                <FormField
+                  control={advancePaymentForm.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Amount (NPR)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          type="number" 
+                          placeholder="Enter amount"
+                          data-testid="input-advance-amount"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={advancePaymentForm.control}
+                  name="paymentMethod"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Payment Method</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-payment-method">
+                            <SelectValue placeholder="Select payment method" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="pos">POS/Card</SelectItem>
+                          <SelectItem value="fonepay">Fonepay</SelectItem>
+                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={advancePaymentForm.control}
+                  name="reference"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reference/Notes (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          placeholder="Transaction reference or notes"
+                          rows={2}
+                          data-testid="input-reference"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsAdvancePaymentModalOpen(false)}
+                    data-testid="button-cancel-advance"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={advancePaymentMutation.isPending}
+                    data-testid="button-submit-advance"
+                  >
+                    {advancePaymentMutation.isPending ? "Recording..." : "Record Payment"}
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </DialogContent>
         </Dialog>
 
