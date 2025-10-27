@@ -259,7 +259,8 @@ export default function FrontDeskDashboard() {
   const advancePaymentForm = useForm({
     defaultValues: {
       amount: "",
-      paymentMethod: "cash"
+      paymentMethod: "cash",
+      reference: ""
     }
   });
 
@@ -482,11 +483,11 @@ export default function FrontDeskDashboard() {
     mutationFn: async (data: any) => {
       await apiRequest("POST", "/api/transactions", {
         hotelId: user?.hotelId,
-        txnType: data.paymentMethod === 'cash' ? 'cash_in' : data.paymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
+        txnType: data.paymentMethod === 'cash' ? 'cash_in' : data.paymentMethod === 'pos' ? 'pos_in' : data.paymentMethod === 'bank_transfer' ? 'bank_transfer_in' : 'fonepay_in',
         amount: String(Number(data.amount)),
         paymentMethod: data.paymentMethod,
         purpose: 'room_advance_payment',
-        reference: `Room ${data.roomNumber} - ${data.guestName}`,
+        reference: data.reference || `Advance payment for Room ${data.roomNumber}`,
         details: {
           roomId: data.roomId,
           roomNumber: data.roomNumber,
@@ -3686,8 +3687,26 @@ export default function FrontDeskDashboard() {
                           <SelectItem value="cash">Cash</SelectItem>
                           <SelectItem value="pos">POS/Card</SelectItem>
                           <SelectItem value="fonepay">Fonepay</SelectItem>
+                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                         </SelectContent>
                       </Select>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={advancePaymentForm.control}
+                  name="reference"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reference/Notes (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          placeholder="Transaction reference or notes"
+                          rows={2}
+                          data-testid="input-reference"
+                        />
+                      </FormControl>
                     </FormItem>
                   )}
                 />
