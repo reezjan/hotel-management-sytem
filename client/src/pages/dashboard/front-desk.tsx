@@ -236,14 +236,6 @@ export default function FrontDeskDashboard() {
     }
   });
 
-  const advancePaymentForm = useForm({
-    defaultValues: {
-      amount: "",
-      paymentMethod: "cash",
-      reference: ""
-    }
-  });
-
   const reservationForm = useForm({
     defaultValues: {
       guestName: "",
@@ -255,6 +247,13 @@ export default function FrontDeskDashboard() {
       numberOfPersons: "",
       mealPlanId: "",
       specialRequests: ""
+    }
+  });
+
+  const advancePaymentForm = useForm({
+    defaultValues: {
+      amount: "",
+      paymentMethod: "cash"
     }
   });
 
@@ -475,15 +474,19 @@ export default function FrontDeskDashboard() {
 
   const advancePaymentMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest("POST", "/api/hotels/current/transactions", {
+      await apiRequest("POST", "/api/transactions", {
         hotelId: user?.hotelId,
-        reservationId: data.reservationId,
-        type: "advance_payment",
-        category: "deposit",
-        amount: data.amount,
+        txnType: data.paymentMethod === 'cash' ? 'cash_in' : data.paymentMethod === 'pos' ? 'pos_in' : 'fonepay_in',
+        amount: String(Number(data.amount)),
         paymentMethod: data.paymentMethod,
-        reference: data.reference || `Advance payment for Room ${data.roomNumber}`,
-        description: `Advance payment collected for Room ${data.roomNumber}`,
+        purpose: 'room_advance_payment',
+        reference: `Room ${data.roomNumber} - ${data.guestName}`,
+        details: {
+          roomId: data.roomId,
+          roomNumber: data.roomNumber,
+          guestName: data.guestName,
+          checkInDate: data.checkInDate
+        },
         createdBy: user?.id
       });
     },
@@ -493,11 +496,12 @@ export default function FrontDeskDashboard() {
       toast({ title: "Advance payment recorded successfully" });
       setIsAdvancePaymentModalOpen(false);
       advancePaymentForm.reset();
+      setSelectedRoomForAdvance(null);
     },
     onError: (error: any) => {
       toast({ 
         title: "Failed to record advance payment", 
-        description: error.message,
+        description: error.message || "Could not record advance payment",
         variant: "destructive" 
       });
     }
@@ -762,27 +766,19 @@ export default function FrontDeskDashboard() {
     return checkOutDate && new Date(checkOutDate).toDateString() === today;
   });
 
-  const currentGuests = occupiedRooms.map(r => ({
-    ...r.occupantDetails,
-    numberOfPersons: (r.occupantDetails as any)?.mealPlan?.numberOfPersons || 1,
-    nationality: (r.occupantDetails as any)?.nationality || ''
-  }));
-  
-  const totalPax = currentGuests.reduce((sum: number, guest: any) => sum + (guest.numberOfPersons || 1), 0);
-  
-  const nepaliGuests = currentGuests.filter((guest: any) => 
-    guest.nationality?.toLowerCase() === 'nepali' || 
-    guest.nationality?.toLowerCase() === 'nepalese' || 
-    guest.nationality?.toLowerCase() === 'nepal'
+  const currentGuests = reservations.filter((r: any) => r.status === 'checked_in');
+  const totalPax = currentGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
+  const nepaliGuests = currentGuests.filter((r: any) => 
+    r.guestNationality?.toLowerCase() === 'nepali' || 
+    r.guestNationality?.toLowerCase() === 'nepalese' || 
+    r.guestNationality?.toLowerCase() === 'nepal'
   );
-  
-  const foreignGuests = currentGuests.filter((guest: any) => 
-    guest.nationality && 
-    !['nepali', 'nepalese', 'nepal'].includes(guest.nationality.toLowerCase())
+  const foreignGuests = currentGuests.filter((r: any) => 
+    r.guestNationality && 
+    !['nepali', 'nepalese', 'nepal'].includes(r.guestNationality.toLowerCase())
   );
-  
-  const totalNepali = nepaliGuests.reduce((sum: number, guest: any) => sum + (guest.numberOfPersons || 1), 0);
-  const totalForeign = foreignGuests.reduce((sum: number, guest: any) => sum + (guest.numberOfPersons || 1), 0);
+  const totalNepali = nepaliGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
+  const totalForeign = foreignGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
 
   const handleTaskStatusUpdate = (task: any, newStatus: string) => {
     updateTaskMutation.mutate({ taskId: task.id, status: newStatus });
@@ -1700,20 +1696,16 @@ export default function FrontDeskDashboard() {
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            const reservation = reservations.find((r: any) => 
-                              r.roomId === room.id && r.status === 'checked_in'
-                            );
-                            if (reservation) {
-                              setSelectedRoomForAdvance({ room, reservation });
-                              setIsAdvancePaymentModalOpen(true);
-                              advancePaymentForm.reset();
-                            } else {
-                              toast({ 
-                                title: "No reservation found", 
-                                description: "Cannot process advance payment",
-                                variant: "destructive" 
-                              });
-                            }
+                            const occupantDetails = room.occupantDetails as any;
+                            setSelectedRoomForAdvance({
+                              room,
+                              roomNumber: room.roomNumber,
+                              guestName: occupantDetails?.name || 'Guest',
+                              roomId: room.id,
+                              checkInDate: occupantDetails?.checkInDate
+                            });
+                            setIsAdvancePaymentModalOpen(true);
+                            advancePaymentForm.reset();
                           }}
                           className="h-6 text-xs px-2"
                           data-testid={`button-advance-${index}`}
@@ -3584,19 +3576,29 @@ export default function FrontDeskDashboard() {
             </DialogHeader>
             {selectedRoomForAdvance && (
               <div className="p-4 bg-muted rounded-lg mb-4">
-                <div className="font-medium">Room {selectedRoomForAdvance.room.roomNumber}</div>
+                <div className="font-medium">Room {selectedRoomForAdvance.roomNumber}</div>
                 <div className="text-sm text-muted-foreground">
-                  Guest: {selectedRoomForAdvance.reservation?.guestName || 'N/A'}
+                  Guest: {selectedRoomForAdvance.guestName || 'N/A'}
                 </div>
               </div>
             )}
             <Form {...advancePaymentForm}>
               <form 
                 onSubmit={advancePaymentForm.handleSubmit((data) => {
+                  if (!data.amount || Number(data.amount) <= 0) {
+                    toast({ 
+                      title: "Invalid amount", 
+                      description: "Please enter a valid amount",
+                      variant: "destructive" 
+                    });
+                    return;
+                  }
                   advancePaymentMutation.mutate({
                     ...data,
-                    reservationId: selectedRoomForAdvance?.reservation?.id,
-                    roomNumber: selectedRoomForAdvance?.room?.roomNumber
+                    roomId: selectedRoomForAdvance?.roomId,
+                    roomNumber: selectedRoomForAdvance?.roomNumber,
+                    guestName: selectedRoomForAdvance?.guestName,
+                    checkInDate: selectedRoomForAdvance?.checkInDate
                   });
                 })}
                 className="space-y-4"
@@ -3606,7 +3608,7 @@ export default function FrontDeskDashboard() {
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Amount (NPR)</FormLabel>
+                      <FormLabel>Amount (NPR) *</FormLabel>
                       <FormControl>
                         <Input 
                           {...field} 
@@ -3623,7 +3625,7 @@ export default function FrontDeskDashboard() {
                   name="paymentMethod"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Payment Method</FormLabel>
+                      <FormLabel>Payment Method *</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger data-testid="select-payment-method">
@@ -3634,26 +3636,8 @@ export default function FrontDeskDashboard() {
                           <SelectItem value="cash">Cash</SelectItem>
                           <SelectItem value="pos">POS/Card</SelectItem>
                           <SelectItem value="fonepay">Fonepay</SelectItem>
-                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                         </SelectContent>
                       </Select>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={advancePaymentForm.control}
-                  name="reference"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reference/Notes (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea 
-                          {...field} 
-                          placeholder="Transaction reference or notes"
-                          rows={2}
-                          data-testid="input-reference"
-                        />
-                      </FormControl>
                     </FormItem>
                   )}
                 />
