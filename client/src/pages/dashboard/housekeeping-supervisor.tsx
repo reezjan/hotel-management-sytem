@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { StatsCard } from "@/components/dashboard/stats-card";
@@ -6,9 +6,13 @@ import { DataTable } from "@/components/tables/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, Clock, CheckSquare, Wrench, UserPlus, ClipboardList } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function HousekeepingSupervisorDashboard() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: staff = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/users"],
@@ -24,6 +28,23 @@ export default function HousekeepingSupervisorDashboard() {
 
   const { data: dailyAttendance = [] } = useQuery<any[]>({
     queryKey: ["/api/attendance/daily"]
+  });
+
+  const completeTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      await apiRequest("PUT", `/api/tasks/${taskId}`, { status: "completed" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/tasks"] });
+      toast({ title: "Task marked as completed" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to complete task", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    }
   });
 
   const housekeepingStaff = staff.filter(s => s.role?.name === 'housekeeping_staff');
@@ -78,7 +99,7 @@ export default function HousekeepingSupervisorDashboard() {
 
   const taskActions = [
     { label: "Edit", action: (row: any) => {/* TODO: Implement task editing */} },
-    { label: "Complete", action: (row: any) => {/* TODO: Implement task completion */} }
+    { label: "Complete", action: (row: any) => completeTaskMutation.mutate(row.id) }
   ];
 
   return (

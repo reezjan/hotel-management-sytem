@@ -1787,7 +1787,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/room-cleaning-queue/:id", async (req, res) => {
+  app.put("/api/hotels/current/room-cleaning-queue/:id", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Authentication required" });
