@@ -1734,6 +1734,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const task = await storage.updateTask(id, updateData);
       
+      // If this is a room cleaning task that was just completed
+      const taskContext = existingTask.context as any;
+      if (
+        updateData.status === 'completed' && 
+        taskContext?.type === 'room_cleaning'
+      ) {
+        const roomId = taskContext.roomId;
+        const queueId = taskContext.queueId;
+        
+        // Update the cleaning queue entry to completed
+        if (queueId) {
+          await storage.updateRoomCleaningQueue(queueId, { 
+            status: 'completed'
+          } as any);
+        }
+        
+        // Broadcast room update so front desk sees the change
+        wsEvents.roomStatusUpdated(user.hotelId, { 
+          id: roomId, 
+          cleaningStatus: 'completed' 
+        });
+      }
+      
       // Broadcast real-time update
       wsEvents.taskUpdated(user.hotelId, task);
       
@@ -4118,9 +4141,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/tasks/:id", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
       const { id } = req.params;
+      
+      // Get the task first to check its context
+      const existingTask = await storage.getTask(id);
+      if (!existingTask) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
       const taskData = insertTaskSchema.partial().parse(req.body);
       const task = await storage.updateTask(id, taskData);
+      
+      // If this is a room cleaning task that was just completed
+      const taskContext = existingTask.context as any;
+      if (
+        taskData.status === 'completed' && 
+        taskContext?.type === 'room_cleaning'
+      ) {
+        const roomId = taskContext.roomId;
+        const queueId = taskContext.queueId;
+        
+        // Update the cleaning queue entry to completed
+        if (queueId) {
+          await storage.updateRoomCleaningQueue(queueId, { 
+            status: 'completed'
+          } as any);
+        }
+        
+        // Broadcast room update so front desk sees the change
+        wsEvents.roomStatusUpdated(user.hotelId, { 
+          id: roomId, 
+          cleaningStatus: 'completed' 
+        });
+      }
+      
       res.json(task);
     } catch (error) {
       res.status(400).json({ message: "Failed to update task" });

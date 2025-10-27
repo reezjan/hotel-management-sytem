@@ -172,6 +172,12 @@ export default function FrontDeskDashboard() {
     enabled: !!user?.hotelId
   });
 
+  const { data: cleaningQueue = [] } = useQuery<any[]>({
+    queryKey: ["/api/hotels/current/room-cleaning-queue"],
+    refetchInterval: 3000,
+    enabled: !!user?.hotelId
+  });
+
   const checkInForm = useForm({
     defaultValues: {
       guestName: "",
@@ -779,6 +785,22 @@ export default function FrontDeskDashboard() {
   );
   const totalNepali = nepaliGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
   const totalForeign = foreignGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
+
+  const getRoomStatus = (room: any) => {
+    // Check if room is in cleaning queue
+    const inCleaningQueue = cleaningQueue.some((q: any) => 
+      q.roomId === room.id && q.status !== 'completed'
+    );
+    
+    // Check if room checked out today
+    const checkedOutToday = todaysCheckOuts.some(r => r.id === room.id);
+    
+    return {
+      isOccupied: room.isOccupied,
+      needsCleaning: inCleaningQueue,
+      checkedOutToday: checkedOutToday
+    };
+  };
 
   const handleTaskStatusUpdate = (task: any, newStatus: string) => {
     updateTaskMutation.mutate({ taskId: task.id, status: newStatus });
@@ -1615,27 +1637,54 @@ export default function FrontDeskDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
-              {rooms.slice(0, 12).map((room, index) => (
-                <div
-                  key={room.id}
-                  className={`p-2 sm:p-3 md:p-4 border-2 rounded-lg text-center ${
-                    room.isOccupied 
-                      ? 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20' 
-                      : 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20'
-                  }`}
-                  data-testid={`room-status-${index}`}
-                >
-                  <Bed className={`h-5 w-5 sm:h-6 sm:w-6 mx-auto mb-1 sm:mb-2 ${room.isOccupied ? 'text-red-600' : 'text-green-600'}`} />
-                  <h3 className="font-medium text-sm sm:text-base text-foreground">{room.roomNumber}</h3>
-                  <p className="text-xs text-muted-foreground mb-1 sm:mb-2">
-                    {room.roomType?.name || 'Standard'}
-                  </p>
-                  <Badge 
-                    variant="secondary" 
-                    className={room.isOccupied ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}
+              {rooms.slice(0, 12).map((room, index) => {
+                const roomStatus = getRoomStatus(room);
+                const getBackgroundColor = () => {
+                  if (roomStatus.isOccupied) {
+                    return 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20';
+                  } else if (roomStatus.needsCleaning) {
+                    return 'border-yellow-300 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-900/20';
+                  } else {
+                    return 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20';
+                  }
+                };
+                
+                return (
+                  <div
+                    key={room.id}
+                    className={`p-2 sm:p-3 md:p-4 border-2 rounded-lg text-center ${getBackgroundColor()}`}
+                    data-testid={`room-status-${index}`}
                   >
-                    {room.isOccupied ? 'Occupied' : 'Available'}
-                  </Badge>
+                    <Bed className={`h-5 w-5 sm:h-6 sm:w-6 mx-auto mb-1 sm:mb-2 ${
+                      roomStatus.isOccupied 
+                        ? 'text-red-600' 
+                        : roomStatus.needsCleaning 
+                        ? 'text-yellow-600' 
+                        : 'text-green-600'
+                    }`} />
+                    <h3 className="font-medium text-sm sm:text-base text-foreground">{room.roomNumber}</h3>
+                    <p className="text-xs text-muted-foreground mb-1 sm:mb-2">
+                      {room.roomType?.name || 'Standard'}
+                    </p>
+                    <div className="flex flex-wrap gap-1 justify-center mt-1">
+                      <Badge 
+                        variant="secondary" 
+                        className={
+                          roomStatus.isOccupied 
+                            ? 'bg-red-100 text-red-800 text-xs' 
+                            : roomStatus.needsCleaning
+                            ? 'bg-yellow-100 text-yellow-800 text-xs'
+                            : 'bg-green-100 text-green-800 text-xs'
+                        }
+                      >
+                        {roomStatus.isOccupied ? 'Occupied' : roomStatus.needsCleaning ? 'Cleaning' : 'Available'}
+                      </Badge>
+                      {roomStatus.checkedOutToday && (
+                        <Badge className="bg-blue-500 text-white text-xs">
+                          Checked Out Today
+                        </Badge>
+                      )}
+                    </div>
                   {room.isOccupied && room.occupantDetails ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs text-foreground font-medium">{(room.occupantDetails as any)?.name || 'Guest'}</p>
@@ -1752,8 +1801,9 @@ export default function FrontDeskDashboard() {
                       Check In
                     </Button>
                   ) : null}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
