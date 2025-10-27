@@ -84,6 +84,7 @@ export default function FrontDeskDashboard() {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(null);
   const [isServiceChargeModalOpen, setIsServiceChargeModalOpen] = useState(false);
   const [selectedReservationForService, setSelectedReservationForService] = useState<string>("");
+  const [isPaxModalOpen, setIsPaxModalOpen] = useState(false);
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
@@ -721,6 +722,20 @@ export default function FrontDeskDashboard() {
     return checkOutDate && new Date(checkOutDate).toDateString() === today;
   });
 
+  const currentGuests = reservations.filter((r: any) => r.status === 'checked_in');
+  const totalPax = currentGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
+  const nepaliGuests = currentGuests.filter((r: any) => 
+    r.guestNationality?.toLowerCase() === 'nepali' || 
+    r.guestNationality?.toLowerCase() === 'nepalese' || 
+    r.guestNationality?.toLowerCase() === 'nepal'
+  );
+  const foreignGuests = currentGuests.filter((r: any) => 
+    r.guestNationality && 
+    !['nepali', 'nepalese', 'nepal'].includes(r.guestNationality.toLowerCase())
+  );
+  const totalNepali = nepaliGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
+  const totalForeign = foreignGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
+
   const handleTaskStatusUpdate = (task: any, newStatus: string) => {
     updateTaskMutation.mutate({ taskId: task.id, status: newStatus });
   };
@@ -1302,6 +1317,15 @@ export default function FrontDeskDashboard() {
               label: "occupancy", 
               isPositive: true 
             }}
+          />
+          <StatsCard
+            title="PAX (Current Guests)"
+            value={totalPax}
+            icon={<Users />}
+            iconColor="text-purple-500"
+            onClick={() => setIsPaxModalOpen(true)}
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            data-testid="stats-pax"
           />
           <StatsCard
             title="Today's Check-ins"
@@ -3435,6 +3459,46 @@ export default function FrontDeskDashboard() {
                   </div>
                 </div>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* PAX Modal */}
+        <Dialog open={isPaxModalOpen} onOpenChange={setIsPaxModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Current Guest Breakdown (PAX)</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                  <div className="text-sm text-muted-foreground mb-2">Nepali Guests</div>
+                  <div className="text-3xl font-bold text-blue-600" data-testid="text-nepali-count">
+                    {totalNepali}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {nepaliGuests.length} reservation{nepaliGuests.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+                <div className="p-4 border rounded-lg bg-green-50 dark:bg-green-950/20">
+                  <div className="text-sm text-muted-foreground mb-2">Foreign Guests</div>
+                  <div className="text-3xl font-bold text-green-600" data-testid="text-foreign-count">
+                    {totalForeign}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {foreignGuests.length} reservation{foreignGuests.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 border-2 rounded-lg bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800">
+                <div className="text-sm text-muted-foreground mb-2">Total Guests (PAX)</div>
+                <div className="text-4xl font-bold text-purple-600" data-testid="text-total-pax">
+                  {totalPax}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Across {currentGuests.length} checked-in room{currentGuests.length !== 1 ? 's' : ''}
+                </div>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

@@ -12,6 +12,7 @@ interface StatsCardProps {
     isPositive: boolean;
   };
   className?: string;
+  onClick?: () => void;
 }
 
 export function StatsCard({ 
@@ -20,10 +21,11 @@ export function StatsCard({
   icon, 
   iconColor = "text-primary",
   trend,
-  className 
+  className,
+  onClick 
 }: StatsCardProps) {
   return (
-    <Card className={cn("", className)} data-testid={`stats-card-${title.toLowerCase().replace(/\s+/g, '-')}`}>
+    <Card className={cn("", className)} onClick={onClick} data-testid={`stats-card-${title.toLowerCase().replace(/\s+/g, '-')}`}>
       <CardContent className="p-4 md:p-6">
         <div className="flex items-start gap-3 md:gap-4">
           <div className={cn("text-2xl md:text-3xl flex-shrink-0", iconColor)}>
