@@ -3687,7 +3687,6 @@ export default function FrontDeskDashboard() {
                           <SelectItem value="cash">Cash</SelectItem>
                           <SelectItem value="pos">POS/Card</SelectItem>
                           <SelectItem value="fonepay">Fonepay</SelectItem>
-                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                         </SelectContent>
                       </Select>
                     </FormItem>
