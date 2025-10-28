@@ -731,12 +731,27 @@ export default function FrontDeskDashboard() {
           createdBy: user?.id
         });
 
-        // Update reservation paidAmount to total amount (already includes advance payment)
-        // The grandTotal is the full amount, and we're now paying the finalAmount (remaining balance)
-        // So paidAmount should equal grandTotal after checkout
+        // Update reservation paidAmount by adding the payment just made
+        // Get current reservation from already loaded data to fetch existing paidAmount (from advance payments)
+        const allReservationsRes = await apiRequest("GET", "/api/hotels/current/reservations");
+        const allReservations = await allReservationsRes.json();
+        const currentReservation = allReservations.find((r: any) => r.id === reservationId);
+        
+        if (!currentReservation) {
+          throw new Error('Reservation not found');
+        }
+        
+        const currentPaidAmount = Number(currentReservation.paidAmount || 0);
+        const newPaidAmount = currentPaidAmount + data.finalAmount;
+        
         await apiRequest("PATCH", `/api/reservations/${reservationId}`, {
-          paidAmount: String(data.totalAmount)
+          paidAmount: String(newPaidAmount)
         });
+
+        // Check if reservation needs to be checked in first
+        if (currentReservation.status === 'confirmed') {
+          await apiRequest("POST", `/api/reservations/${reservationId}/check-in`, {});
+        }
 
         // Now attempt checkout - this will validate balance
         try {
