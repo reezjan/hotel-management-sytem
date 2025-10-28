@@ -183,6 +183,8 @@ export interface IStorage {
   getRoomReservationsByHotel(hotelId: string): Promise<RoomReservation[]>;
   getRoomReservation(id: string): Promise<RoomReservation | undefined>;
   updateRoomReservation(id: string, data: Partial<InsertRoomReservation>): Promise<RoomReservation>;
+  transferReservationRoom(reservationId: string, newRoomId: string, userId: string): Promise<RoomReservation>;
+  updateReservationRate(reservationId: string, newRoomRate: string, newMealPlanRate: string | null): Promise<RoomReservation>;
   createCheckoutOverrideLog(log: InsertCheckoutOverrideLog): Promise<CheckoutOverrideLog>;
 
   // Room service charge operations
@@ -894,6 +896,101 @@ export class DatabaseStorage implements IStorage {
       throw new Error('Reservation not found');
     }
     
+    return updated;
+  }
+
+  async transferReservationRoom(reservationId: string, newRoomId: string, userId: string): Promise<RoomReservation> {
+    return await db.transaction(async (tx) => {
+      const [reservation] = await tx
+        .select()
+        .from(roomReservations)
+        .where(eq(roomReservations.id, reservationId));
+
+      if (!reservation) {
+        throw new Error('Reservation not found');
+      }
+
+      if (reservation.status !== 'checked_in') {
+        throw new Error('Can only transfer rooms for checked-in guests');
+      }
+
+      const oldRoomId = reservation.roomId;
+
+      const [newRoom] = await tx
+        .select()
+        .from(rooms)
+        .where(eq(rooms.id, newRoomId));
+
+      if (!newRoom) {
+        throw new Error('New room not found');
+      }
+
+      if (newRoom.isOccupied) {
+        throw new Error('Target room is already occupied');
+      }
+
+      await tx
+        .update(rooms)
+        .set({ isOccupied: false, occupantDetails: null, currentReservationId: null, updatedAt: new Date() })
+        .where(eq(rooms.id, oldRoomId));
+
+      await tx
+        .update(rooms)
+        .set({ 
+          isOccupied: true, 
+          occupantDetails: reservation.guestDetails || null,
+          currentReservationId: reservationId,
+          updatedAt: new Date() 
+        })
+        .where(eq(rooms.id, newRoomId));
+
+      const [updated] = await tx
+        .update(roomReservations)
+        .set({ roomId: newRoomId, updatedAt: new Date() })
+        .where(eq(roomReservations.id, reservationId))
+        .returning();
+
+      return updated;
+    });
+  }
+
+  async updateReservationRate(reservationId: string, newRoomRate: string, newMealPlanRate: string | null): Promise<RoomReservation> {
+    const [reservation] = await db
+      .select()
+      .from(roomReservations)
+      .where(eq(roomReservations.id, reservationId));
+
+    if (!reservation) {
+      throw new Error('Reservation not found');
+    }
+
+    if (reservation.status !== 'checked_in' && reservation.status !== 'confirmed') {
+      throw new Error('Can only update rates for active reservations');
+    }
+
+    const updateData: Partial<InsertRoomReservation> = {
+      roomPrice: newRoomRate,
+      updatedAt: new Date()
+    };
+
+    if (newMealPlanRate !== null) {
+      updateData.mealPlanPrice = newMealPlanRate;
+    }
+
+    const checkInDate = reservation.checkInDate ? new Date(reservation.checkInDate) : new Date();
+    const checkOutDate = reservation.checkOutDate ? new Date(reservation.checkOutDate) : new Date();
+    const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 3600 * 24)));
+
+    const roomTotal = Number(newRoomRate) * nights;
+    const mealTotal = newMealPlanRate ? Number(newMealPlanRate) * nights : (reservation.mealPlanPrice ? Number(reservation.mealPlanPrice) * nights : 0);
+    updateData.totalPrice = String(roomTotal + mealTotal);
+
+    const [updated] = await db
+      .update(roomReservations)
+      .set(updateData)
+      .where(eq(roomReservations.id, reservationId))
+      .returning();
+
     return updated;
   }
 

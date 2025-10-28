@@ -99,6 +99,7 @@ const FinanceReports = lazy(() => import("@/pages/dashboard/finance/reports"));
 const FinanceMaintenanceRequests = lazy(() => import("@/pages/dashboard/finance/maintenance-requests"));
 const FrontDeskDashboard = lazy(() => import("@/pages/dashboard/front-desk"));
 const FrontdeskMaintenanceRequests = lazy(() => import("@/pages/dashboard/frontdesk/maintenance-requests"));
+const GuestManagement = lazy(() => import("@/pages/dashboard/frontdesk/guest-management"));
 const GuestsPage = lazy(() => import("@/pages/dashboard/guests"));
 const StorekeeperDashboard = lazy(() => import("@/pages/dashboard/storekeeper"));
 const StorekeeperDutyStatus = lazy(() => import("@/pages/dashboard/storekeeper/duty-status"));
@@ -236,9 +237,10 @@ function Router() {
         <ProtectedRoute path="/finance/maintenance-requests" component={FinanceMaintenanceRequests} allowedRoles={["finance"]} />
         <ProtectedRoute path="/finance" component={FinanceDashboard} allowedRoles={["finance"]} />
         
-        <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
+        <ProtectedRoute path="/front-desk/guest-management" component={GuestManagement} allowedRoles={["front_desk"]} />
         <ProtectedRoute path="/front-desk/request-stock" component={RequestStock} allowedRoles={["front_desk"]} />
         <ProtectedRoute path="/front-desk/maintenance-requests" component={FrontdeskMaintenanceRequests} allowedRoles={["front_desk"]} />
+        <ProtectedRoute path="/front-desk" component={FrontDeskDashboard} allowedRoles={["front_desk"]} />
         <ProtectedRoute path="/guests" component={GuestsPage} allowedRoles={["front_desk", "manager", "owner"]} />
         <ProtectedRoute path="/dashboard/hall-calendar" component={HallCalendar} allowedRoles={["front_desk", "manager", "owner", "finance", "cashier"]} />
         <ProtectedRoute path="/dashboard/bookings/:id" component={BookingDetail} allowedRoles={["front_desk", "manager", "owner", "finance", "cashier"]} />

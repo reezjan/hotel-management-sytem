@@ -854,6 +854,33 @@ export default function FrontDeskDashboard() {
     }
   });
 
+  const updateRoomStatusMutation = useMutation({
+    mutationFn: async (data: { roomId: string; status: string }) => {
+      return apiRequest("PATCH", `/api/rooms/${data.roomId}/status`, { status: data.status });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
+      toast({ title: "Room status updated successfully" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update room status",
+        description: error.message || "Please try again",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleMarkCleaned = (roomId: string, roomNumber: string) => {
+    confirm({
+      title: "Mark Room as Cleaned",
+      description: `Are you sure you want to mark Room ${roomNumber} as cleaned? This will make it available for new guests.`,
+      onConfirm: () => {
+        updateRoomStatusMutation.mutate({ roomId, status: 'available' });
+      }
+    });
+  };
+
   const availableRooms = rooms.filter(r => !r.isOccupied);
   const occupiedRooms = rooms.filter(r => r.isOccupied);
   const pendingTasks = tasks.filter(t => t.status === 'pending');
@@ -1517,33 +1544,6 @@ export default function FrontDeskDashboard() {
                     default:
                       return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-950 dark:text-gray-200 dark:border-gray-800';
                   }
-                };
-
-                const updateRoomStatusMutation = useMutation({
-                  mutationFn: async (data: { roomId: string; status: string }) => {
-                    return apiRequest("PATCH", `/api/rooms/${data.roomId}/status`, { status: data.status });
-                  },
-                  onSuccess: () => {
-                    queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
-                    toast({ title: "Room status updated successfully" });
-                  },
-                  onError: (error: any) => {
-                    toast({
-                      title: "Failed to update room status",
-                      description: error.message || "Please try again",
-                      variant: "destructive"
-                    });
-                  }
-                });
-
-                const handleMarkCleaned = (roomId: string, roomNumber: string) => {
-                  confirm({
-                    title: "Mark Room as Cleaned",
-                    description: `Are you sure you want to mark Room ${roomNumber} as cleaned? This will make it available for new guests.`,
-                    onConfirm: () => {
-                      updateRoomStatusMutation.mutate({ roomId, status: 'available' });
-                    }
-                  });
                 };
 
                 return (

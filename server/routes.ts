@@ -3892,6 +3892,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/reservations/:id/transfer-room", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const currentUser = req.user as any;
+      
+      // Only front desk staff can transfer rooms
+      if (currentUser.role?.name !== 'front_desk') {
+        return res.status(403).json({ message: "Only front desk staff can transfer rooms" });
+      }
+
+      const { id } = req.params;
+      const { newRoomId } = req.body;
+
+      if (!newRoomId) {
+        return res.status(400).json({ message: "New room ID is required" });
+      }
+
+      const reservation = await storage.getRoomReservation(id);
+      if (!reservation) {
+        return res.status(404).json({ message: "Reservation not found" });
+      }
+
+      if (reservation.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Reservation not found" });
+      }
+
+      const updated = await storage.transferReservationRoom(id, newRoomId, currentUser.id);
+      
+      // Broadcast room status updates
+      wsEvents.roomStatusUpdated(currentUser.hotelId, { 
+        id: reservation.roomId, 
+        status: 'available',
+        isOccupied: false 
+      });
+      wsEvents.roomStatusUpdated(currentUser.hotelId, { 
+        id: newRoomId, 
+        status: 'occupied',
+        isOccupied: true 
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Transfer room error:", error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : "Failed to transfer room" 
+      });
+    }
+  });
+
+  app.patch("/api/reservations/:id/rate", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      const currentUser = req.user as any;
+      
+      // Only front desk staff can change rates
+      if (currentUser.role?.name !== 'front_desk') {
+        return res.status(403).json({ message: "Only front desk staff can change rates" });
+      }
+
+      const { id } = req.params;
+      const { newRoomRate, newMealPlanRate } = req.body;
+
+      if (!newRoomRate) {
+        return res.status(400).json({ message: "New room rate is required" });
+      }
+
+      const reservation = await storage.getRoomReservation(id);
+      if (!reservation) {
+        return res.status(404).json({ message: "Reservation not found" });
+      }
+
+      if (reservation.hotelId !== currentUser.hotelId) {
+        return res.status(404).json({ message: "Reservation not found" });
+      }
+
+      const updated = await storage.updateReservationRate(id, newRoomRate, newMealPlanRate || null);
+      
+      // Broadcast reservation update
+      wsEvents.emit('reservation:updated', updated);
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Update rate error:", error);
+      res.status(400).json({ 
+        message: error instanceof Error ? error.message : "Failed to update rate" 
+      });
+    }
+  });
+
   app.post("/api/reservations/:id/check-out", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
