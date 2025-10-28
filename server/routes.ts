@@ -4902,8 +4902,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Reservation not found" });
       }
 
-      // CRITICAL: Calculate actual total including service charges
-      const baseTotal = Number(reservation.totalPrice || 0);
+      // CRITICAL: Recalculate total based on actual checkout time (same as frontend)
+      const roomPricePerNight = Number(reservation.billingRoomRate || reservation.roomPrice || 0);
+      const mealPlanPricePerNight = Number(reservation.mealPlanPrice || 0);
+      const numberOfPersons = Number(reservation.numberOfPersons || 1);
+      const checkInDate = reservation.checkInDate ? new Date(reservation.checkInDate) : null;
+      const actualCheckOutDate = new Date();
+      
+      // Calculate number of nights with 2pm cutoff rule (same as frontend)
+      let numberOfNights = 1;
+      if (checkInDate) {
+        const checkInDateOnly = new Date(checkInDate);
+        checkInDateOnly.setHours(0, 0, 0, 0);
+        
+        const checkOutDateOnly = new Date(actualCheckOutDate);
+        checkOutDateOnly.setHours(0, 0, 0, 0);
+        
+        const daysDiff = Math.floor((checkOutDateOnly.getTime() - checkInDateOnly.getTime()) / (1000 * 3600 * 24));
+        numberOfNights = Math.max(1, daysDiff);
+        
+        // Apply 2pm cutoff rule
+        const checkOutHour = actualCheckOutDate.getHours();
+        const checkOutMinute = actualCheckOutDate.getMinutes();
+        const checkOutTimeInMinutes = checkOutHour * 60 + checkOutMinute;
+        const cutoffTimeInMinutes = 14 * 60;
+        
+        if (checkOutTimeInMinutes > cutoffTimeInMinutes) {
+          numberOfNights += 1;
+        }
+      }
+      
+      // Calculate charges
+      const totalRoomCharges = roomPricePerNight * numberOfNights;
+      const totalMealPlanCharges = mealPlanPricePerNight * numberOfPersons * numberOfNights;
       
       // Get all service charges for this reservation
       const serviceCharges = await storage.getRoomServiceCharges(id);
@@ -4911,18 +4942,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return sum + Number(charge.totalCharge || 0);
       }, 0);
       
-      // Calculate actual total including service charges
-      const totalAmount = baseTotal + serviceChargesTotal;
+      // Calculate actual total (before any discounts or taxes in the payment)
+      const baseTotal = totalRoomCharges + totalMealPlanCharges + serviceChargesTotal;
       const paidAmount = Number(reservation.paidAmount || 0);
-      const balanceDue = totalAmount - paidAmount;
+      const balanceDue = baseTotal - paidAmount;
 
       // Log checkout validation for debugging
       console.log('Checkout validation:', {
         reservationId: id,
-        baseTotal,
+        numberOfNights,
+        roomPricePerNight,
+        mealPlanPricePerNight,
+        numberOfPersons,
+        totalRoomCharges,
+        totalMealPlanCharges,
         serviceChargesTotal,
         serviceChargesCount: serviceCharges.length,
-        totalAmount,
+        baseTotal,
         paidAmount,
         balanceDue
       });
@@ -4964,10 +5000,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hotelId: currentUser.hotelId,
         tableId: null,
         billNumber: billNumber,
-        totalAmount: String(totalAmount),
+        totalAmount: String(baseTotal),
         taxAmount: "0",
         discountAmount: "0",
-        netAmount: String(totalAmount),
+        netAmount: String(baseTotal),
         paymentMethod: "cash",
         createdBy: currentUser.username,
         customerName: reservation.guestName || null,
@@ -4977,8 +5013,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           reservationId: id,
           roomNumber: reservation.roomId,
           checkInDate: reservation.checkInDate,
-          checkOutDate: reservation.checkOutDate,
-          totalPrice: reservation.totalPrice,
+          checkOutDate: actualCheckOutDate,
+          totalPrice: String(baseTotal),
+          numberOfNights,
+          roomCharges: totalRoomCharges,
+          mealPlanCharges: totalMealPlanCharges,
+          serviceCharges: serviceChargesTotal,
         },
       });
 

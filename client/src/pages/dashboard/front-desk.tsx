@@ -1977,9 +1977,15 @@ export default function FrontDeskDashboard() {
                         </Badge>
                       )}
                     </div>
-                  {room.isOccupied && room.occupantDetails ? (
+                  {room.isOccupied && (room.occupantDetails || room.currentReservationId) ? (
                     <div className="mt-2 space-y-1">
-                      <p className="text-xs text-foreground font-medium">{(room.occupantDetails as any)?.name || 'Guest'}</p>
+                      <p className="text-xs text-foreground font-medium">{(() => {
+                        if (room.occupantDetails) {
+                          return (room.occupantDetails as any)?.name || 'Guest';
+                        }
+                        const reservation = reservations.find((r: any) => r.id === room.currentReservationId);
+                        return reservation?.guestName || 'Guest';
+                      })()}</p>
                       <div className="flex flex-wrap gap-1">
                         <Button
                           size="sm"
