@@ -195,6 +195,28 @@ export const guests = pgTable("guests", {
   deletedAt: timestamp("deleted_at", { withTimezone: true })
 });
 
+// Companies Table
+export const companies = pgTable("companies", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  hotelId: uuid("hotel_id").references(() => hotels.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  contactPerson: text("contact_person"),
+  email: text("email"),
+  phone: text("phone").notNull(),
+  address: text("address"),
+  city: text("city"),
+  country: text("country"),
+  taxId: text("tax_id"),
+  discountPercentage: numeric("discount_percentage", { precision: 5, scale: 2 }),
+  creditLimit: numeric("credit_limit", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true })
+});
+
 // Room Types Table
 export const roomTypes = pgTable("room_types", {
   id: serial("id").primaryKey(),
@@ -1357,6 +1379,13 @@ export const insertGuestSchema = createInsertSchema(guests).omit({
   currentReservationId: true
 });
 
+export const insertCompanySchema = createInsertSchema(companies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true
+});
+
 export const insertStockRequestSchema = createInsertSchema(stockRequests).omit({
   id: true,
   createdAt: true,
@@ -1530,6 +1559,8 @@ export type RoomServiceCharge = typeof roomServiceCharges.$inferSelect;
 export type InsertRoomServiceCharge = z.infer<typeof insertRoomServiceChargeSchema>;
 export type Guest = typeof guests.$inferSelect;
 export type InsertGuest = z.infer<typeof insertGuestSchema>;
+export type Company = typeof companies.$inferSelect;
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
 export type StockRequest = typeof stockRequests.$inferSelect;
 export type InsertStockRequest = z.infer<typeof insertStockRequestSchema>;
 
