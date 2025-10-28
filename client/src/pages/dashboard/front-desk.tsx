@@ -938,19 +938,37 @@ export default function FrontDeskDashboard() {
     return checkOutDate && new Date(checkOutDate).toDateString() === today;
   });
 
-  const currentGuests = reservations.filter((r: any) => r.status === 'checked_in');
-  const totalPax = currentGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
-  const nepaliGuests = currentGuests.filter((r: any) => 
-    r.guestNationality?.toLowerCase() === 'nepali' || 
-    r.guestNationality?.toLowerCase() === 'nepalese' || 
-    r.guestNationality?.toLowerCase() === 'nepal'
+  const currentGuests = occupiedRooms.map(room => {
+    const occupantDetails = room.occupantDetails as any;
+    return {
+      numberOfPersons: occupantDetails?.mealPlan?.numberOfPersons || occupantDetails?.numberOfPersons || 1,
+      guestNationality: occupantDetails?.nationality || '',
+      guestName: occupantDetails?.name || '',
+      roomNumber: room.roomNumber
+    };
+  });
+  const totalPax = currentGuests.reduce((sum: number, guest: any) => sum + (guest.numberOfPersons || 1), 0);
+  const nepaliGuests = currentGuests.filter((guest: any) => 
+    guest.guestNationality?.toLowerCase() === 'nepali' || 
+    guest.guestNationality?.toLowerCase() === 'nepalese' || 
+    guest.guestNationality?.toLowerCase() === 'nepal'
   );
-  const foreignGuests = currentGuests.filter((r: any) => 
-    r.guestNationality && 
-    !['nepali', 'nepalese', 'nepal'].includes(r.guestNationality.toLowerCase())
+  const foreignGuests = currentGuests.filter((guest: any) => 
+    guest.guestNationality && 
+    !['nepali', 'nepalese', 'nepal'].includes(guest.guestNationality.toLowerCase())
   );
-  const totalNepali = nepaliGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
-  const totalForeign = foreignGuests.reduce((sum: number, r: any) => sum + (r.numberOfPersons || 1), 0);
+  const totalNepali = nepaliGuests.reduce((sum: number, guest: any) => sum + (guest.numberOfPersons || 1), 0);
+  const totalForeign = foreignGuests.reduce((sum: number, guest: any) => sum + (guest.numberOfPersons || 1), 0);
+
+  console.log('PAX Debug:', {
+    occupiedRooms: occupiedRooms.length,
+    currentGuests: currentGuests.length,
+    totalPax,
+    nepaliGuests: nepaliGuests.length,
+    totalNepali,
+    foreignGuests: foreignGuests.length,
+    totalForeign
+  });
 
   const getRoomStatus = (room: any) => {
     // Check if room is in cleaning queue
