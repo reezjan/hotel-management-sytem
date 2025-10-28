@@ -75,7 +75,7 @@ export default function FrontDeskDashboard() {
   const [foodSearchQuery, setFoodSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [foodOrderItems, setFoodOrderItems] = useState<Array<{ item: MenuItem; quantity: number }>>([]);
-  const [guestType, setGuestType] = useState<"inhouse" | "walkin">("walkin");
+  const [guestType, setGuestType] = useState<"company" | "walkin">("walkin");
   const [officeName, setOfficeName] = useState("");
   const [isExtendStayModalOpen, setIsExtendStayModalOpen] = useState(false);
   const [newCheckoutDate, setNewCheckoutDate] = useState<Date | undefined>(undefined);
@@ -337,7 +337,7 @@ export default function FrontDeskDashboard() {
       }
       
       // Get the correct room price based on guest type
-      const price = data.guestType === "inhouse" ? roomType.priceInhouse : roomType.priceWalkin;
+      const price = data.guestType === "company" ? roomType.priceInhouse : roomType.priceWalkin;
       const roomPrice = price ? Number(price) : 0;
       
       if (roomPrice <= 0) {
@@ -346,8 +346,8 @@ export default function FrontDeskDashboard() {
 
       let reservationId: string | null = null;
       
-      // Try to find existing reservation for this guest/room (for inhouse guests)
-      if (data.guestType === "inhouse") {
+      // Try to find existing reservation for this guest/room (for company guests)
+      if (data.guestType === "company") {
         // Look for existing reservation by guest phone/email and room
         const allReservations: any[] = await apiRequest("GET", "/api/hotels/current/reservations");
         const existingReservation = allReservations.find((res: any) => 
@@ -371,7 +371,7 @@ export default function FrontDeskDashboard() {
         }
       }
       
-      // If no existing reservation found (walk-in or inhouse without reservation), create one
+      // If no existing reservation found (walk-in or company without reservation), create one
       if (!reservationId) {
         // Calculate total price
         const checkInDate = new Date(data.checkInDate);
@@ -1131,11 +1131,11 @@ export default function FrontDeskDashboard() {
       toast({ title: "Error", description: "Please select payment method for advance payment", variant: "destructive" });
       return;
     }
-    if (guestType === "inhouse" && !officeName.trim()) {
-      toast({ title: "Error", description: "Office name is required for in-house guests", variant: "destructive" });
+    if (guestType === "company" && !officeName.trim()) {
+      toast({ title: "Error", description: "Company name is required for company guests", variant: "destructive" });
       return;
     }
-    checkInGuestMutation.mutate({ ...data, roomId: selectedRoom?.id, guestType, officeName: guestType === "inhouse" ? officeName : null });
+    checkInGuestMutation.mutate({ ...data, roomId: selectedRoom?.id, guestType, officeName: guestType === "company" ? officeName : null });
   };
 
   const onSubmitReservation = (data: any) => {
@@ -1330,8 +1330,8 @@ export default function FrontDeskDashboard() {
           ${guest?.email ? `<div>Email: ${guest.email}</div>` : ''}
           ${guest?.nationality ? `<div>Nationality: ${guest.nationality}</div>` : ''}
           ${guest?.idNumber ? `<div>ID: ${guest.idNumber}</div>` : ''}
-          ${guest?.guestType ? `<div>Type: ${guest.guestType === 'inhouse' ? 'In-House' : 'Walk-in'}</div>` : ''}
-          ${guest?.officeName ? `<div>Office: ${guest.officeName}</div>` : ''}
+          ${guest?.guestType ? `<div>Type: ${guest.guestType === 'company' ? 'Company' : 'Walk-in'}</div>` : ''}
+          ${guest?.officeName ? `<div>Company: ${guest.officeName}</div>` : ''}
           <div class="line"></div>
           ${type === 'checkin' ? `
             <div class="bold">CHECK-IN INFORMATION</div>
@@ -2301,17 +2301,17 @@ export default function FrontDeskDashboard() {
                     </Button>
                     <Button
                       type="button"
-                      variant={guestType === 'inhouse' ? 'default' : 'outline'}
-                      onClick={() => setGuestType('inhouse')}
+                      variant={guestType === 'company' ? 'default' : 'outline'}
+                      onClick={() => setGuestType('company')}
                       className="flex-1"
-                      data-testid="button-guest-type-inhouse"
+                      data-testid="button-guest-type-company"
                     >
-                      In-House
+                      Company
                     </Button>
                   </div>
-                  {guestType === 'inhouse' && (
+                  {guestType === 'company' && (
                     <div>
-                      <label className="text-sm font-medium mb-2 block">Office Name *</label>
+                      <label className="text-sm font-medium mb-2 block">Company Name *</label>
                       <Input 
                         value={officeName}
                         onChange={(e) => setOfficeName(e.target.value)}
@@ -2323,9 +2323,9 @@ export default function FrontDeskDashboard() {
                   <div className="text-sm text-muted-foreground">
                     {selectedRoom && selectedRoom.roomType && (
                       <div className="flex justify-between p-2 bg-muted rounded">
-                        <span>Room Rate ({guestType === 'inhouse' ? 'In-House' : 'Walk-in'}):</span>
+                        <span>Room Rate ({guestType === 'company' ? 'Company' : 'Walk-in'}):</span>
                         <span className="font-semibold">
-                          NPR {parseFloat(guestType === 'inhouse' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')).toFixed(2)}
+                          NPR {parseFloat(guestType === 'company' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')).toFixed(2)}
                         </span>
                       </div>
                     )}

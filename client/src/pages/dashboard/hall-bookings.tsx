@@ -336,7 +336,9 @@ export default function HallBookings() {
   const canManage = ['manager', 'owner', 'super_admin'].includes(userRole);
   const isFinance = userRole === 'finance';
   const isCashier = userRole === 'cashier';
+  const isFrontDesk = userRole === 'front_desk';
   const canViewOnly = isCashier;
+  const canBook = canManage || isFrontDesk;
 
   return (
     <DashboardLayout title="Hall Bookings">
@@ -353,10 +355,10 @@ export default function HallBookings() {
                 Calendar View
               </Button>
             </Link>
-            {canManage && (
-              <Button onClick={() => setIsWizardOpen(true)} data-testid="button-create-booking">
+            {canBook && (
+              <Button onClick={() => setIsWizardOpen(true)} data-testid="button-book-hall">
                 <Plus className="w-4 h-4 mr-2" />
-                New Booking
+                Book Hall
               </Button>
             )}
           </div>
