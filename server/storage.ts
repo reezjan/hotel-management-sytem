@@ -920,8 +920,8 @@ export class DatabaseStorage implements IStorage {
         throw new Error('Reservation not found');
       }
 
-      if (reservation.status !== 'checked_in') {
-        throw new Error('Can only transfer rooms for checked-in guests');
+      if (reservation.status !== 'checked_in' && reservation.status !== 'confirmed') {
+        throw new Error('Can only transfer rooms for confirmed or checked-in guests');
       }
 
       const oldRoomId = reservation.roomId;
