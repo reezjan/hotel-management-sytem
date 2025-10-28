@@ -198,6 +198,7 @@ export default function FrontDeskDashboard() {
       roomId: "",
       advancePayment: "",
       mealPlanId: "",
+      mealPlanRate: "",
       numberOfPersons: ""
     }
   });
@@ -260,6 +261,7 @@ export default function FrontDeskDashboard() {
       roomId: "",
       numberOfPersons: "",
       mealPlanId: "",
+      mealPlanRate: "",
       specialRequests: ""
     }
   });
@@ -351,6 +353,7 @@ export default function FrontDeskDashboard() {
       }
 
       let reservationId: string | null = null;
+      const mealPlanRate = data.mealPlanRate ? Number(data.mealPlanRate) : (selectedMealPlan ? Number(selectedMealPlan.pricePerPerson) : 0);
       
       // Try to find existing reservation for this guest/room (for company guests)
       if (data.guestType === "company") {
@@ -379,12 +382,12 @@ export default function FrontDeskDashboard() {
       
       // If no existing reservation found (walk-in or company without reservation), create one
       if (!reservationId) {
-        // Calculate total price
+        // Calculate total price using custom meal plan rate
         const checkInDate = new Date(data.checkInDate);
         const checkOutDate = new Date(data.checkOutDate);
         const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 3600 * 24)));
         const totalRoomPrice = roomPrice * nights;
-        const mealPlanTotalPrice = selectedMealPlan ? Number(selectedMealPlan.pricePerPerson) * (Number(data.numberOfPersons) || 0) * nights : 0;
+        const mealPlanTotalPrice = selectedMealPlan ? mealPlanRate * (Number(data.numberOfPersons) || 0) * nights : 0;
         const totalPrice = totalRoomPrice + mealPlanTotalPrice;
         
         const reservation: any = await apiRequest("POST", "/api/reservations", {
@@ -398,7 +401,7 @@ export default function FrontDeskDashboard() {
           numberOfPersons: Number(data.numberOfPersons) || 1,
           mealPlanId: data.mealPlanId || null,
           roomPrice: String(roomPrice),
-          mealPlanPrice: selectedMealPlan ? String(selectedMealPlan.pricePerPerson) : "0",
+          mealPlanPrice: data.mealPlanId ? String(mealPlanRate) : "0",
           totalPrice: String(totalPrice),
           paidAmount: data.advancePayment ? String(Number(data.advancePayment)) : "0",
           guestType: data.guestType || "walkin",
@@ -429,9 +432,9 @@ export default function FrontDeskDashboard() {
             planId: selectedMealPlan.id,
             planType: selectedMealPlan.planType,
             planName: selectedMealPlan.planName,
-            pricePerPerson: selectedMealPlan.pricePerPerson,
+            pricePerPerson: data.mealPlanRate ? String(data.mealPlanRate) : selectedMealPlan.pricePerPerson,
             numberOfPersons: Number(data.numberOfPersons) || 0,
-            totalCost: Number(selectedMealPlan.pricePerPerson) * (Number(data.numberOfPersons) || 0)
+            totalCost: mealPlanRate * (Number(data.numberOfPersons) || 0)
           } : null
         }
       });
@@ -815,16 +818,16 @@ export default function FrontDeskDashboard() {
       const room = rooms.find(r => r.id === data.roomId);
       const roomPrice = room?.roomType?.priceWalkin ? Number(room.roomType.priceWalkin) : 0;
       
-      const plan = mealPlans.find(p => p.id === data.mealPlanId);
-      const mealPlanPrice = plan && data.numberOfPersons 
-        ? Number(plan.pricePerPerson) * Number(data.numberOfPersons) 
+      const mealRate = data.mealPlanRate ? Number(data.mealPlanRate) : 0;
+      const mealPlanPricePerNight = data.mealPlanId && data.numberOfPersons 
+        ? mealRate * Number(data.numberOfPersons) 
         : 0;
       
       const checkIn = new Date(data.checkInDate);
       const checkOut = new Date(data.checkOutDate);
       const nights = Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 3600 * 24)));
       
-      const totalPrice = (roomPrice + mealPlanPrice) * nights;
+      const totalPrice = (roomPrice + mealPlanPricePerNight) * nights;
 
       await apiRequest("POST", "/api/reservations", {
         hotelId: user?.hotelId,
@@ -837,7 +840,7 @@ export default function FrontDeskDashboard() {
         numberOfPersons: Number(data.numberOfPersons),
         mealPlanId: data.mealPlanId || null,
         roomPrice: String(roomPrice),
-        mealPlanPrice: String(mealPlanPrice),
+        mealPlanPrice: data.mealPlanId ? String(mealRate) : "0",
         totalPrice: String(totalPrice),
         specialRequests: data.specialRequests,
         status: 'confirmed',
@@ -2393,14 +2396,23 @@ export default function FrontDeskDashboard() {
                         <FormLabel>Meal Plan (Optional)</FormLabel>
                         <FormControl>
                           <select 
-                            {...field} 
+                            {...field}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              const selectedPlan = mealPlans.find((p: any) => p.id === e.target.value);
+                              if (selectedPlan) {
+                                checkInForm.setValue("mealPlanRate", selectedPlan.pricePerPerson);
+                              } else {
+                                checkInForm.setValue("mealPlanRate", "");
+                              }
+                            }}
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             data-testid="select-meal-plan"
                           >
                             <option value="">No meal plan</option>
                             {mealPlans.map((plan: any) => (
                               <option key={plan.id} value={plan.id}>
-                                {plan.planType} - {plan.planName} (NPR {parseFloat(plan.pricePerPerson).toFixed(2)}/person)
+                                {plan.planType} - {plan.planName}
                               </option>
                             ))}
                           </select>
@@ -2410,18 +2422,32 @@ export default function FrontDeskDashboard() {
                   />
                   
                   {checkInForm.watch('mealPlanId') && (
-                    <FormField
-                      control={checkInForm.control}
-                      name="numberOfPersons"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Number of Persons</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" min="1" placeholder="1" data-testid="input-number-of-persons" />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
+                    <>
+                      <FormField
+                        control={checkInForm.control}
+                        name="mealPlanRate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Meal Plan Rate (NPR/person/day)</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="number" min="0" step="0.01" placeholder="0" data-testid="input-meal-plan-rate" />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={checkInForm.control}
+                        name="numberOfPersons"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Number of Persons</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="number" min="1" placeholder="1" data-testid="input-number-of-persons" />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </>
                   )}
                   
                   <FormField
@@ -2989,7 +3015,18 @@ export default function FrontDeskDashboard() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Meal Plan</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select 
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            const selectedPlan = mealPlans.find((p) => p.id === value);
+                            if (selectedPlan) {
+                              reservationForm.setValue("mealPlanRate", selectedPlan.pricePerPerson);
+                            } else {
+                              reservationForm.setValue("mealPlanRate", "");
+                            }
+                          }} 
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger data-testid="select-reservation-meal-plan">
                               <SelectValue placeholder="Select meal plan (optional)" />
@@ -2998,7 +3035,7 @@ export default function FrontDeskDashboard() {
                           <SelectContent>
                             {mealPlans.map((plan) => (
                               <SelectItem key={plan.id} value={plan.id}>
-                                {plan.planName} - {formatCurrency(Number(plan.pricePerPerson))}/person/day
+                                {plan.planName}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -3006,6 +3043,21 @@ export default function FrontDeskDashboard() {
                       </FormItem>
                     )}
                   />
+                  
+                  {reservationForm.watch("mealPlanId") && (
+                    <FormField
+                      control={reservationForm.control}
+                      name="mealPlanRate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Meal Plan Rate (NPR/person/day)</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="number" min="0" step="0.01" placeholder="0" data-testid="input-meal-plan-rate" />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
 
                 {reservationForm.watch("roomId") && reservationForm.watch("checkInDate") && reservationForm.watch("checkOutDate") && (
@@ -3034,9 +3086,9 @@ export default function FrontDeskDashboard() {
                           <div className="flex justify-between">
                             <span>Meal Plan ({reservationForm.watch("numberOfPersons") || 0} persons):</span>
                             <span>{(() => {
-                              const plan = mealPlans.find(p => p.id === reservationForm.watch("mealPlanId"));
+                              const mealRate = Number(reservationForm.watch("mealPlanRate")) || 0;
                               const persons = Number(reservationForm.watch("numberOfPersons")) || 0;
-                              return plan ? `${formatCurrency(Number(plan.pricePerPerson))} × ${persons} = ${formatCurrency(Number(plan.pricePerPerson) * persons)}/night` : 'N/A';
+                              return mealRate > 0 ? `${formatCurrency(mealRate)} × ${persons} = ${formatCurrency(mealRate * persons)}/night` : 'N/A';
                             })()}</span>
                           </div>
                         )}
@@ -3057,9 +3109,9 @@ export default function FrontDeskDashboard() {
                           <span>{(() => {
                             const room = rooms.find(r => r.id === reservationForm.watch("roomId"));
                             const roomPrice = room?.roomType?.priceWalkin ? Number(room.roomType.priceWalkin) : 0;
-                            const plan = mealPlans.find(p => p.id === reservationForm.watch("mealPlanId"));
-                            const mealPrice = plan && reservationForm.watch("numberOfPersons") 
-                              ? Number(plan.pricePerPerson) * Number(reservationForm.watch("numberOfPersons")) 
+                            const mealRate = Number(reservationForm.watch("mealPlanRate")) || 0;
+                            const mealPrice = reservationForm.watch("mealPlanId") && reservationForm.watch("numberOfPersons") 
+                              ? mealRate * Number(reservationForm.watch("numberOfPersons")) 
                               : 0;
                             const checkIn = reservationForm.watch("checkInDate");
                             const checkOut = reservationForm.watch("checkOutDate");
