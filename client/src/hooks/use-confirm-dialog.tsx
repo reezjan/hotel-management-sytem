@@ -50,13 +50,15 @@ export const useConfirmDialog = () => {
   const store = useConfirmDialogStore();
 
   const confirm = (config: Omit<ConfirmDialogState, 'isOpen' | 'onConfirm'> & { 
-    onConfirm: () => void | Promise<void> 
+    onConfirm?: () => void | Promise<void> 
   }): Promise<boolean> => {
     return new Promise((resolve) => {
       store.open({
         ...config,
         onConfirm: async () => {
-          await config.onConfirm();
+          if (config.onConfirm) {
+            await config.onConfirm();
+          }
           store.close();
           resolve(true);
         },

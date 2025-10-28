@@ -1382,7 +1382,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         await logAudit({
-          db,
           userId: user.id,
           hotelId: user.hotelId,
           action: "create",
@@ -1447,7 +1446,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
 
         await logAudit({
-          db,
           userId: user.id,
           hotelId: user.hotelId,
           action: "update",
@@ -1486,7 +1484,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.deleteCompany(id, user.hotelId);
 
         await logAudit({
-          db,
           userId: user.id,
           hotelId: user.hotelId,
           action: "delete",
@@ -2283,7 +2280,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { id } = req.params;
 
-      const queueItem = await storage.getRoomCleaningQueueItem(id);
+      const queueItems = await storage.getRoomCleaningQueueByHotel(user.hotelId);
+      const queueItem = queueItems.find(item => item.id === id);
       if (!queueItem) {
         return res
           .status(404)
@@ -4910,7 +4908,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all service charges for this reservation
       const serviceCharges = await storage.getRoomServiceCharges(id);
       const serviceChargesTotal = serviceCharges.reduce((sum, charge) => {
-        return sum + Number(charge.amount || 0);
+        return sum + Number(charge.totalCharge || 0);
       }, 0);
       
       // Calculate actual total including service charges

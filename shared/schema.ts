@@ -1383,9 +1383,24 @@ export const insertGuestSchema = createInsertSchema(guests).omit({
 
 export const insertCompanySchema = createInsertSchema(companies).omit({
   id: true,
+  hotelId: true,
+  createdBy: true,
   createdAt: true,
   updatedAt: true,
   deletedAt: true
+}).extend({
+  discountPercentage: z.union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((val) => {
+      if (val === null || val === undefined || val === "") return null;
+      return String(val);
+    })
+    .optional(),
+  creditLimit: z.union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((val) => {
+      if (val === null || val === undefined || val === "") return null;
+      return String(val);
+    })
+    .optional()
 });
 
 export const insertStockRequestSchema = createInsertSchema(stockRequests).omit({

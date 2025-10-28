@@ -157,7 +157,7 @@ export default function CompanyProfiles() {
       discountPercentage: company.discountPercentage || "0",
       creditLimit: company.creditLimit || "",
       notes: company.notes || "",
-      isActive: company.isActive
+      isActive: company.isActive ?? true
     });
     setDialogOpen(true);
   };
