@@ -92,6 +92,12 @@ export default function GuestManagement() {
     }
   });
 
+  // Helper function to get room number from room ID
+  const getRoomNumber = (roomId: string) => {
+    const room = rooms.find(r => r.id === roomId);
+    return room?.roomNumber || 'Unknown';
+  };
+
   const transferRoomMutation = useMutation({
     mutationFn: async (data: { reservationId: string; newRoomId: string }) => {
       return apiRequest("PATCH", `/api/reservations/${data.reservationId}/transfer-room`, { newRoomId: data.newRoomId });
@@ -178,7 +184,7 @@ export default function GuestManagement() {
   const handleEditGuest = (guest: any) => {
     setSelectedGuest(guest);
     guestInfoForm.reset({
-      name: guest.name || "",
+      name: `${guest.firstName} ${guest.lastName}`,
       phone: guest.phone || "",
       email: guest.email || "",
       idNumber: guest.idNumber || "",
@@ -221,15 +227,22 @@ export default function GuestManagement() {
   const onGuestInfoSubmit = (data: any) => {
     if (!selectedGuest) return;
 
+    // Split name into firstName and lastName
+    const nameParts = data.name.trim().split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
     updateGuestMutation.mutate({
       guestId: selectedGuest.id,
-      updates: data
+      updates: {
+        firstName,
+        lastName,
+        phone: data.phone,
+        email: data.email || undefined,
+        idNumber: data.idNumber || undefined,
+        nationality: data.nationality || undefined
+      }
     });
-  };
-
-  const getRoomNumber = (roomId: string) => {
-    const room = rooms.find(r => r.id === roomId);
-    return room?.roomNumber || "Unknown";
   };
 
   const getGuestName = (reservationId: string) => {
@@ -424,7 +437,7 @@ export default function GuestManagement() {
                     <TableBody>
                       {guests.map((guest) => (
                         <TableRow key={guest.id}>
-                          <TableCell className="font-medium">{guest.name}</TableCell>
+                          <TableCell className="font-medium">{guest.firstName} {guest.lastName}</TableCell>
                           <TableCell>{guest.phone}</TableCell>
                           <TableCell>{guest.email || "N/A"}</TableCell>
                           <TableCell>{guest.idNumber || "N/A"}</TableCell>

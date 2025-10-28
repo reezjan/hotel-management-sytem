@@ -4873,7 +4873,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Broadcast reservation update
-      wsEvents.emit("reservation:updated", updated);
+      wsEvents.reservationUpdated(currentUser.hotelId, updated);
 
       res.json(updated);
     } catch (error) {
@@ -4904,10 +4904,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Reservation not found" });
       }
 
-      // CRITICAL: Check for outstanding balance
-      const totalAmount = Number(reservation.totalPrice || 0);
+      // CRITICAL: Calculate actual total including service charges
+      const baseTotal = Number(reservation.totalPrice || 0);
+      
+      // Get all service charges for this reservation
+      const serviceCharges = await storage.getRoomServiceCharges(id);
+      const serviceChargesTotal = serviceCharges.reduce((sum, charge) => {
+        return sum + Number(charge.amount || 0);
+      }, 0);
+      
+      // Calculate actual total including service charges
+      const totalAmount = baseTotal + serviceChargesTotal;
       const paidAmount = Number(reservation.paidAmount || 0);
       const balanceDue = totalAmount - paidAmount;
+
+      // Log checkout validation for debugging
+      console.log('Checkout validation:', {
+        reservationId: id,
+        baseTotal,
+        serviceChargesTotal,
+        serviceChargesCount: serviceCharges.length,
+        totalAmount,
+        paidAmount,
+        balanceDue
+      });
 
       if (balanceDue > 0) {
         // Only managers can override balance requirement
