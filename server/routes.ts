@@ -39,6 +39,8 @@ import {
   insertSecuritySettingsSchema,
   vouchers,
   guests,
+  companies,
+  insertCompanySchema,
   hallBookings,
   halls,
   servicePackages,
@@ -1157,6 +1159,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Failed to restore guest" 
       });
+    }
+  });
+
+  // Company routes
+  app.get("/api/hotels/current/companies", requireRole(['front_desk', 'manager', 'owner', 'super_admin']), async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const companies = await storage.getCompaniesByHotel(user.hotelId);
+      res.json(companies);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+      res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+
+  app.post("/api/hotels/current/companies", requireRole(['front_desk', 'manager', 'owner', 'super_admin']), async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+
+      const validatedData = insertCompanySchema.parse(req.body);
+      const company = await storage.createCompany(validatedData, user.hotelId, user.id);
+
+      await logAudit({
+        db,
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'create',
+        resourceType: 'company',
+        resourceId: company.id,
+        details: { companyName: company.name }
+      });
+
+      res.json(company);
+    } catch (error) {
+      console.error("Company creation error:", error);
+      res.status(400).json({ message: "Failed to create company" });
+    }
+  });
+
+  app.get("/api/companies/:id", requireRole(['front_desk', 'manager', 'owner', 'super_admin']), async (req, res) => {
+    try {
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+      const company = await storage.getCompany(id, user.hotelId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      res.json(company);
+    } catch (error) {
+      console.error("Error fetching company:", error);
+      res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+
+  app.put("/api/companies/:id", requireRole(['front_desk', 'manager', 'owner', 'super_admin']), async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+
+      const validatedData = insertCompanySchema.partial().parse(req.body);
+      const company = await storage.updateCompany(id, user.hotelId, validatedData);
+
+      await logAudit({
+        db,
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'update',
+        resourceType: 'company',
+        resourceId: company.id,
+        details: { changes: validatedData }
+      });
+
+      res.json(company);
+    } catch (error) {
+      console.error("Company update error:", error);
+      const message = error instanceof Error ? error.message : "Failed to update company";
+      const status = message.includes("not found") ? 404 : 400;
+      res.status(status).json({ message });
+    }
+  });
+
+  app.delete("/api/companies/:id", requireRole(['manager', 'owner', 'super_admin']), async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      if (!user || !user.hotelId) {
+        return res.status(400).json({ message: "User not associated with a hotel" });
+      }
+      const { id } = req.params;
+
+      await storage.deleteCompany(id, user.hotelId);
+
+      await logAudit({
+        db,
+        userId: user.id,
+        hotelId: user.hotelId,
+        action: 'delete',
+        resourceType: 'company',
+        resourceId: id,
+        details: { action: 'soft delete' }
+      });
+
+      res.json({ message: "Company deleted successfully (soft delete)" });
+    } catch (error) {
+      console.error("Company deletion error:", error);
+      const message = error instanceof Error ? error.message : "Failed to delete company";
+      const status = message.includes("not found") ? 404 : 500;
+      res.status(status).json({ message });
     }
   });
 

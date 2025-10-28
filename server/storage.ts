@@ -98,6 +98,8 @@ import {
   type InsertMealVoucher,
   type Guest,
   type InsertGuest,
+  type Company,
+  type InsertCompany,
   type StockRequest,
   type InsertStockRequest,
   type SelectHallBooking,
@@ -133,7 +135,8 @@ import {
   type InsertKnownDevice,
   securitySettings,
   type SecuritySettings,
-  type InsertSecuritySettings
+  type InsertSecuritySettings,
+  companies
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, not, isNull, desc, asc, sql, gte, lte, gt, lt, ne, inArray } from "drizzle-orm";
@@ -376,6 +379,13 @@ export interface IStorage {
   deleteGuest(id: string): Promise<void>;
   restoreGuest(id: string, hotelId: string): Promise<Guest>;
   searchGuests(hotelId: string, searchTerm: string): Promise<Guest[]>;
+  
+  // Company operations
+  getCompaniesByHotel(hotelId: string): Promise<Company[]>;
+  getCompany(id: string, hotelId: string): Promise<Company | undefined>;
+  createCompany(company: InsertCompany, hotelId: string, createdBy: string): Promise<Company>;
+  updateCompany(id: string, hotelId: string, company: Partial<InsertCompany>): Promise<Company>;
+  deleteCompany(id: string, hotelId: string): Promise<void>;
   
   // Stock request operations
   getStockRequestsByHotel(hotelId: string): Promise<StockRequest[]>;
@@ -3299,6 +3309,74 @@ export class DatabaseStorage implements IStorage {
         sql`(LOWER(${guests.firstName}) LIKE ${search} OR LOWER(${guests.lastName}) LIKE ${search} OR LOWER(${guests.phone}) LIKE ${search} OR LOWER(${guests.email}) LIKE ${search})`
       ))
       .orderBy(desc(guests.createdAt));
+  }
+
+  // Company operations
+  async getCompaniesByHotel(hotelId: string): Promise<Company[]> {
+    return await db
+      .select()
+      .from(companies)
+      .where(and(
+        eq(companies.hotelId, hotelId),
+        isNull(companies.deletedAt)
+      ))
+      .orderBy(desc(companies.createdAt));
+  }
+
+  async getCompany(id: string, hotelId: string): Promise<Company | undefined> {
+    const [company] = await db
+      .select()
+      .from(companies)
+      .where(and(
+        eq(companies.id, id),
+        eq(companies.hotelId, hotelId),
+        isNull(companies.deletedAt)
+      ));
+    return company || undefined;
+  }
+
+  async createCompany(companyData: InsertCompany, hotelId: string, createdBy: string): Promise<Company> {
+    const [company] = await db
+      .insert(companies)
+      .values({
+        ...companyData,
+        hotelId,
+        createdBy
+      })
+      .returning();
+    return company;
+  }
+
+  async updateCompany(id: string, hotelId: string, companyData: Partial<InsertCompany>): Promise<Company> {
+    const [company] = await db
+      .update(companies)
+      .set({ ...companyData, updatedAt: new Date() })
+      .where(and(
+        eq(companies.id, id),
+        eq(companies.hotelId, hotelId)
+      ))
+      .returning();
+    
+    if (!company) {
+      throw new Error('Company not found or does not belong to this hotel');
+    }
+    
+    return company;
+  }
+
+  async deleteCompany(id: string, hotelId: string): Promise<void> {
+    const result = await db
+      .update(companies)
+      .set({ deletedAt: new Date() })
+      .where(and(
+        eq(companies.id, id),
+        eq(companies.hotelId, hotelId)
+      ))
+      .returning();
+    
+    if (!result || result.length === 0) {
+      throw new Error('Company not found or does not belong to this hotel');
+    }
   }
 
   // Stock request operations

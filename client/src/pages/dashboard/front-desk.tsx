@@ -47,7 +47,7 @@ import { useWebSocket } from "@/hooks/use-websocket";
 import { useRealtimeQuery } from "@/hooks/use-realtime-query";
 import { formatCurrency, getStatusColor, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import type { Room, Task, RoomServiceOrder, MealPlan, Voucher, MenuItem, MenuCategory, RoomType } from "@shared/schema";
+import type { Room, Task, RoomServiceOrder, MealPlan, Voucher, MenuItem, MenuCategory, RoomType, Company } from "@shared/schema";
 import { RoomServiceChargeModal } from "@/components/modals/room-service-charge-modal";
 
 export default function FrontDeskDashboard() {
@@ -77,6 +77,7 @@ export default function FrontDeskDashboard() {
   const [foodOrderItems, setFoodOrderItems] = useState<Array<{ item: MenuItem; quantity: number }>>([]);
   const [guestType, setGuestType] = useState<"company" | "walkin">("walkin");
   const [officeName, setOfficeName] = useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   const [isExtendStayModalOpen, setIsExtendStayModalOpen] = useState(false);
   const [newCheckoutDate, setNewCheckoutDate] = useState<Date | undefined>(undefined);
   const [guestSearchQuery, setGuestSearchQuery] = useState("");
@@ -99,6 +100,11 @@ export default function FrontDeskDashboard() {
   const { data: guests = [] } = useQuery<any[]>({
     queryKey: ["/api/hotels/current/guests"],
     refetchInterval: 3000,
+    enabled: !!user?.hotelId
+  });
+
+  const { data: companies = [] } = useQuery<Company[]>({
+    queryKey: ["/api/hotels/current/companies"],
     enabled: !!user?.hotelId
   });
 
@@ -1131,8 +1137,8 @@ export default function FrontDeskDashboard() {
       toast({ title: "Error", description: "Please select payment method for advance payment", variant: "destructive" });
       return;
     }
-    if (guestType === "company" && !officeName.trim()) {
-      toast({ title: "Error", description: "Company name is required for company guests", variant: "destructive" });
+    if (guestType === "company" && !selectedCompanyId && !officeName.trim()) {
+      toast({ title: "Error", description: "Please select a company for company guests", variant: "destructive" });
       return;
     }
     checkInGuestMutation.mutate({ ...data, roomId: selectedRoom?.id, guestType, officeName: guestType === "company" ? officeName : null });
@@ -2310,14 +2316,60 @@ export default function FrontDeskDashboard() {
                     </Button>
                   </div>
                   {guestType === 'company' && (
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Company Name *</label>
-                      <Input 
-                        value={officeName}
-                        onChange={(e) => setOfficeName(e.target.value)}
-                        placeholder="Enter office/company name"
-                        data-testid="input-office-name"
-                      />
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium mb-2 block">Select Company *</label>
+                      <Select
+                        value={selectedCompanyId}
+                        onValueChange={(value) => {
+                          setSelectedCompanyId(value);
+                          const company = companies.find(c => c.id === value);
+                          if (company) {
+                            setOfficeName(company.name);
+                          }
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-company">
+                          <SelectValue placeholder="Select a company" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {companies.filter(c => c.isActive).map((company) => (
+                            <SelectItem key={company.id} value={company.id} data-testid={`select-company-option-${company.id}`}>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{company.name}</span>
+                                {company.discountPercentage && Number(company.discountPercentage) > 0 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {company.discountPercentage}% discount available
+                                  </span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                          {companies.filter(c => c.isActive).length === 0 && (
+                            <div className="p-2 text-sm text-muted-foreground">
+                              No companies found. Add companies in Company Profiles.
+                            </div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {selectedCompanyId && companies.find(c => c.id === selectedCompanyId) && (
+                        <div className="text-xs space-y-1 text-muted-foreground p-2 bg-muted rounded">
+                          {(() => {
+                            const company = companies.find(c => c.id === selectedCompanyId);
+                            return company && (
+                              <>
+                                {company.contactPerson && <div>Contact: {company.contactPerson}</div>}
+                                {company.phone && <div>Phone: {company.phone}</div>}
+                                {company.email && <div>Email: {company.email}</div>}
+                                {company.discountPercentage && Number(company.discountPercentage) > 0 && (
+                                  <div className="font-semibold text-green-600 dark:text-green-400">
+                                    Discount: {company.discountPercentage}%
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="text-sm text-muted-foreground">

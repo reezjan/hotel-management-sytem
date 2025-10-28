@@ -127,6 +127,7 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'dashboard': '/front-desk',
         'guests': '/guests',
         'guest-management': '/front-desk/guest-management',
+        'companies': '/front-desk/company-profiles',
         'hall-bookings': '/hall-bookings',
         'request-stock': '/front-desk/request-stock',
         'maintenance': '/front-desk/maintenance-requests',

@@ -273,6 +273,7 @@ export const NAVIGATION_ITEMS = {
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
     { icon: 'Users', label: 'Guest Search', id: 'guests' },
     { icon: 'UserCog', label: 'Guest Management', id: 'guest-management' },
+    { icon: 'Building2', label: 'Company Profiles', id: 'companies' },
     { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
     { icon: 'Wrench', label: 'Maintenance', id: 'maintenance' },
