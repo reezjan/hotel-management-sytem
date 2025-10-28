@@ -189,7 +189,7 @@ export default function GuestsPage() {
   });
 
   return (
-    <DashboardLayout title="Guest Management">
+    <DashboardLayout title="Guest Search">
       <div className="space-y-6">
         <Card className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
           <CardContent className="pt-6">

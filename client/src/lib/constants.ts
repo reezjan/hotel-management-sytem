@@ -229,7 +229,7 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.OWNER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Users', label: 'Guest Management', id: 'guests' },
+    { icon: 'Users', label: 'Guest Search', id: 'guests' },
     { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'PieChart', label: 'Financial Overview', id: 'financial' },
     { icon: 'Package', label: 'Inventory Tracking', id: 'inventory' },
@@ -247,7 +247,7 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.MANAGER]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Users', label: 'Guest Management', id: 'guests' },
+    { icon: 'Users', label: 'Guest Search', id: 'guests' },
     { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'UserCog', label: 'Staff Management', id: 'staff' },
     { icon: 'ClipboardCheck', label: 'Attendance Reports', id: 'attendance' },
@@ -271,7 +271,7 @@ export const NAVIGATION_ITEMS = {
   ],
   [ROLES.FRONT_DESK]: [
     { icon: 'LayoutDashboard', label: 'Dashboard', id: 'dashboard' },
-    { icon: 'Users', label: 'Guest Management', id: 'guests' },
+    { icon: 'Users', label: 'Guest Search', id: 'guests' },
     { icon: 'CalendarCheck', label: 'Hall Bookings', id: 'hall-bookings' },
     { icon: 'Package', label: 'Request Stock', id: 'request-stock' },
     { icon: 'Wrench', label: 'Maintenance', id: 'maintenance' },
