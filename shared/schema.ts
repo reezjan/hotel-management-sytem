@@ -752,6 +752,8 @@ export const roomReservations = pgTable("room_reservations", {
   checkOutDate: timestamp("check_out_date", { withTimezone: true }).notNull(),
   numberOfPersons: integer("number_of_persons").notNull(),
   mealPlanId: uuid("meal_plan_id").references(() => mealPlans.id),
+  initialRoomRate: numeric("initial_room_rate", { precision: 12, scale: 2 }),
+  billingRoomRate: numeric("billing_room_rate", { precision: 12, scale: 2 }),
   roomPrice: numeric("room_price", { precision: 12, scale: 2 }),
   mealPlanPrice: numeric("meal_plan_price", { precision: 12, scale: 2 }),
   totalPrice: numeric("total_price", { precision: 12, scale: 2 }),

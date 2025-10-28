@@ -199,7 +199,8 @@ export default function FrontDeskDashboard() {
       advancePayment: "",
       mealPlanId: "",
       mealPlanRate: "",
-      numberOfPersons: ""
+      numberOfPersons: "",
+      specialRequests: ""
     }
   });
 
@@ -367,27 +368,45 @@ export default function FrontDeskDashboard() {
         
         if (existingReservation) {
           reservationId = existingReservation.id;
-          // Update the paidAmount if advance payment is provided
+          // Update the paidAmount and specialRequests
+          const updateData: any = {
+            status: "confirmed"
+          };
+          
           if (data.advancePayment && Number(data.advancePayment) > 0) {
             const currentPaid = Number(existingReservation.paidAmount || 0);
             const newPaid = currentPaid + Number(data.advancePayment);
-            
-            await apiRequest("PUT", `/api/reservations/${reservationId}`, {
-              paidAmount: String(newPaid),
-              status: "confirmed"
-            });
+            updateData.paidAmount = String(newPaid);
           }
+          
+          if (data.specialRequests) {
+            updateData.specialRequests = data.specialRequests;
+          }
+          
+          await apiRequest("PUT", `/api/reservations/${reservationId}`, updateData);
         }
       }
       
       // If no existing reservation found (walk-in or company without reservation), create one
       if (!reservationId) {
-        // Calculate total price using custom meal plan rate
+        // Calculate billing room rate using new formula
+        const initialRoomRate = roomPrice;
+        const numberOfPersons = Number(data.numberOfPersons) || 1;
+        
+        // Calculate total meal plan cost per night for all persons
+        const mealPlanTotalPerNight = mealPlanRate * numberOfPersons;
+        
+        // Billing room rate = Initial room rate - Total meal plan cost per night
+        const billingRoomRate = initialRoomRate - mealPlanTotalPerNight;
+        
+        // Calculate total price over all nights
         const checkInDate = new Date(data.checkInDate);
         const checkOutDate = new Date(data.checkOutDate);
         const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 3600 * 24)));
-        const totalRoomPrice = roomPrice * nights;
-        const mealPlanTotalPrice = selectedMealPlan ? mealPlanRate * (Number(data.numberOfPersons) || 0) * nights : 0;
+        
+        // Total = (Billing Room Rate + Meal Plan Total) * nights = Initial Room Rate * nights
+        const totalRoomPrice = billingRoomRate * nights;
+        const mealPlanTotalPrice = mealPlanTotalPerNight * nights;
         const totalPrice = totalRoomPrice + mealPlanTotalPrice;
         
         const reservation: any = await apiRequest("POST", "/api/reservations", {
@@ -400,15 +419,24 @@ export default function FrontDeskDashboard() {
           checkOutDate: data.checkOutDate,
           numberOfPersons: Number(data.numberOfPersons) || 1,
           mealPlanId: data.mealPlanId || null,
-          roomPrice: String(roomPrice),
+          initialRoomRate: String(initialRoomRate),
+          billingRoomRate: String(billingRoomRate),
+          roomPrice: String(billingRoomRate),
           mealPlanPrice: data.mealPlanId ? String(mealPlanRate) : "0",
           totalPrice: String(totalPrice),
           paidAmount: data.advancePayment ? String(Number(data.advancePayment)) : "0",
+          specialRequests: data.specialRequests || null,
           guestType: data.guestType || "walkin",
           status: "confirmed"
         });
         reservationId = reservation.id;
       }
+      
+      // Calculate billing room rate for occupant details
+      const initialRoomRateForOccupant = roomPrice;
+      const numberOfPersonsForOccupant = Number(data.numberOfPersons) || 1;
+      const mealPlanTotalPerNightForOccupant = mealPlanRate * numberOfPersonsForOccupant;
+      const billingRoomRateForOccupant = initialRoomRateForOccupant - mealPlanTotalPerNightForOccupant;
       
       // Update room occupancy with reservation ID
       await apiRequest("PUT", `/api/rooms/${data.roomId}`, {
@@ -426,7 +454,9 @@ export default function FrontDeskDashboard() {
           officeName: data.officeName || null,
           roomTypeId: roomType?.id || null,
           roomTypeName: roomType?.name || null,
-          roomPrice: roomPrice,
+          initialRoomRate: initialRoomRateForOccupant,
+          billingRoomRate: billingRoomRateForOccupant,
+          roomPrice: billingRoomRateForOccupant,
           reservationId: reservationId,
           mealPlan: selectedMealPlan ? {
             planId: selectedMealPlan.id,
@@ -2449,6 +2479,51 @@ export default function FrontDeskDashboard() {
                       />
                     </>
                   )}
+                </div>
+
+                {checkInForm.watch('mealPlanId') && selectedRoom && selectedRoom.roomType && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
+                    <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">Billing Breakdown (Per Night)</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between" data-testid="text-initial-rate">
+                        <span className="text-muted-foreground">Initial Room Rate:</span>
+                        <span className="font-medium">
+                          NPR {parseFloat(guestType === 'company' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between" data-testid="text-meal-plan-rate">
+                        <span className="text-muted-foreground">Meal Plan Rate ({checkInForm.watch('numberOfPersons') || 1} person{(checkInForm.watch('numberOfPersons') || 1) > 1 ? 's' : ''}):</span>
+                        <span className="font-medium">
+                          NPR {(parseFloat(checkInForm.watch('mealPlanRate') || '0') * (parseFloat(checkInForm.watch('numberOfPersons') || '1'))).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="border-t pt-2">
+                        <div className="flex justify-between" data-testid="text-billing-rate">
+                          <span className="text-muted-foreground">Billing Room Rate:</span>
+                          <span className="font-semibold text-blue-600 dark:text-blue-400">
+                            NPR {(parseFloat(guestType === 'company' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')) - (parseFloat(checkInForm.watch('mealPlanRate') || '0') * parseFloat(checkInForm.watch('numberOfPersons') || '1'))).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          (Initial Room Rate - Total Meal Plan Cost)
+                        </div>
+                      </div>
+                      <div className="border-t pt-2">
+                        <div className="flex justify-between" data-testid="text-subtotal">
+                          <span className="font-semibold">Subtotal Per Night:</span>
+                          <span className="font-bold text-lg">
+                            NPR {parseFloat(guestType === 'company' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          (Billing Room Rate + Total Meal Plan Cost = Initial Room Rate)
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   
                   <FormField
                     control={checkInForm.control}
@@ -2476,6 +2551,29 @@ export default function FrontDeskDashboard() {
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={checkInForm.control}
+                  name="specialRequests"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Special Instructions (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          placeholder="Enter any special requests, dietary requirements, preferences, etc."
+                          maxLength={500}
+                          rows={3}
+                          data-testid="textarea-special-instructions"
+                          className="resize-none"
+                        />
+                      </FormControl>
+                      <div className="flex justify-end text-xs text-muted-foreground mt-1">
+                        {field.value?.length || 0} / 500 characters
+                      </div>
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={checkInForm.control}
