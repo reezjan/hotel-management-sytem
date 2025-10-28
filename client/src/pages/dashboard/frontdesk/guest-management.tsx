@@ -162,7 +162,7 @@ export default function GuestManagement() {
     }
   });
 
-  const checkedInReservations = reservations.filter(r => r.status === 'checked_in');
+  const checkedInReservations = reservations.filter(r => r.status === 'checked_in' || r.status === 'confirmed');
   const activeReservations = reservations.filter(r => r.status === 'checked_in' || r.status === 'confirmed');
   const availableRooms = rooms.filter(r => !r.isOccupied);
 
@@ -251,7 +251,7 @@ export default function GuestManagement() {
   };
 
   return (
-    <DashboardLayout role="front_desk">
+    <DashboardLayout title="Guest Management">
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
@@ -284,13 +284,13 @@ export default function GuestManagement() {
               <CardHeader>
                 <CardTitle>Room Transfer</CardTitle>
                 <CardDescription>
-                  Transfer checked-in guests from one room to another
+                  Transfer confirmed or checked-in guests from one room to another
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {checkedInReservations.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
-                    No checked-in guests available for transfer
+                    No guests available for transfer
                   </p>
                 ) : (
                   <Table>
