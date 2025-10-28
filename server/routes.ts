@@ -3768,6 +3768,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update room status (for front desk to mark rooms as cleaned)
+  app.patch("/api/rooms/:roomId/status", requireActiveUser, async (req, res) => {
+    try {
+      const { roomId } = req.params;
+      const { status } = req.body;
+      const currentUser = req.user as any;
+
+      if (!currentUser || !currentUser.id) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+
+      // Validate status value
+      const validStatuses = ['available', 'occupied', 'cleaning', 'maintenance'];
+      if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          message: "Invalid status. Must be one of: available, occupied, cleaning, maintenance" 
+        });
+      }
+
+      // Update room status
+      const updatedRoom = await storage.updateRoomStatus(roomId, status, currentUser.id);
+
+      // Trigger WebSocket event for real-time updates
+      if (currentUser.hotelId) {
+        wsEvents.roomStatusUpdated(currentUser.hotelId, updatedRoom);
+      }
+
+      res.json(updatedRoom);
+    } catch (error) {
+      console.error("Room status update error:", error);
+      res.status(500).json({ 
+        message: "Failed to update room status",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Room Reservations routes
   app.post("/api/reservations", async (req, res) => {
     try {

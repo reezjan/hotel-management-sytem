@@ -174,6 +174,7 @@ export interface IStorage {
   getRoom(id: string): Promise<Room | undefined>;
   createRoom(room: InsertRoom): Promise<Room>;
   updateRoom(id: string, room: Partial<InsertRoom>): Promise<Room>;
+  updateRoomStatus(roomId: string, status: string, userId: string): Promise<Room>;
   deleteRoom(id: string): Promise<void>;
   createRoomStatusLog(log: InsertRoomStatusLog): Promise<RoomStatusLog>;
 
@@ -744,6 +745,47 @@ export class DatabaseStorage implements IStorage {
       .where(eq(rooms.id, id))
       .returning();
     return room;
+  }
+
+  async updateRoomStatus(roomId: string, status: string, userId: string): Promise<Room> {
+    // Get current room to find previous status and other details
+    const currentRoom = await this.getRoom(roomId);
+    if (!currentRoom) {
+      throw new Error('Room not found');
+    }
+
+    // Update room status
+    const [updatedRoom] = await db
+      .update(rooms)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(rooms.id, roomId))
+      .returning();
+
+    // Create status change log
+    await this.createRoomStatusLog({
+      roomId,
+      roomNumber: currentRoom.roomNumber || '',
+      previousStatus: currentRoom.status || '',
+      newStatus: status,
+      changedBy: userId,
+      reason: 'Status changed by front desk'
+    });
+
+    // If room is being marked as available, update cleaning queue
+    if (status === 'available') {
+      await db
+        .update(roomCleaningQueue)
+        .set({ 
+          status: 'cleaned',
+          updatedAt: new Date()
+        })
+        .where(and(
+          eq(roomCleaningQueue.roomId, roomId),
+          eq(roomCleaningQueue.status, 'cleaning')
+        ));
+    }
+
+    return updatedRoom;
   }
 
   async deleteRoom(id: string): Promise<void> {

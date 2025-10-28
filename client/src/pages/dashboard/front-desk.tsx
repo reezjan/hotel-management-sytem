@@ -1493,6 +1493,92 @@ export default function FrontDeskDashboard() {
           />
         </div>
 
+        {/* Room Status Management */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              Room Status Management
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+              {rooms.map((room) => {
+                const getStatusColor = (status: string) => {
+                  switch (status) {
+                    case 'available':
+                      return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800';
+                    case 'occupied':
+                      return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800';
+                    case 'cleaning':
+                      return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-200 dark:border-yellow-800';
+                    case 'maintenance':
+                      return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800';
+                    default:
+                      return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-950 dark:text-gray-200 dark:border-gray-800';
+                  }
+                };
+
+                const updateRoomStatusMutation = useMutation({
+                  mutationFn: async (data: { roomId: string; status: string }) => {
+                    return apiRequest("PATCH", `/api/rooms/${data.roomId}/status`, { status: data.status });
+                  },
+                  onSuccess: () => {
+                    queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
+                    toast({ title: "Room status updated successfully" });
+                  },
+                  onError: (error: any) => {
+                    toast({
+                      title: "Failed to update room status",
+                      description: error.message || "Please try again",
+                      variant: "destructive"
+                    });
+                  }
+                });
+
+                const handleMarkCleaned = (roomId: string, roomNumber: string) => {
+                  confirm({
+                    title: "Mark Room as Cleaned",
+                    description: `Are you sure you want to mark Room ${roomNumber} as cleaned? This will make it available for new guests.`,
+                    onConfirm: () => {
+                      updateRoomStatusMutation.mutate({ roomId, status: 'available' });
+                    }
+                  });
+                };
+
+                return (
+                  <div 
+                    key={room.id} 
+                    className="border rounded-lg p-3 space-y-2 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-lg">{room.roomNumber}</span>
+                      <Badge 
+                        className={getStatusColor(room.status || 'available')}
+                        data-testid={`badge-room-status-${room.roomNumber}`}
+                      >
+                        {room.status || 'available'}
+                      </Badge>
+                    </div>
+                    {room.status === 'cleaning' && (
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        onClick={() => handleMarkCleaned(room.id, room.roomNumber || '')}
+                        disabled={updateRoomStatusMutation.isPending}
+                        data-testid={`button-mark-cleaned-${room.roomNumber}`}
+                      >
+                        <Check className="h-4 w-4 mr-1" />
+                        Mark as Cleaned
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Quick Actions - Grouped Operations */}
         <Card>
           <CardHeader className="pb-3">
