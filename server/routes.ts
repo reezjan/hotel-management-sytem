@@ -1829,6 +1829,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/room-cleaning-queue/:id/mark-cleaned", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const user = req.user as any;
+      const userRole = user.role?.name || '';
+      
+      if (userRole !== 'front_desk' && userRole !== 'housekeeping_supervisor') {
+        return res.status(403).json({ 
+          message: "Only front desk and housekeeping supervisor can mark rooms as cleaned" 
+        });
+      }
+      
+      const { id } = req.params;
+      
+      const queueItem = await storage.getRoomCleaningQueueItem(id);
+      if (!queueItem) {
+        return res.status(404).json({ message: "Cleaning queue item not found" });
+      }
+      
+      const updatedQueue = await storage.updateRoomCleaningQueue(id, { 
+        status: 'completed'
+      } as any);
+      
+      wsEvents.roomStatusUpdated(user.hotelId, { 
+        id: queueItem.roomId, 
+        cleaningStatus: 'completed' 
+      });
+      
+      res.json(updatedQueue);
+    } catch (error) {
+      console.error("Mark room cleaned error:", error);
+      res.status(400).json({ message: "Failed to mark room as cleaned" });
+    }
+  });
+
   app.get("/api/hotels/current/maintenance-requests", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {

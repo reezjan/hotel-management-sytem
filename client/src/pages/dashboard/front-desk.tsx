@@ -35,7 +35,9 @@ import {
   Wrench,
   Search,
   Utensils,
-  Building2
+  Building2,
+  Check,
+  Sparkles
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -586,6 +588,24 @@ export default function FrontDeskDashboard() {
       toast({ 
         title: "Failed to record advance payment", 
         description: error.message || "Could not record advance payment",
+        variant: "destructive" 
+      });
+    }
+  });
+
+  const markRoomCleanedMutation = useMutation({
+    mutationFn: async (queueId: string) => {
+      await apiRequest("POST", `/api/room-cleaning-queue/${queueId}/mark-cleaned`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/room-cleaning-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hotels", user?.hotelId, "rooms"] });
+      toast({ title: "Room marked as cleaned successfully" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Failed to mark room as cleaned", 
+        description: error.message || "Could not update room status",
         variant: "destructive" 
       });
     }
@@ -1602,6 +1622,54 @@ export default function FrontDeskDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Room Cleaning Queue */}
+        {cleaningQueue.filter((q: any) => q.status !== 'completed').length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                Rooms Pending Cleaning ({cleaningQueue.filter((q: any) => q.status !== 'completed').length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {cleaningQueue
+                  .filter((q: any) => q.status !== 'completed')
+                  .map((queueItem: any) => {
+                    const room = rooms.find(r => r.id === queueItem.roomId);
+                    return (
+                      <div 
+                        key={queueItem.id} 
+                        className="flex items-center justify-between p-4 border rounded-lg bg-amber-50 dark:bg-amber-950/20"
+                        data-testid={`cleaning-queue-${queueItem.id}`}
+                      >
+                        <div className="flex-1">
+                          <div className="font-semibold text-lg">Room {room?.roomNumber || 'N/A'}</div>
+                          <div className="text-sm text-muted-foreground">
+                            <div>Status: {queueItem.status === 'cleaning' ? 'In Progress' : queueItem.status}</div>
+                            {queueItem.assignedTo && (
+                              <div className="text-xs mt-1">Assigned to staff</div>
+                            )}
+                          </div>
+                        </div>
+                        <Button 
+                          onClick={() => markRoomCleanedMutation.mutate(queueItem.id)}
+                          disabled={markRoomCleanedMutation.isPending}
+                          size="sm"
+                          className="ml-4 bg-green-600 hover:bg-green-700"
+                          data-testid={`button-mark-cleaned-${queueItem.id}`}
+                        >
+                          <Check className="h-4 w-4 mr-1" />
+                          Mark as Cleaned
+                        </Button>
+                      </div>
+                    );
+                  })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Today's Reservations */}
         {todaysReservations.length > 0 && (
