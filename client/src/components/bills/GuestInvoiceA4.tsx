@@ -35,9 +35,8 @@ export function GuestInvoiceA4({
 
   const lineItems = billCalculation?.lineItems || [];
   const subTotal = billCalculation?.subTotal || "0";
-  const vatAmount = billCalculation?.vatAmount || "0";
-  const serviceTax = billCalculation?.serviceTax || "0";
-  const luxuryTax = billCalculation?.luxuryTax || "0";
+  const taxBreakdown = billCalculation?.taxBreakdown || {};
+  const totalTax = billCalculation?.totalTax || "0";
   const totalAmount = billCalculation?.totalAmount || "0";
   const advancePaid = reservation?.paidAmount || "0";
   const balanceAmount = billCalculation?.balanceAmount || "0";
@@ -390,26 +389,20 @@ export function GuestInvoiceA4({
             <span>Sub Total:</span>
             <span>NPR {formatCurrency(subTotal)}</span>
           </div>
-          {parseFloat(vatAmount) > 0 && (
-            <div className="total-row">
-              <span>VAT (13%):</span>
-              <span>NPR {formatCurrency(vatAmount)}</span>
+          {Object.entries(taxBreakdown).map(([name, tax]: [string, any]) => (
+            <div key={name} className="total-row">
+              <span>{name} ({tax.rate}%):</span>
+              <span>NPR {formatCurrency(tax.amount)}</span>
             </div>
-          )}
-          {parseFloat(serviceTax) > 0 && (
-            <div className="total-row">
-              <span>Service Tax:</span>
-              <span>NPR {formatCurrency(serviceTax)}</span>
-            </div>
-          )}
-          {parseFloat(luxuryTax) > 0 && (
-            <div className="total-row">
-              <span>Luxury Tax:</span>
-              <span>NPR {formatCurrency(luxuryTax)}</span>
+          ))}
+          {parseFloat(totalTax) > 0 && (
+            <div className="total-row" style={{ fontWeight: "bold" }}>
+              <span>Total Tax:</span>
+              <span>NPR {formatCurrency(totalTax)}</span>
             </div>
           )}
           <div className="total-row grand-total">
-            <span>Total Amount:</span>
+            <span>Grand Total:</span>
             <span>NPR {formatCurrency(totalAmount)}</span>
           </div>
         </div>
