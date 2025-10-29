@@ -226,12 +226,20 @@ export function setupAuth(app: Express) {
 
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: string, done) => {
-    const user = await storage.getUser(id);
-    // CRITICAL: Block deactivated users from using existing sessions
-    if (user && !user.isActive) {
-      return done(null, false);
+    try {
+      const user = await storage.getUser(id);
+      if (!user) {
+        return done(null, false);
+      }
+      // CRITICAL: Block deactivated users from using existing sessions
+      if (!user.isActive) {
+        return done(null, false);
+      }
+      done(null, user);
+    } catch (error) {
+      console.error('Deserialization error:', error);
+      done(null, false);
     }
-    done(null, user);
   });
 
   app.post("/api/register", async (req, res, next) => {

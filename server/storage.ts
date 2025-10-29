@@ -472,7 +472,9 @@ export class DatabaseStorage implements IStorage {
   constructor() {
     this.sessionStore = new PostgresSessionStore({
       conString: process.env.DATABASE_URL,
-      createTableIfMissing: true
+      createTableIfMissing: true,
+      tableName: 'session',
+      pruneSessionInterval: 60 * 15
     });
   }
 
