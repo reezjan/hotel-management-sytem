@@ -54,7 +54,6 @@ export function Sidebar({ onItemClick }: SidebarProps = {}) {
         'payments': '/manager/vendor-payments',
         'vouchers': '/manager/discount-vouchers',
         'rooms': '/manager/room-setup',
-        'pricing': '/manager/room-pricing',
         'amenities': '/manager/amenities',
         'meal-plans': '/manager/meal-plans',
         'maintenance-requests': '/manager/maintenance-requests',

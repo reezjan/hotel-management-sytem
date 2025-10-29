@@ -35,7 +35,6 @@ const AttendanceReports = lazy(() => import("@/pages/dashboard/manager/attendanc
 const VendorPayments = lazy(() => import("@/pages/dashboard/manager/vendor-payments"));
 const DiscountVouchers = lazy(() => import("@/pages/dashboard/manager/discount-vouchers"));
 const RoomSetup = lazy(() => import("@/pages/dashboard/manager/room-setup"));
-const RoomPricing = lazy(() => import("@/pages/dashboard/manager/room-pricing"));
 const AmenitiesSetup = lazy(() => import("@/pages/dashboard/manager/amenities"));
 const ManagerTransactions = lazy(() => import("@/pages/dashboard/manager/transactions"));
 const ManagerLeaveApprovals = lazy(() => import("@/pages/dashboard/manager/leave-approvals"));
@@ -161,7 +160,6 @@ function Router() {
         <ProtectedRoute path="/manager/vendor-payments" component={VendorPayments} allowedRoles={["manager", "owner"]} />
         <ProtectedRoute path="/manager/discount-vouchers" component={DiscountVouchers} allowedRoles={["manager", "owner"]} />
         <ProtectedRoute path="/manager/room-setup" component={RoomSetup} allowedRoles={["manager", "owner"]} />
-        <ProtectedRoute path="/manager/room-pricing" component={RoomPricing} allowedRoles={["manager", "owner"]} />
         <ProtectedRoute path="/manager/amenities" component={AmenitiesSetup} allowedRoles={["manager", "owner"]} />
         <ProtectedRoute path="/manager/meal-plans" component={ManagerMealPlans} allowedRoles={["manager", "owner"]} />
         <ProtectedRoute path="/manager/transactions" component={ManagerTransactions} allowedRoles={["manager", "owner"]} />
