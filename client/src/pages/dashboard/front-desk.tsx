@@ -1947,7 +1947,7 @@ export default function FrontDeskDashboard() {
                   className="h-24 flex flex-col items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 border-slate-200 dark:bg-slate-950/20 dark:border-slate-700 dark:hover:bg-slate-950/30"
                   onClick={() => {
                     const room = rooms.find(r => r.isOccupied);
-                    if (room) handlePrintReceipt(room, 'bill');
+                    if (room) handlePrintA4Invoice(room, 'bill');
                     else toast({ title: "No occupied rooms to print", variant: "destructive" });
                   }}
                   data-testid="button-print-reports"
@@ -2992,6 +2992,30 @@ export default function FrontDeskDashboard() {
                     )}
                   </CardContent>
                 </Card>
+
+                {selectedRoom.occupantDetails?.currency && selectedRoom.occupantDetails.currency !== 'NPR' && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">Currency Information</h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Currency:</span>
+                        <span className="ml-2 font-medium">{selectedRoom.occupantDetails.currency}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Exchange Rate:</span>
+                        <span className="ml-2 font-medium">
+                          1 {selectedRoom.occupantDetails.currency} = NPR {selectedRoom.occupantDetails.exchangeRate}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Original Room Rate:</span>
+                        <span className="ml-2 font-medium">
+                          {selectedRoom.occupantDetails.currency} {selectedRoom.occupantDetails.originalRoomRate}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   <div>

@@ -1193,7 +1193,10 @@ export class DatabaseStorage implements IStorage {
           numberOfPersons: reservation.numberOfPersons,
           reservationId: reservationId,
           roomTypeName: roomData?.roomType?.name || 'N/A',
-          roomPrice: reservation.roomPrice
+          roomPrice: reservation.roomPrice,
+          currency: reservation.currency || 'NPR',
+          exchangeRate: reservation.exchangeRate || '1.0',
+          originalRoomRate: reservation.originalRoomRate
         },
         updatedAt: new Date()
       })
