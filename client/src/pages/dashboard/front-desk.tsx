@@ -200,7 +200,10 @@ export default function FrontDeskDashboard() {
       mealPlanId: "",
       mealPlanRate: "",
       numberOfPersons: "",
-      specialRequests: ""
+      specialRequests: "",
+      currency: "NPR",
+      exchangeRate: "1.0",
+      originalRoomRate: ""
     }
   });
 
@@ -1225,7 +1228,37 @@ export default function FrontDeskDashboard() {
       toast({ title: "Error", description: "Please select a company for company guests", variant: "destructive" });
       return;
     }
-    checkInGuestMutation.mutate({ ...data, roomId: selectedRoom?.id, guestType, officeName: guestType === "company" ? officeName : null });
+    
+    // Handle currency conversion
+    const currency = data.currency || "NPR";
+    const exchangeRate = parseFloat(data.exchangeRate || "1.0");
+    const originalRoomRate = data.originalRoomRate ? parseFloat(data.originalRoomRate) : null;
+    
+    // Calculate NPR room price
+    let roomPriceNPR;
+    if (currency !== "NPR" && originalRoomRate) {
+      // Foreign currency: convert to NPR
+      roomPriceNPR = originalRoomRate * exchangeRate;
+    } else {
+      // NPR: use the room type price directly
+      roomPriceNPR = selectedRoom?.roomType 
+        ? parseFloat(guestType === 'company' 
+          ? (selectedRoom.roomType.priceInhouse || '0') 
+          : (selectedRoom.roomType.priceWalkin || '0'))
+        : 0;
+    }
+    
+    checkInGuestMutation.mutate({ 
+      ...data, 
+      roomId: selectedRoom?.id, 
+      guestType, 
+      officeName: guestType === "company" ? officeName : null,
+      currency,
+      exchangeRate,
+      originalCurrency: currency,
+      originalRoomRate: currency !== "NPR" ? originalRoomRate : null,
+      roomPriceNPR
+    });
   };
 
   const onSubmitReservation = (data: any) => {
@@ -2415,6 +2448,77 @@ export default function FrontDeskDashboard() {
                     )}
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={checkInForm.control}
+                    name="currency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Currency</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-currency">
+                              <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="NPR">NPR (Nepali Rupee)</SelectItem>
+                            <SelectItem value="INR">INR (Indian Rupee)</SelectItem>
+                            <SelectItem value="USD">USD (US Dollar)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+
+                  {checkInForm.watch("currency") !== "NPR" && (
+                    <FormField
+                      control={checkInForm.control}
+                      name="exchangeRate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Exchange Rate (1 {checkInForm.watch("currency")} = ? NPR)
+                          </FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              step="0.0001"
+                              placeholder="Enter exchange rate"
+                              data-testid="input-exchange-rate"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+
+                {checkInForm.watch("currency") !== "NPR" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={checkInForm.control}
+                      name="originalRoomRate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Room Rate ({checkInForm.watch("currency")})
+                          </FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              placeholder={`Enter rate in ${checkInForm.watch("currency")}`}
+                              data-testid="input-original-room-rate"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
