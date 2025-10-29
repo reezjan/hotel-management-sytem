@@ -928,16 +928,20 @@ export class DatabaseStorage implements IStorage {
 
       const oldRoomId = reservation.roomId;
 
-      const [newRoom] = await tx
-        .select()
+      const [newRoomData] = await tx
+        .select({
+          room: rooms,
+          roomType: roomTypes
+        })
         .from(rooms)
+        .leftJoin(roomTypes, eq(rooms.roomTypeId, roomTypes.id))
         .where(eq(rooms.id, newRoomId));
 
-      if (!newRoom) {
+      if (!newRoomData || !newRoomData.room) {
         throw new Error('New room not found');
       }
 
-      if (newRoom.isOccupied) {
+      if (newRoomData.room.isOccupied) {
         throw new Error('Target room is already occupied');
       }
 
@@ -946,19 +950,48 @@ export class DatabaseStorage implements IStorage {
         .set({ isOccupied: false, occupantDetails: null, currentReservationId: null, updatedAt: new Date() })
         .where(eq(rooms.id, oldRoomId));
 
+      const newRoomPrice = newRoomData.roomType 
+        ? (reservation.guestType === 'walk_in' 
+          ? newRoomData.roomType.priceWalkin 
+          : newRoomData.roomType.priceInhouse)
+        : reservation.roomPrice;
+
       await tx
         .update(rooms)
         .set({ 
           isOccupied: true, 
-          occupantDetails: reservation.guestDetails || null,
+          occupantDetails: {
+            name: reservation.guestName,
+            email: reservation.guestEmail,
+            phone: reservation.guestPhone,
+            checkInDate: reservation.checkInDate,
+            checkOutDate: reservation.checkOutDate,
+            numberOfPersons: reservation.numberOfPersons,
+            reservationId: reservationId,
+            roomTypeName: newRoomData.roomType?.name || 'N/A',
+            roomPrice: newRoomPrice
+          },
           currentReservationId: reservationId,
           updatedAt: new Date() 
         })
         .where(eq(rooms.id, newRoomId));
 
+      const checkInDate = reservation.checkInDate ? new Date(reservation.checkInDate) : new Date();
+      const checkOutDate = reservation.checkOutDate ? new Date(reservation.checkOutDate) : new Date();
+      const nights = Math.max(1, Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 3600 * 24)));
+
+      const roomTotal = Number(newRoomPrice) * nights;
+      const mealTotal = reservation.mealPlanPrice ? Number(reservation.mealPlanPrice) * nights * Number(reservation.numberOfPersons || 1) : 0;
+      const newTotalPrice = String(roomTotal + mealTotal);
+
       const [updated] = await tx
         .update(roomReservations)
-        .set({ roomId: newRoomId, updatedAt: new Date() })
+        .set({ 
+          roomId: newRoomId, 
+          roomPrice: newRoomPrice,
+          totalPrice: newTotalPrice,
+          updatedAt: new Date() 
+        })
         .where(eq(roomReservations.id, reservationId))
         .returning();
 
@@ -1134,6 +1167,16 @@ export class DatabaseStorage implements IStorage {
       throw new Error('This reservation has been cancelled');
     }
 
+    // Get room type info
+    const [roomData] = await db
+      .select({
+        room: rooms,
+        roomType: roomTypes
+      })
+      .from(rooms)
+      .leftJoin(roomTypes, eq(rooms.roomTypeId, roomTypes.id))
+      .where(eq(rooms.id, reservation.roomId));
+
     // Update room status
     await db
       .update(rooms)
@@ -1148,7 +1191,9 @@ export class DatabaseStorage implements IStorage {
           checkInDate: reservation.checkInDate,
           checkOutDate: reservation.checkOutDate,
           numberOfPersons: reservation.numberOfPersons,
-          reservationId: reservationId
+          reservationId: reservationId,
+          roomTypeName: roomData?.roomType?.name || 'N/A',
+          roomPrice: reservation.roomPrice
         },
         updatedAt: new Date()
       })
