@@ -4727,6 +4727,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const currentUser = req.user as any;
       const { id } = req.params;
+      const { currency, exchangeRate, originalRoomRate } = req.body;
+
+      // Get the current reservation to access room rate
+      const existingReservation = await storage.getRoomReservation(id);
+      if (!existingReservation) {
+        return res.status(404).json({ message: "Reservation not found" });
+      }
+
+      // Validate currency data
+      if (currency && currency !== "NPR") {
+        // For foreign currencies, require exchange rate and original room rate
+        if (!exchangeRate || !originalRoomRate) {
+          return res.status(400).json({
+            message: "Exchange rate and original room rate are required for foreign currency"
+          });
+        }
+
+        // Calculate NPR room price: originalRoomRate * exchangeRate
+        const roomPriceNPR = (parseFloat(originalRoomRate) * parseFloat(exchangeRate)).toFixed(2);
+
+        // Update reservation with currency information
+        await storage.updateRoomReservation(id, {
+          currency: currency,
+          exchangeRate: exchangeRate,
+          originalCurrency: currency,
+          originalRoomRate: originalRoomRate,
+          roomPrice: roomPriceNPR,
+          billingRoomRate: roomPriceNPR
+        });
+      } else if (currency === "NPR") {
+        // For NPR, use the room rate directly
+        await storage.updateRoomReservation(id, {
+          currency: "NPR",
+          exchangeRate: "1.0000",
+          originalCurrency: "NPR",
+          originalRoomRate: existingReservation.roomPrice,
+          roomPrice: existingReservation.roomPrice,
+          billingRoomRate: existingReservation.roomPrice
+        });
+      }
+
       const reservation = await storage.checkInGuest(id);
 
       // Broadcast check-in event to front desk role in real-time

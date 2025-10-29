@@ -49,6 +49,9 @@ import { formatCurrency, getStatusColor, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { Room, Task, RoomServiceOrder, MealPlan, Voucher, MenuItem, MenuCategory, RoomType, Company } from "@shared/schema";
 import { RoomServiceChargeModal } from "@/components/modals/room-service-charge-modal";
+import { HotelInvoiceA4 } from "@/components/bills/HotelInvoiceA4";
+import { GuestInvoiceA4 } from "@/components/bills/GuestInvoiceA4";
+import { createRoot } from 'react-dom/client';
 
 export default function FrontDeskDashboard() {
   const { user } = useAuth();
@@ -858,9 +861,9 @@ export default function FrontDeskDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/hotels/current/reservations"] });
       toast({ title: "Guest checked out successfully" });
       
-      // Print receipt automatically before clearing room data
+      // Print A4 invoice automatically after checkout
       if (selectedRoom) {
-        handlePrintReceipt(selectedRoom, 'checkout');
+        handlePrintA4Invoice(selectedRoom, 'checkout');
       }
       
       setIsCheckOutModalOpen(false);
@@ -1028,7 +1031,18 @@ export default function FrontDeskDashboard() {
 
   // Calculate checkout bill with taxes
   const calculateCheckoutBill = (room: any) => {
+    // Get reservation for currency information
+    const reservationId = room.currentReservationId || (room.occupantDetails as any)?.reservationId;
+    const reservation = reservationId ? reservations.find((r: any) => r.id === reservationId) : null;
+    
+    // Get currency and exchange rate information
+    const currency = reservation?.currency || 'NPR';
+    const exchangeRate = reservation?.exchangeRate ? Number(reservation.exchangeRate) : 1.0;
+    const originalRoomRate = reservation?.originalRoomRate ? Number(reservation.originalRoomRate) : null;
+    
+    // Get room price in NPR (already converted during check-in)
     const roomPricePerNight = room.occupantDetails?.roomPrice ? Number(room.occupantDetails.roomPrice) : 0;
+    
     const checkInDate = room.occupantDetails?.checkInDate ? new Date(room.occupantDetails.checkInDate) : null;
     // Use actual checkout date (today) instead of booked checkout date for accurate billing
     const actualCheckOutDate = new Date();
@@ -1058,14 +1072,19 @@ export default function FrontDeskDashboard() {
       }
     }
     
+    // Total room charges in NPR (already converted)
     const totalRoomCharges = roomPricePerNight * numberOfNights;
+    
+    // Calculate original currency total if foreign currency was used
+    const totalRoomChargesInOriginalCurrency = originalRoomRate 
+      ? originalRoomRate * numberOfNights 
+      : totalRoomCharges;
     const mealPlanCostPerNight = room.occupantDetails?.mealPlan?.totalCost || 0;
     const totalMealPlanCharges = parseFloat(mealPlanCostPerNight.toString()) * numberOfNights;
     const foodCharges = room.occupantDetails?.foodCharges || [];
     const totalFoodCharges = foodCharges.reduce((sum: number, charge: any) => sum + parseFloat(charge.totalAmount || 0), 0);
     
-    // Get room service charges for this reservation
-    const reservationId = room.currentReservationId || (room.occupantDetails as any)?.reservationId;
+    // Get room service charges for this reservation (reservationId already declared above)
     const serviceCharges = reservationId 
       ? roomServiceCharges.filter((charge: any) => charge.reservationId === reservationId)
       : [];
@@ -1153,7 +1172,14 @@ export default function FrontDeskDashboard() {
       totalMealPlanCharges: parseFloat(totalMealPlanCharges.toString()),
       totalFoodCharges,
       totalServiceCharges,
-      serviceCharges
+      serviceCharges,
+      // Multi-currency fields
+      currency,
+      exchangeRate,
+      originalRoomRate: originalRoomRate || roomPricePerNight,
+      roomRateInNPR: roomPricePerNight,
+      totalRoomChargesInOriginalCurrency,
+      displayCurrency: currency !== 'NPR' ? `${currency} (Exchange Rate: ${exchangeRate})` : 'NPR'
     };
   };
 
@@ -1392,6 +1418,166 @@ export default function FrontDeskDashboard() {
     }
   };
 
+  // New A4 Invoice Print Function
+  const handlePrintA4Invoice = (room: any, type: 'checkin' | 'checkout' | 'bill') => {
+    if (type !== 'checkout') {
+      // For non-checkout types, keep the old thermal receipt (or implement separate logic)
+      toast({ title: "Only checkout invoices are supported in A4 format" });
+      return;
+    }
+
+    const guest = room.occupantDetails;
+    const billCalc = calculateCheckoutBill(room);
+    const receiptNumber = `INV-${Date.now().toString().slice(-8)}`;
+    const checkoutDate = new Date();
+    const servedBy = user?.username || 'Front Desk';
+
+    // Get reservation for guest details
+    const reservationId = room.currentReservationId || (room.occupantDetails as any)?.reservationId;
+    const reservation = reservationId ? reservations.find((r: any) => r.id === reservationId) : null;
+    const guestRecord = reservation?.guestId ? guests?.find((g: any) => g.id === reservation.guestId) : null;
+
+    // Prepare bill calculation data with line items
+    const lineItems = [];
+    
+    // Add room charges
+    if (billCalc.totalRoomCharges > 0) {
+      lineItems.push({
+        description: 'Room Charges',
+        days: billCalc.numberOfNights,
+        rate: billCalc.roomRateInNPR,
+        originalRate: billCalc.originalRoomRate,
+        amount: billCalc.totalRoomCharges
+      });
+    }
+
+    // Add meal plan charges
+    if (billCalc.totalMealPlanCharges > 0) {
+      lineItems.push({
+        description: 'Meal Plan',
+        days: billCalc.numberOfNights,
+        rate: billCalc.mealPlanCostPerNight,
+        amount: billCalc.totalMealPlanCharges
+      });
+    }
+
+    // Add food charges
+    if (billCalc.totalFoodCharges > 0 && guest?.foodCharges?.length > 0) {
+      guest.foodCharges.forEach((charge: any) => {
+        charge.items.forEach((item: any) => {
+          lineItems.push({
+            description: `${item.name} (Food)`,
+            quantity: item.quantity,
+            rate: parseFloat(item.price || 0),
+            amount: parseFloat(item.total || 0)
+          });
+        });
+      });
+    }
+
+    // Add service charges
+    if (billCalc.totalServiceCharges > 0 && billCalc.serviceCharges?.length > 0) {
+      billCalc.serviceCharges.forEach((charge: any) => {
+        lineItems.push({
+          description: `${charge.serviceName} (${charge.unit})`,
+          quantity: charge.quantity,
+          rate: parseFloat(charge.ratePerUnit || 0),
+          amount: parseFloat(charge.totalCharge || 0)
+        });
+      });
+    }
+
+    const billCalculation = {
+      lineItems,
+      subTotal: billCalc.subtotal,
+      vatAmount: billCalc.taxBreakdown['VAT']?.amount || 0,
+      serviceTax: billCalc.taxBreakdown['Service Tax']?.amount || 0,
+      luxuryTax: billCalc.taxBreakdown['Luxury Tax']?.amount || 0,
+      totalAmount: billCalc.grandTotal,
+      balanceAmount: billCalc.finalAmount
+    };
+
+    // Print Hotel Copy
+    const printHotelCopy = () => {
+      const hotelWindow = window.open('', '_blank', 'width=800,height=600');
+      if (!hotelWindow) {
+        toast({ title: "Error", description: "Failed to open print window", variant: "destructive" });
+        return;
+      }
+
+      hotelWindow.document.write('<html><head><title>Hotel Invoice</title></head><body><div id="root"></div></body></html>');
+      hotelWindow.document.close();
+
+      const rootElement = hotelWindow.document.getElementById('root');
+      if (rootElement) {
+        const root = createRoot(rootElement);
+        root.render(
+          <HotelInvoiceA4
+            hotel={hotel}
+            reservation={reservation}
+            guest={guestRecord || { firstName: guest?.name, phone: guest?.phone }}
+            billCalculation={billCalculation}
+            room={room}
+            checkoutDate={checkoutDate}
+            receiptNumber={receiptNumber}
+            servedBy={servedBy}
+          />
+        );
+
+        setTimeout(() => {
+          hotelWindow.print();
+          setTimeout(() => {
+            root.unmount();
+            hotelWindow.close();
+            // Print guest copy after hotel copy
+            printGuestCopy();
+          }, 500);
+        }, 500);
+      }
+    };
+
+    // Print Guest Copy
+    const printGuestCopy = () => {
+      const guestWindow = window.open('', '_blank', 'width=800,height=600');
+      if (!guestWindow) {
+        toast({ title: "Error", description: "Failed to open guest print window", variant: "destructive" });
+        return;
+      }
+
+      guestWindow.document.write('<html><head><title>Guest Invoice</title></head><body><div id="root"></div></body></html>');
+      guestWindow.document.close();
+
+      const rootElement = guestWindow.document.getElementById('root');
+      if (rootElement) {
+        const root = createRoot(rootElement);
+        root.render(
+          <GuestInvoiceA4
+            hotel={hotel}
+            reservation={reservation}
+            guest={guestRecord || { firstName: guest?.name, phone: guest?.phone }}
+            billCalculation={billCalculation}
+            room={room}
+            checkoutDate={checkoutDate}
+            receiptNumber={receiptNumber}
+            servedBy={servedBy}
+          />
+        );
+
+        setTimeout(() => {
+          guestWindow.print();
+          setTimeout(() => {
+            root.unmount();
+            guestWindow.close();
+          }, 500);
+        }, 500);
+      }
+    };
+
+    // Start printing process
+    printHotelCopy();
+  };
+
+  // Keep old function for non-checkout receipts if needed
   const handlePrintReceipt = (room: any, type: 'checkin' | 'checkout' | 'bill') => {
     const guest = room.occupantDetails;
     const mealPlan = guest?.mealPlan;
@@ -2075,7 +2261,7 @@ export default function FrontDeskDashboard() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handlePrintReceipt(room, 'checkout')}
+                          onClick={() => handlePrintA4Invoice(room, 'checkout')}
                           className="h-6 text-xs px-2"
                           data-testid={`button-print-${index}`}
                         >
