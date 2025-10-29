@@ -93,6 +93,7 @@ export default function FrontDeskDashboard() {
   const [isPaxModalOpen, setIsPaxModalOpen] = useState(false);
   const [isAdvancePaymentModalOpen, setIsAdvancePaymentModalOpen] = useState(false);
   const [selectedRoomForAdvance, setSelectedRoomForAdvance] = useState<any>(null);
+  const [isPrintingInvoice, setIsPrintingInvoice] = useState(false);
 
   const { data: hotel } = useQuery<any>({
     queryKey: ["/api/hotels/current"],
@@ -1418,7 +1419,13 @@ export default function FrontDeskDashboard() {
     }
   };
 
-  // New A4 Invoice Print Function
+  /**
+   * Prints professional A4 invoices for guest checkout.
+   * Generates both hotel copy and guest copy with multi-currency support.
+   * 
+   * @param room - The room object containing occupant details
+   * @param type - Type of invoice ('checkin' | 'checkout' | 'bill')
+   */
   const handlePrintA4Invoice = (room: any, type: 'checkin' | 'checkout' | 'bill') => {
     if (type !== 'checkout') {
       // For non-checkout types, keep the old thermal receipt (or implement separate logic)
@@ -1426,16 +1433,43 @@ export default function FrontDeskDashboard() {
       return;
     }
 
-    const guest = room.occupantDetails;
-    const billCalc = calculateCheckoutBill(room);
-    const receiptNumber = `INV-${Date.now().toString().slice(-8)}`;
-    const checkoutDate = new Date();
-    const servedBy = user?.username || 'Front Desk';
+    // Set loading state to disable UI elements
+    setIsPrintingInvoice(true);
 
-    // Get reservation for guest details
-    const reservationId = room.currentReservationId || (room.occupantDetails as any)?.reservationId;
-    const reservation = reservationId ? reservations.find((r: any) => r.id === reservationId) : null;
-    const guestRecord = reservation?.guestId ? guests?.find((g: any) => g.id === reservation.guestId) : null;
+    // Show loading notification
+    toast({ 
+      title: "Generating invoices...", 
+      description: "Please wait while we prepare your A4 invoices" 
+    });
+
+    try {
+      const guest = room.occupantDetails;
+      const billCalc = calculateCheckoutBill(room);
+      const receiptNumber = `INV-${Date.now().toString().slice(-8)}`;
+      const checkoutDate = new Date();
+      const servedBy = user?.username || 'Front Desk';
+
+      // Get reservation for guest details
+      const reservationId = room.currentReservationId || (room.occupantDetails as any)?.reservationId;
+      const reservation = reservationId ? reservations.find((r: any) => r.id === reservationId) : null;
+      const guestRecord = reservation?.guestId ? guests?.find((g: any) => g.id === reservation.guestId) : null;
+      
+      // Error handling: Ensure currency data exists with fallback to NPR
+      if (reservation && !reservation.currency) {
+        console.warn('No currency specified in reservation, defaulting to NPR');
+        reservation.currency = 'NPR';
+        reservation.exchangeRate = '1.0';
+      }
+      
+      // Validate exchange rate
+      if (reservation && reservation.currency !== 'NPR' && (!reservation.exchangeRate || parseFloat(reservation.exchangeRate) <= 0)) {
+        toast({
+          title: "Warning",
+          description: "Invalid exchange rate detected. Defaulting to 1.0",
+          variant: "destructive"
+        });
+        reservation.exchangeRate = '1.0';
+      }
 
     // Prepare bill calculation data with line items
     const lineItems = [];
@@ -1568,6 +1602,13 @@ export default function FrontDeskDashboard() {
           setTimeout(() => {
             root.unmount();
             guestWindow.close();
+            // Show success notification after all invoices are sent to printer
+            toast({ 
+              title: "Invoices sent to printer", 
+              description: "Hotel copy and guest copy A4 invoices have been generated successfully"
+            });
+            // Clear loading state
+            setIsPrintingInvoice(false);
           }, 500);
         }, 500);
       }
@@ -1575,6 +1616,16 @@ export default function FrontDeskDashboard() {
 
     // Start printing process
     printHotelCopy();
+    } catch (error) {
+      console.error('Error printing A4 invoice:', error);
+      toast({ 
+        title: "Print Failed", 
+        description: "An error occurred while generating the invoices. Please try again.",
+        variant: "destructive"
+      });
+      // Clear loading state on error
+      setIsPrintingInvoice(false);
+    }
   };
 
   // Keep old function for non-checkout receipts if needed

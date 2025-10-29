@@ -1,16 +1,45 @@
 import { Building2 } from "lucide-react";
 
+/**
+ * Props for the GuestInvoiceA4 component
+ */
 interface GuestInvoiceA4Props {
+  /** Hotel information including name, address, contact details */
   hotel: any;
+  /** Reservation details including pricing and currency information */
   reservation: any;
+  /** Guest information including name, contact, and identification details */
   guest: any;
+  /** Calculated bill breakdown including line items, subtotal, taxes, and totals */
   billCalculation: any;
+  /** Room details including room number and type */
   room: any;
+  /** Date when the guest is checking out */
   checkoutDate: Date;
+  /** Unique receipt/invoice number for tracking */
   receiptNumber: string;
+  /** Name or username of the staff member processing the checkout */
   servedBy: string;
 }
 
+/**
+ * GuestInvoiceA4 - Professional A4 format invoice (Guest Copy)
+ * 
+ * This component generates a professional guest copy invoice in A4 format for hotel checkouts.
+ * It includes multi-currency support with exchange rate display, detailed billing breakdown,
+ * tax calculations, and signature sections.
+ * 
+ * Features:
+ * - A4 standard size (210mm x 297mm) with print-optimized styling
+ * - Multi-currency support (displays original currency + NPR conversion)
+ * - Detailed line items for room charges, meal plans, food, and services
+ * - Tax breakdown with multiple tax types (VAT, Service Tax, etc.)
+ * - Guest copy watermark for identification
+ * - Professional layout with hotel branding
+ * 
+ * @param {GuestInvoiceA4Props} props - Component props
+ * @returns {JSX.Element} Rendered guest invoice component
+ */
 export function GuestInvoiceA4({
   hotel,
   reservation,
@@ -21,10 +50,20 @@ export function GuestInvoiceA4({
   receiptNumber,
   servedBy,
 }: GuestInvoiceA4Props) {
+  /**
+   * Formats a number to currency format with 2 decimal places
+   * @param amount - Amount to format (string or number)
+   * @returns Formatted currency string (e.g., "1234.56")
+   */
   const formatCurrency = (amount: string | number) => {
     return parseFloat(amount?.toString() || "0").toFixed(2);
   };
 
+  /**
+   * Formats a date to DD/MM/YYYY format
+   * @param date - Date to format (Date object or string)
+   * @returns Formatted date string in DD/MM/YYYY format
+   */
   const formatDate = (date: Date | string) => {
     return new Date(date).toLocaleDateString("en-GB", {
       day: "2-digit",
@@ -41,6 +80,7 @@ export function GuestInvoiceA4({
   const advancePaid = reservation?.paidAmount || "0";
   const balanceAmount = billCalculation?.balanceAmount || "0";
 
+  // Multi-currency handling with fallback to NPR
   const currency = reservation?.currency || "NPR";
   const exchangeRate = reservation?.exchangeRate || "1.0000";
   const showExchangeRate = currency !== "NPR" && parseFloat(exchangeRate) !== 1.0;
