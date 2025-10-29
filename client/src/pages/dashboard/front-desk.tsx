@@ -207,7 +207,8 @@ export default function FrontDeskDashboard() {
       specialRequests: "",
       currency: "NPR",
       exchangeRate: "1.0",
-      originalRoomRate: ""
+      originalRoomRate: "",
+      nprRoomRate: ""
     }
   });
 
@@ -347,17 +348,11 @@ export default function FrontDeskDashboard() {
       const room = rooms.find(r => r.id === data.roomId);
       const roomType = room?.roomType;
       
-      // Validate room type exists
-      if (!roomType) {
-        throw new Error('Room type information is missing. Please ensure the room is properly configured.');
-      }
-      
-      // Get the correct room price based on guest type
-      const price = data.guestType === "company" ? roomType.priceInhouse : roomType.priceWalkin;
-      const roomPrice = price ? Number(price) : 0;
+      // Use the custom room price entered by front desk
+      const roomPrice = data.roomPriceNPR ? Number(data.roomPriceNPR) : 0;
       
       if (roomPrice <= 0) {
-        throw new Error(`Room price is not configured for ${data.guestType} guests. Please configure room pricing first.`);
+        throw new Error(`Please enter a valid room price.`);
       }
 
       let reservationId: string | null = null;
@@ -434,7 +429,11 @@ export default function FrontDeskDashboard() {
           paidAmount: data.advancePayment ? String(Number(data.advancePayment)) : "0",
           specialRequests: data.specialRequests || null,
           guestType: data.guestType || "walkin",
-          status: "confirmed"
+          status: "confirmed",
+          currency: data.currency || "NPR",
+          exchangeRate: data.exchangeRate ? String(data.exchangeRate) : "1.0",
+          originalCurrency: data.originalCurrency || "NPR",
+          originalRoomRate: data.originalRoomRate ? String(data.originalRoomRate) : null
         });
         reservationId = reservation.id;
       }
@@ -465,6 +464,9 @@ export default function FrontDeskDashboard() {
           billingRoomRate: billingRoomRateForOccupant,
           roomPrice: billingRoomRateForOccupant,
           reservationId: reservationId,
+          currency: data.currency || "NPR",
+          exchangeRate: data.exchangeRate || "1.0",
+          originalRoomRate: data.originalRoomRate || null,
           mealPlan: selectedMealPlan ? {
             planId: selectedMealPlan.id,
             planType: selectedMealPlan.planType,
@@ -1260,19 +1262,20 @@ export default function FrontDeskDashboard() {
     const currency = data.currency || "NPR";
     const exchangeRate = parseFloat(data.exchangeRate || "1.0");
     const originalRoomRate = data.originalRoomRate ? parseFloat(data.originalRoomRate) : null;
+    const nprRoomRate = data.nprRoomRate ? parseFloat(data.nprRoomRate) : null;
     
     // Calculate NPR room price
     let roomPriceNPR;
     if (currency !== "NPR" && originalRoomRate) {
       // Foreign currency: convert to NPR
       roomPriceNPR = originalRoomRate * exchangeRate;
+    } else if (currency === "NPR" && nprRoomRate) {
+      // NPR: use the custom rate entered by front desk
+      roomPriceNPR = nprRoomRate;
     } else {
-      // NPR: use the room type price directly
-      roomPriceNPR = selectedRoom?.roomType 
-        ? parseFloat(guestType === 'company' 
-          ? (selectedRoom.roomType.priceInhouse || '0') 
-          : (selectedRoom.roomType.priceWalkin || '0'))
-        : 0;
+      // Fallback: Should not happen if form validation is correct
+      toast({ title: "Error", description: "Please enter room rate", variant: "destructive" });
+      return;
     }
     
     checkInGuestMutation.mutate({ 
@@ -2675,14 +2678,11 @@ export default function FrontDeskDashboard() {
                     </div>
                   )}
                   <div className="text-sm text-muted-foreground">
-                    {selectedRoom && selectedRoom.roomType && (
-                      <div className="flex justify-between p-2 bg-muted rounded">
-                        <span>Room Rate ({guestType === 'company' ? 'Company' : 'Walk-in'}):</span>
-                        <span className="font-semibold">
-                          NPR {parseFloat(guestType === 'company' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+                      <p className="text-xs font-medium text-blue-900 dark:text-blue-100">
+                        ℹ️ Enter the room rate below based on your negotiation with the guest
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -2733,7 +2733,30 @@ export default function FrontDeskDashboard() {
                   )}
                 </div>
 
-                {checkInForm.watch("currency") !== "NPR" && (
+                {checkInForm.watch("currency") === "NPR" ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={checkInForm.control}
+                      name="nprRoomRate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            Room Rate (NPR) *
+                          </FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="number" 
+                              step="0.01"
+                              placeholder="Enter room rate in NPR"
+                              data-testid="input-npr-room-rate"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={checkInForm.control}
@@ -2741,12 +2764,13 @@ export default function FrontDeskDashboard() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>
-                            Room Rate ({checkInForm.watch("currency")})
+                            Room Rate ({checkInForm.watch("currency")}) *
                           </FormLabel>
                           <FormControl>
                             <Input 
                               {...field} 
                               type="number" 
+                              step="0.01"
                               placeholder={`Enter rate in ${checkInForm.watch("currency")}`}
                               data-testid="input-original-room-rate"
                             />
@@ -2821,18 +2845,20 @@ export default function FrontDeskDashboard() {
                   )}
                 </div>
 
-                {checkInForm.watch('mealPlanId') && selectedRoom && selectedRoom.roomType && (
+                {checkInForm.watch('mealPlanId') && (
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
                     <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">Billing Breakdown (Per Night)</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between" data-testid="text-initial-rate">
                         <span className="text-muted-foreground">Initial Room Rate:</span>
                         <span className="font-medium">
-                          NPR {parseFloat(guestType === 'company' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')).toFixed(2)}
+                          NPR {(checkInForm.watch("currency") === "NPR" 
+                            ? parseFloat(checkInForm.watch('nprRoomRate') || '0')
+                            : parseFloat(checkInForm.watch('originalRoomRate') || '0') * parseFloat(checkInForm.watch('exchangeRate') || '1')).toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between" data-testid="text-meal-plan-rate">
-                        <span className="text-muted-foreground">Meal Plan Rate ({checkInForm.watch('numberOfPersons') || 1} person{(checkInForm.watch('numberOfPersons') || 1) > 1 ? 's' : ''}):</span>
+                        <span className="text-muted-foreground">Meal Plan Rate ({Number(checkInForm.watch('numberOfPersons')) || 1} person{(Number(checkInForm.watch('numberOfPersons')) || 1) > 1 ? 's' : ''}):</span>
                         <span className="font-medium">
                           NPR {(parseFloat(checkInForm.watch('mealPlanRate') || '0') * (parseFloat(checkInForm.watch('numberOfPersons') || '1'))).toFixed(2)}
                         </span>
@@ -2841,7 +2867,9 @@ export default function FrontDeskDashboard() {
                         <div className="flex justify-between" data-testid="text-billing-rate">
                           <span className="text-muted-foreground">Billing Room Rate:</span>
                           <span className="font-semibold text-blue-600 dark:text-blue-400">
-                            NPR {(parseFloat(guestType === 'company' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')) - (parseFloat(checkInForm.watch('mealPlanRate') || '0') * parseFloat(checkInForm.watch('numberOfPersons') || '1'))).toFixed(2)}
+                            NPR {((checkInForm.watch("currency") === "NPR" 
+                              ? parseFloat(checkInForm.watch('nprRoomRate') || '0')
+                              : parseFloat(checkInForm.watch('originalRoomRate') || '0') * parseFloat(checkInForm.watch('exchangeRate') || '1')) - (parseFloat(checkInForm.watch('mealPlanRate') || '0') * parseFloat(checkInForm.watch('numberOfPersons') || '1'))).toFixed(2)}
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
@@ -2852,7 +2880,9 @@ export default function FrontDeskDashboard() {
                         <div className="flex justify-between" data-testid="text-subtotal">
                           <span className="font-semibold">Subtotal Per Night:</span>
                           <span className="font-bold text-lg">
-                            NPR {parseFloat(guestType === 'company' ? (selectedRoom.roomType.priceInhouse || '0') : (selectedRoom.roomType.priceWalkin || '0')).toFixed(2)}
+                            NPR {(checkInForm.watch("currency") === "NPR" 
+                              ? parseFloat(checkInForm.watch('nprRoomRate') || '0')
+                              : parseFloat(checkInForm.watch('originalRoomRate') || '0') * parseFloat(checkInForm.watch('exchangeRate') || '1')).toFixed(2)}
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
