@@ -2677,13 +2677,13 @@ export default function FrontDeskDashboard() {
                       )}
                     </div>
                   )}
-                  <div className="text-sm text-muted-foreground">
+                  {/* <div className="text-sm text-muted-foreground">
                     <div className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
                       <p className="text-xs font-medium text-blue-900 dark:text-blue-100">
-                        ℹ️ Enter the room rate below based on your negotiation with the guest
+                        ℹ️ Enter the room rate below based on your negotiation with the guest 
                       </p>
                     </div>
-                  </div>
+                   </div> */}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
