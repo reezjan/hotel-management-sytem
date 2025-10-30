@@ -2750,53 +2750,48 @@ export default function FrontDeskDashboard() {
                   )}
                 </div>
 
-                {checkInForm.watch("currency") === "NPR" ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={checkInForm.control}
-                      name="nprRoomRate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Room Rate (NPR) *
-                          </FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              type="number" 
-                              step="0.01"
-                              placeholder="Enter room rate in NPR"
-                              data-testid="input-npr-room-rate"
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={checkInForm.control}
-                      name="originalRoomRate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Room Rate (INR/USD) *
-                          </FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field}
-                              type="number" 
-                              step="0.01"
-                              placeholder="Enter room rate"
-                              data-testid="input-original-room-rate"
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={checkInForm.control}
+                    name="nprRoomRate"
+                    render={({ field }) => (
+                      <FormItem className={checkInForm.watch("currency") !== "NPR" ? "hidden" : ""}>
+                        <FormLabel>
+                          Room Rate (NPR) *
+                        </FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field}
+                            type="number" 
+                            step="0.01"
+                            placeholder="Enter room rate in NPR"
+                            data-testid="input-npr-room-rate"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={checkInForm.control}
+                    name="originalRoomRate"
+                    render={({ field }) => (
+                      <FormItem className={checkInForm.watch("currency") === "NPR" ? "hidden" : ""}>
+                        <FormLabel>
+                          Room Rate (INR/USD) *
+                        </FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field}
+                            type="number" 
+                            step="0.01"
+                            placeholder="Enter room rate"
+                            data-testid="input-original-room-rate"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
