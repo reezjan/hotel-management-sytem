@@ -212,6 +212,20 @@ export default function FrontDeskDashboard() {
     }
   });
 
+  useEffect(() => {
+    const subscription = checkInForm.watch((value, { name }) => {
+      if (name === "currency") {
+        if (value.currency === "NPR") {
+          checkInForm.setValue("originalRoomRate", "");
+          checkInForm.setValue("exchangeRate", "1.0");
+        } else {
+          checkInForm.setValue("nprRoomRate", "");
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [checkInForm]);
+
   const maintenanceForm = useForm({
     defaultValues: {
       title: "",
