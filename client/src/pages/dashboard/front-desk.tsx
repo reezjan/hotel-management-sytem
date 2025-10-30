@@ -220,6 +220,9 @@ export default function FrontDeskDashboard() {
           checkInForm.setValue("exchangeRate", "1.0");
         } else {
           checkInForm.setValue("nprRoomRate", "");
+          if (!checkInForm.getValues("exchangeRate") || checkInForm.getValues("exchangeRate") === "1.0") {
+            checkInForm.setValue("exchangeRate", "");
+          }
         }
       }
     });
@@ -2730,11 +2733,11 @@ export default function FrontDeskDashboard() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>
-                            Exchange Rate (1 {checkInForm.watch("currency")} = ? NPR)
+                            Exchange Rate (to NPR)
                           </FormLabel>
                           <FormControl>
                             <Input 
-                              {...field} 
+                              {...field}
                               type="number" 
                               step="0.0001"
                               placeholder="Enter exchange rate"
@@ -2778,14 +2781,14 @@ export default function FrontDeskDashboard() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>
-                            Room Rate ({checkInForm.watch("currency")}) *
+                            Room Rate (INR/USD) *
                           </FormLabel>
                           <FormControl>
                             <Input 
-                              {...field} 
+                              {...field}
                               type="number" 
                               step="0.01"
-                              placeholder={`Enter rate in ${checkInForm.watch("currency")}`}
+                              placeholder="Enter room rate"
                               data-testid="input-original-room-rate"
                             />
                           </FormControl>
@@ -2859,16 +2862,14 @@ export default function FrontDeskDashboard() {
                   )}
                 </div>
 
-                {checkInForm.watch('mealPlanId') && (
+                {checkInForm.watch('mealPlanId') && checkInForm.watch("currency") === "NPR" && (
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
                     <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">Billing Breakdown (Per Night)</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between" data-testid="text-initial-rate">
                         <span className="text-muted-foreground">Initial Room Rate:</span>
                         <span className="font-medium">
-                          NPR {(checkInForm.watch("currency") === "NPR" 
-                            ? parseFloat(checkInForm.watch('nprRoomRate') || '0')
-                            : parseFloat(checkInForm.watch('originalRoomRate') || '0') * parseFloat(checkInForm.watch('exchangeRate') || '1')).toFixed(2)}
+                          NPR {parseFloat(checkInForm.watch('nprRoomRate') || '0').toFixed(2)}
                         </span>
                       </div>
                       <div className="flex justify-between" data-testid="text-meal-plan-rate">
@@ -2881,9 +2882,7 @@ export default function FrontDeskDashboard() {
                         <div className="flex justify-between" data-testid="text-billing-rate">
                           <span className="text-muted-foreground">Billing Room Rate:</span>
                           <span className="font-semibold text-blue-600 dark:text-blue-400">
-                            NPR {((checkInForm.watch("currency") === "NPR" 
-                              ? parseFloat(checkInForm.watch('nprRoomRate') || '0')
-                              : parseFloat(checkInForm.watch('originalRoomRate') || '0') * parseFloat(checkInForm.watch('exchangeRate') || '1')) - (parseFloat(checkInForm.watch('mealPlanRate') || '0') * parseFloat(checkInForm.watch('numberOfPersons') || '1'))).toFixed(2)}
+                            NPR {(parseFloat(checkInForm.watch('nprRoomRate') || '0') - (parseFloat(checkInForm.watch('mealPlanRate') || '0') * parseFloat(checkInForm.watch('numberOfPersons') || '1'))).toFixed(2)}
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
@@ -2894,9 +2893,7 @@ export default function FrontDeskDashboard() {
                         <div className="flex justify-between" data-testid="text-subtotal">
                           <span className="font-semibold">Subtotal Per Night:</span>
                           <span className="font-bold text-lg">
-                            NPR {(checkInForm.watch("currency") === "NPR" 
-                              ? parseFloat(checkInForm.watch('nprRoomRate') || '0')
-                              : parseFloat(checkInForm.watch('originalRoomRate') || '0') * parseFloat(checkInForm.watch('exchangeRate') || '1')).toFixed(2)}
+                            NPR {parseFloat(checkInForm.watch('nprRoomRate') || '0').toFixed(2)}
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
